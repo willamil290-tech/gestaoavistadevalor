@@ -13,7 +13,7 @@ export const CircularProgress = ({
   variant = "primary",
   size = 180,
 }: CircularProgressProps) => {
-  const strokeWidth = 12;
+  const strokeWidth = 16;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (Math.min(percentage, 100) / 100) * circumference;
@@ -32,8 +32,8 @@ export const CircularProgress = ({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+    <div className="flex flex-col items-center gap-3">
+      <span className="text-base md:text-lg lg:text-xl font-semibold text-muted-foreground uppercase tracking-wider">
         {label}
       </span>
       <div className="relative" style={{ width: size, height: size }}>
@@ -67,7 +67,7 @@ export const CircularProgress = ({
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-3xl font-bold text-white">
+          <span className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
             {percentage.toFixed(1)}%
           </span>
         </div>

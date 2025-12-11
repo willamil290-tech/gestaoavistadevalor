@@ -41,6 +41,7 @@ export const DashboardView = ({
               percentage={percentualMes}
               label="Meta (mês)"
               variant="primary"
+              size={220}
             />
             <div className="w-full pt-4 border-t border-border">
               <EditableValue
@@ -65,6 +66,7 @@ export const DashboardView = ({
               percentage={percentualDia}
               label="Meta (dia)"
               variant="secondary"
+              size={220}
             />
             <div className="w-full pt-4 border-t border-border">
               <EditableValue
@@ -80,23 +82,23 @@ export const DashboardView = ({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-4 border border-border text-center">
-          <p className="text-xs text-muted-foreground mb-1">% Mês</p>
-          <p className="text-xl font-bold text-primary">{percentualMes.toFixed(1)}%</p>
+        <div className="bg-card rounded-xl p-5 border border-border text-center">
+          <p className="text-sm md:text-base text-muted-foreground mb-2">% Mês</p>
+          <p className="text-3xl md:text-4xl font-bold text-primary">{percentualMes.toFixed(1)}%</p>
         </div>
-        <div className="bg-card rounded-xl p-4 border border-border text-center">
-          <p className="text-xs text-muted-foreground mb-1">% Dia</p>
-          <p className="text-xl font-bold text-secondary">{percentualDia.toFixed(1)}%</p>
+        <div className="bg-card rounded-xl p-5 border border-border text-center">
+          <p className="text-sm md:text-base text-muted-foreground mb-2">% Dia</p>
+          <p className="text-3xl md:text-4xl font-bold text-secondary">{percentualDia.toFixed(1)}%</p>
         </div>
-        <div className="bg-card rounded-xl p-4 border border-border text-center">
-          <p className="text-xs text-muted-foreground mb-1">Falta (Mês)</p>
-          <p className="text-xl font-bold text-foreground">
+        <div className="bg-card rounded-xl p-5 border border-border text-center">
+          <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Mês)</p>
+          <p className="text-2xl md:text-3xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaMes - atingidoMes))}
           </p>
         </div>
-        <div className="bg-card rounded-xl p-4 border border-border text-center">
-          <p className="text-xs text-muted-foreground mb-1">Falta (Dia)</p>
-          <p className="text-xl font-bold text-foreground">
+        <div className="bg-card rounded-xl p-5 border border-border text-center">
+          <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Dia)</p>
+          <p className="text-2xl md:text-3xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaDia - atingidoDia))}
           </p>
         </div>

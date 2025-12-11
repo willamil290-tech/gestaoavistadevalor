@@ -46,13 +46,13 @@ export const EditableValue = ({
   };
 
   const sizeClasses = {
-    sm: "text-lg md:text-xl",
-    lg: "text-2xl md:text-4xl lg:text-5xl",
+    sm: "text-2xl md:text-3xl lg:text-4xl",
+    lg: "text-4xl md:text-5xl lg:text-6xl",
   };
 
   return (
     <div className={cn("flex flex-col items-center gap-1", className)}>
-      <span className="text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-wider">
+      <span className="text-sm md:text-base lg:text-lg font-medium text-muted-foreground uppercase tracking-wider">
         {label}
       </span>
       <div className="flex items-center gap-2">
