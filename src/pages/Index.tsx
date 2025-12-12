@@ -11,6 +11,13 @@ type TabType = "dashboard" | "empresas" | "leads";
 
 const tabs: TabType[] = ["dashboard", "empresas", "leads"];
 
+type KpiPatch = Partial<{
+  meta_mes: number;
+  meta_dia: number;
+  atingido_mes: number;
+  atingido_dia: number;
+}>;
+
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [autoRotate, setAutoRotate] = useState(false);
@@ -23,6 +30,55 @@ const Index = () => {
   // Achieved values
   const [atingidoMes, setAtingidoMes] = useState(5556931.1);
   const [atingidoDia, setAtingidoDia] = useState(292434.31);
+
+  const reloadKpis = async () => {
+    const { data, error } = await supabase
+      .from("kpis")
+      .select("meta_mes, meta_dia, atingido_mes, atingido_dia")
+      .eq("id", 1)
+      .single();
+
+    if (error) {
+      console.error("Erro ao recarregar KPIs:", error);
+      return;
+    }
+
+    setMetaMes(Number(data.meta_mes));
+    setMetaDia(Number(data.meta_dia));
+    setAtingidoMes(Number(data.atingido_mes));
+    setAtingidoDia(Number(data.atingido_dia));
+  };
+
+  const updateKpis = async (patch: KpiPatch) => {
+    const { error } = await supabase.from("kpis").update(patch).eq("id", 1);
+
+    if (error) {
+      console.error("Erro ao salvar KPIs:", error);
+      alert("Erro ao salvar: " + error.message);
+      await reloadKpis(); // volta pro valor correto do banco
+    }
+  };
+
+  // ✅ Esses handlers atualizam o state e também salvam no Supabase
+  const onMetaMesChangePersist = (v: number) => {
+    setMetaMes(v);
+    void updateKpis({ meta_mes: v });
+  };
+
+  const onMetaDiaChangePersist = (v: number) => {
+    setMetaDia(v);
+    void updateKpis({ meta_dia: v });
+  };
+
+  const onAtingidoMesChangePersist = (v: number) => {
+    setAtingidoMes(v);
+    void updateKpis({ atingido_mes: v });
+  };
+
+  const onAtingidoDiaChangePersist = (v: number) => {
+    setAtingidoDia(v);
+    void updateKpis({ atingido_dia: v });
+  };
 
   // 🔥 Carrega do Supabase + atualiza ao vivo (Realtime)
   useEffect(() => {
@@ -163,10 +219,10 @@ const Index = () => {
             metaDia={metaDia}
             atingidoMes={atingidoMes}
             atingidoDia={atingidoDia}
-            onMetaMesChange={setMetaMes}
-            onMetaDiaChange={setMetaDia}
-            onAtingidoMesChange={setAtingidoMes}
-            onAtingidoDiaChange={setAtingidoDia}
+            onMetaMesChange={onMetaMesChangePersist}
+            onMetaDiaChange={onMetaDiaChangePersist}
+            onAtingidoMesChange={onAtingidoMesChangePersist}
+            onAtingidoDiaChange={onAtingidoDiaChangePersist}
           />
         )}
         {activeTab === "empresas" && <EmpresasView />}
