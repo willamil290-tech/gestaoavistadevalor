@@ -67,7 +67,7 @@ export const CircularProgress = ({
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
+          <span className="text-3xl md:text-4xl font-bold text-white">
             {percentage.toFixed(1)}%
           </span>
         </div>
