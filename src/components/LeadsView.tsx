@@ -1,29 +1,66 @@
-import { TeamMemberCard } from "./TeamMemberCard";
-import { BarChart3, Users } from "lucide-react";
+import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
+import { BarChart3, Users, Plus } from "lucide-react";
+import { useState } from "react";
 
-const leadsData = [
-  { name: "Sabrina Fulas", total: 45, morning: 45, afternoon: 0 },
-  { name: "Nayad Souza", total: 41, morning: 41, afternoon: 0 },
-  { name: "Caio Zapelini", total: 14, morning: 14, afternoon: 0 },
-  { name: "Alana Silveira", total: 16, morning: 16, afternoon: 0 },
+const initialLeadsData: TeamMember[] = [
+  { id: "l1", name: "Sabrina Fulas", total: 45, morning: 45, afternoon: 0 },
+  { id: "l2", name: "Nayad Souza", total: 41, morning: 41, afternoon: 0 },
+  { id: "l3", name: "Caio Zapelini", total: 14, morning: 14, afternoon: 0 },
+  { id: "l4", name: "Alana Silveira", total: 16, morning: 16, afternoon: 0 },
 ];
 
 export const LeadsView = () => {
+  const [leadsData, setLeadsData] = useState<TeamMember[]>(initialLeadsData);
+
   const totalLeads = leadsData.reduce((acc, member) => acc + member.total, 0);
-  const mediaPorPessoa = (totalLeads / leadsData.length).toFixed(0);
+  const mediaPorPessoa = leadsData.length > 0 ? (totalLeads / leadsData.length).toFixed(0) : "0";
+  const topPerformer = leadsData.length > 0 ? [...leadsData].sort((a, b) => b.total - a.total)[0] : null;
+
+  const handleUpdate = (updatedMember: TeamMember) => {
+    setLeadsData(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
+  };
+
+  const handleDelete = (id: string) => {
+    setLeadsData(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleAdd = () => {
+    const newMember: TeamMember = {
+      id: Date.now().toString(),
+      name: "Novo Colaborador",
+      total: 0,
+      morning: 0,
+      afternoon: 0,
+    };
+    setLeadsData(prev => [...prev, newMember]);
+  };
 
   return (
     <div className="animate-fade-in-up">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-3 h-3 rounded-full bg-gold" />
-        <h2 className="text-2xl md:text-3xl font-semibold text-foreground">Leads Acionados</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-gold" />
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground">Leads Acionados</h2>
+        </div>
+        <button
+          onClick={handleAdd}
+          className="flex items-center gap-2 px-4 py-2 bg-gold text-primary-foreground rounded-lg hover:bg-gold/80 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="hidden md:inline">Adicionar</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Team Cards */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           {leadsData.map((member) => (
-            <TeamMemberCard key={member.name} {...member} />
+            <TeamMemberCard 
+              key={member.id} 
+              member={member}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
 
@@ -40,12 +77,12 @@ export const LeadsView = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-muted rounded-lg p-5 text-center">
                 <Users className="w-8 h-8 text-gold mx-auto mb-2" />
-                <p className="text-4xl md:text-5xl font-bold text-gold">{totalLeads}</p>
+                <p className="text-3xl md:text-4xl font-bold text-gold">{totalLeads}</p>
                 <p className="text-sm text-muted-foreground">Leads acionados</p>
               </div>
               <div className="bg-muted rounded-lg p-5 text-center">
                 <BarChart3 className="w-8 h-8 text-pink-500 mx-auto mb-2" />
-                <p className="text-4xl md:text-5xl font-bold text-pink-500">{mediaPorPessoa}</p>
+                <p className="text-3xl md:text-4xl font-bold text-pink-500">{mediaPorPessoa}</p>
                 <p className="text-sm text-muted-foreground">Média por pessoa</p>
               </div>
             </div>
@@ -56,11 +93,13 @@ export const LeadsView = () => {
           </div>
 
           {/* Top Performer */}
-          <div className="bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl p-6 border border-gold/30">
-            <p className="text-sm text-gold uppercase tracking-wider mb-2">Top Performer</p>
-            <p className="text-xl md:text-2xl font-bold text-foreground">{leadsData[0].name}</p>
-            <p className="text-4xl md:text-5xl font-bold text-gold">{leadsData[0].total} leads</p>
-          </div>
+          {topPerformer && (
+            <div className="bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl p-6 border border-gold/30">
+              <p className="text-sm text-gold uppercase tracking-wider mb-2">Top Performer</p>
+              <p className="text-xl md:text-2xl font-bold text-foreground">{topPerformer.name}</p>
+              <p className="text-3xl md:text-4xl font-bold text-gold">{topPerformer.total} leads</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -84,21 +84,21 @@ export const DashboardView = ({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-card rounded-xl p-5 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">% Mês</p>
-          <p className="text-3xl md:text-4xl font-bold text-primary">{percentualMes.toFixed(1)}%</p>
+          <p className="text-2xl md:text-3xl font-bold text-primary">{percentualMes.toFixed(1)}%</p>
         </div>
         <div className="bg-card rounded-xl p-5 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">% Dia</p>
-          <p className="text-3xl md:text-4xl font-bold text-secondary">{percentualDia.toFixed(1)}%</p>
+          <p className="text-2xl md:text-3xl font-bold text-secondary">{percentualDia.toFixed(1)}%</p>
         </div>
         <div className="bg-card rounded-xl p-5 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Mês)</p>
-          <p className="text-2xl md:text-3xl font-bold text-foreground">
+          <p className="text-xl md:text-2xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaMes - atingidoMes))}
           </p>
         </div>
         <div className="bg-card rounded-xl p-5 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Dia)</p>
-          <p className="text-2xl md:text-3xl font-bold text-foreground">
+          <p className="text-xl md:text-2xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaDia - atingidoDia))}
           </p>
         </div>
