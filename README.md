@@ -64,6 +64,58 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
+## Persistência (valores editáveis + colaboradores) com sync entre máquinas
+
+Este projeto já está preparado para salvar e sincronizar os valores editáveis e a lista de colaboradores via **Supabase**.
+
+### 1) Criar as tabelas no Supabase
+
+No SQL Editor do Supabase, rode:
+
+```sql
+create table if not exists public.dashboard_settings (
+  key text primary key,
+  meta_mes numeric not null default 0,
+  meta_dia numeric not null default 0,
+  atingido_mes numeric not null default 0,
+  atingido_dia numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.team_members (
+  id text primary key,
+  category text not null check (category in ('empresas','leads')),
+  name text not null,
+  morning int not null default 0,
+  afternoon int not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists team_members_category_idx on public.team_members(category);
+```
+
+> Observação: por simplicidade, as tabelas podem ficar sem RLS (padrão). Se quiser segurança, habilite RLS e crie políticas.
+
+### 2) Configurar as env vars
+
+Crie um `.env` local (ou use o painel do Vercel) com:
+
+```env
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_SYNC_POLL_INTERVAL=5000
+```
+
+No Vercel: Project → Settings → Environment Variables.
+
+### 3) Instalar dependências
+
+```sh
+npm i
+```
+
+Pronto: ao editar os valores ou adicionar/excluir colaboradores, o app salva no Supabase e as outras máquinas veem as mudanças (o app faz polling por padrão a cada 5s).
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!

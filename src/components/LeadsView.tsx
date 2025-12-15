@@ -1,6 +1,9 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
 import { BarChart3, Users, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import type { TeamMember as PersistedMember } from "@/lib/persistence";
 
 const initialLeadsData: TeamMember[] = [
   { id: "l1", name: "Sabrina Fulas", total: 45, morning: 45, afternoon: 0 },
@@ -10,21 +13,56 @@ const initialLeadsData: TeamMember[] = [
 ];
 
 export const LeadsView = () => {
+  const remote = useTeamMembers("leads");
   const [leadsData, setLeadsData] = useState<TeamMember[]>(initialLeadsData);
+
+  // Sincroniza do Supabase -> state local
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const data = remote.data;
+    if (!data) return;
+    const mapped: TeamMember[] = data.map((m) => ({
+      id: m.id,
+      name: m.name,
+      morning: m.morning,
+      afternoon: m.afternoon,
+      total: m.morning + m.afternoon,
+    }));
+    setLeadsData(mapped);
+  }, [remote.data]);
 
   const totalLeads = leadsData.reduce((acc, member) => acc + member.total, 0);
   const mediaPorPessoa = leadsData.length > 0 ? (totalLeads / leadsData.length).toFixed(0) : "0";
   const topPerformer = leadsData.length > 0 ? [...leadsData].sort((a, b) => b.total - a.total)[0] : null;
 
   const handleUpdate = (updatedMember: TeamMember) => {
+    if (isSupabaseConfigured) {
+      const payload: PersistedMember = {
+        id: updatedMember.id,
+        category: "leads",
+        name: updatedMember.name,
+        morning: updatedMember.morning,
+        afternoon: updatedMember.afternoon,
+      };
+      remote.upsertMember(payload);
+      return;
+    }
     setLeadsData(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
   };
 
   const handleDelete = (id: string) => {
+    if (isSupabaseConfigured) {
+      remote.deleteMember(id);
+      return;
+    }
     setLeadsData(prev => prev.filter(m => m.id !== id));
   };
 
   const handleAdd = () => {
+    if (isSupabaseConfigured) {
+      remote.addMember();
+      return;
+    }
     const newMember: TeamMember = {
       id: Date.now().toString(),
       name: "Novo Colaborador",

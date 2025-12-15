@@ -3,8 +3,10 @@ import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { EmpresasView } from "@/components/EmpresasView";
 import { LeadsView } from "@/components/LeadsView";
-import { LayoutDashboard, Users, Target, Settings, Play, Pause } from "lucide-react";
+import { LayoutDashboard, Users, Target, Play, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { useDashboardSettings } from "@/hooks/useDashboardSettings";
 
 type TabType = "dashboard" | "empresas" | "leads";
 
@@ -20,6 +22,23 @@ const Index = () => {
   // Achieved values
   const [atingidoMes, setAtingidoMes] = useState(5556931.10);
   const [atingidoDia, setAtingidoDia] = useState(292434.31);
+
+  const remoteSettings = useDashboardSettings();
+
+  // Carrega valores do Supabase (quando configurado)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (!remoteSettings.data) return;
+    setMetaMes(remoteSettings.data.metaMes);
+    setMetaDia(remoteSettings.data.metaDia);
+    setAtingidoMes(remoteSettings.data.atingidoMes);
+    setAtingidoDia(remoteSettings.data.atingidoDia);
+  }, [
+    remoteSettings.data?.metaMes,
+    remoteSettings.data?.metaDia,
+    remoteSettings.data?.atingidoMes,
+    remoteSettings.data?.atingidoDia,
+  ]);
 
   const tabs: TabType[] = ["dashboard", "empresas", "leads"];
 
@@ -120,10 +139,22 @@ const Index = () => {
             metaDia={metaDia}
             atingidoMes={atingidoMes}
             atingidoDia={atingidoDia}
-            onMetaMesChange={setMetaMes}
-            onMetaDiaChange={setMetaDia}
-            onAtingidoMesChange={setAtingidoMes}
-            onAtingidoDiaChange={setAtingidoDia}
+            onMetaMesChange={(v) => {
+              setMetaMes(v);
+              if (isSupabaseConfigured) remoteSettings.update({ metaMes: v });
+            }}
+            onMetaDiaChange={(v) => {
+              setMetaDia(v);
+              if (isSupabaseConfigured) remoteSettings.update({ metaDia: v });
+            }}
+            onAtingidoMesChange={(v) => {
+              setAtingidoMes(v);
+              if (isSupabaseConfigured) remoteSettings.update({ atingidoMes: v });
+            }}
+            onAtingidoDiaChange={(v) => {
+              setAtingidoDia(v);
+              if (isSupabaseConfigured) remoteSettings.update({ atingidoDia: v });
+            }}
           />
         )}
         {activeTab === "empresas" && <EmpresasView />}
