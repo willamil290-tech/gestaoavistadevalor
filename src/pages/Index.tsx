@@ -1,126 +1,27 @@
-import { supabase } from "@/lib/supabaseClient";
 import { useState, useEffect } from "react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { EmpresasView } from "@/components/EmpresasView";
 import { LeadsView } from "@/components/LeadsView";
-import { LayoutDashboard, Users, Target, Play, Pause } from "lucide-react";
+import { LayoutDashboard, Users, Target, Settings, Play, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TabType = "dashboard" | "empresas" | "leads";
-
-const tabs: TabType[] = ["dashboard", "empresas", "leads"];
-
-type KpiPatch = Partial<{
-  meta_mes: number;
-  meta_dia: number;
-  atingido_mes: number;
-  atingido_dia: number;
-}>;
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [autoRotate, setAutoRotate] = useState(false);
   const [rotateInterval, setRotateInterval] = useState(1); // minutes
-
+  
   // Meta values
   const [metaMes, setMetaMes] = useState(15800000);
   const [metaDia, setMetaDia] = useState(1053333.33);
-
+  
   // Achieved values
-  const [atingidoMes, setAtingidoMes] = useState(5556931.1);
+  const [atingidoMes, setAtingidoMes] = useState(5556931.10);
   const [atingidoDia, setAtingidoDia] = useState(292434.31);
 
-  const reloadKpis = async () => {
-    const { data, error } = await supabase
-      .from("kpis")
-      .select("meta_mes, meta_dia, atingido_mes, atingido_dia")
-      .eq("id", 1)
-      .single();
-
-    if (error) {
-      console.error("Erro ao recarregar KPIs:", error);
-      return;
-    }
-
-    setMetaMes(Number(data.meta_mes));
-    setMetaDia(Number(data.meta_dia));
-    setAtingidoMes(Number(data.atingido_mes));
-    setAtingidoDia(Number(data.atingido_dia));
-  };
-
-  const updateKpis = async (patch: KpiPatch) => {
-    const { error } = await supabase.from("kpis").update(patch).eq("id", 1);
-
-    if (error) {
-      console.error("Erro ao salvar KPIs:", error);
-      alert("Erro ao salvar: " + error.message);
-      await reloadKpis(); // volta pro valor correto do banco
-    }
-  };
-
-  // ✅ Esses handlers atualizam o state e também salvam no Supabase
-  const onMetaMesChangePersist = (v: number) => {
-    setMetaMes(v);
-    void updateKpis({ meta_mes: v });
-  };
-
-  const onMetaDiaChangePersist = (v: number) => {
-    setMetaDia(v);
-    void updateKpis({ meta_dia: v });
-  };
-
-  const onAtingidoMesChangePersist = (v: number) => {
-    setAtingidoMes(v);
-    void updateKpis({ atingido_mes: v });
-  };
-
-  const onAtingidoDiaChangePersist = (v: number) => {
-    setAtingidoDia(v);
-    void updateKpis({ atingido_dia: v });
-  };
-
-  // 🔥 Carrega do Supabase + atualiza ao vivo (Realtime)
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase
-        .from("kpis")
-        .select("meta_mes, meta_dia, atingido_mes, atingido_dia")
-        .eq("id", 1)
-        .single();
-
-      if (error) {
-        console.error("Erro ao carregar KPIs:", error);
-        return;
-      }
-
-      setMetaMes(Number(data.meta_mes));
-      setMetaDia(Number(data.meta_dia));
-      setAtingidoMes(Number(data.atingido_mes));
-      setAtingidoDia(Number(data.atingido_dia));
-    };
-
-    load();
-
-    const channel = supabase
-      .channel("kpis-live")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "kpis", filter: "id=eq.1" },
-        (payload) => {
-          const n: any = payload.new;
-          setMetaMes(Number(n.meta_mes));
-          setMetaDia(Number(n.meta_dia));
-          setAtingidoMes(Number(n.atingido_mes));
-          setAtingidoDia(Number(n.atingido_dia));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const tabs: TabType[] = ["dashboard", "empresas", "leads"];
 
   // Auto-rotate tabs
   useEffect(() => {
@@ -143,7 +44,7 @@ const Index = () => {
         {/* Header */}
         <header className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
           <Logo className="w-16 h-16 md:w-20 md:h-20" />
-
+          
           {/* Tab Navigation */}
           <div className="flex bg-card rounded-xl p-1 border border-border">
             <button
@@ -219,10 +120,10 @@ const Index = () => {
             metaDia={metaDia}
             atingidoMes={atingidoMes}
             atingidoDia={atingidoDia}
-            onMetaMesChange={onMetaMesChangePersist}
-            onMetaDiaChange={onMetaDiaChangePersist}
-            onAtingidoMesChange={onAtingidoMesChangePersist}
-            onAtingidoDiaChange={onAtingidoDiaChangePersist}
+            onMetaMesChange={setMetaMes}
+            onMetaDiaChange={setMetaDia}
+            onAtingidoMesChange={setAtingidoMes}
+            onAtingidoDiaChange={setAtingidoDia}
           />
         )}
         {activeTab === "empresas" && <EmpresasView />}
