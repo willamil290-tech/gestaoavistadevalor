@@ -1,5 +1,5 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
-import { BarChart3, Users, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -33,9 +33,11 @@ export const EmpresasView = () => {
     setTeamData(mapped);
   }, [remote.data]);
 
-  const totalEmpresas = teamData.reduce((acc, member) => acc + member.total, 0);
-  const mediaPorPessoa = teamData.length > 0 ? (totalEmpresas / teamData.length).toFixed(0) : "0";
-  const topPerformer = teamData.length > 0 ? [...teamData].sort((a, b) => b.total - a.total)[0] : null;
+  const sortedTeamData = [...teamData].sort((a, b) => {
+    const diff = b.total - a.total;
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
 
   const handleUpdate = (updatedMember: TeamMember) => {
     if (isSupabaseConfigured) {
@@ -91,56 +93,15 @@ export const EmpresasView = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Team Cards */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {teamData.map((member) => (
-            <TeamMemberCard 
-              key={member.id} 
-              member={member}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
-
-        {/* Summary Panel */}
-        <div className="space-y-4">
-          <div className="bg-card rounded-xl p-6 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-foreground text-xl">Visão Geral</h3>
-              <div className="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center">
-                <BarChart3 className="w-6 h-6 text-secondary" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-muted rounded-lg p-5 text-center">
-                <Users className="w-8 h-8 text-secondary mx-auto mb-2" />
-                <p className="text-3xl md:text-4xl font-bold text-secondary">{totalEmpresas}</p>
-                <p className="text-sm text-muted-foreground">Empresas acionadas</p>
-              </div>
-              <div className="bg-muted rounded-lg p-5 text-center">
-                <BarChart3 className="w-8 h-8 text-pink-500 mx-auto mb-2" />
-                <p className="text-3xl md:text-4xl font-bold text-pink-500">{mediaPorPessoa}</p>
-                <p className="text-sm text-muted-foreground">Média por pessoa</p>
-              </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground mt-4 text-center">
-              *Sem repetir nome de empresa entre os comerciais
-            </p>
-          </div>
-
-          {/* Top Performer */}
-          {topPerformer && (
-            <div className="bg-gradient-to-br from-gold/20 to-gold/5 rounded-xl p-6 border border-gold/30">
-              <p className="text-sm text-gold uppercase tracking-wider mb-2">Top Performer</p>
-              <p className="text-xl md:text-2xl font-bold text-foreground">{topPerformer.name}</p>
-              <p className="text-3xl md:text-4xl font-bold text-gold">{topPerformer.total} empresas</p>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        {sortedTeamData.map((member) => (
+          <TeamMemberCard 
+            key={member.id} 
+            member={member}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
+        ))}
       </div>
     </div>
   );

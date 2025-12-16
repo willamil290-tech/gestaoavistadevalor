@@ -107,8 +107,7 @@ export async function listTeamMembers(category: TeamCategory): Promise<TeamMembe
   const { data, error } = await supabase!
     .from("team_members")
     .select("id, category, name, morning, afternoon")
-    .eq("category", category)
-    .order("name", { ascending: true });
+    .eq("category", category);
 
   if (error) throw error;
 
@@ -119,6 +118,13 @@ export async function listTeamMembers(category: TeamCategory): Promise<TeamMembe
     morning: Number(r.morning ?? 0),
     afternoon: Number(r.afternoon ?? 0),
   }));
+
+  // Ordena sempre pelo total (manhã + tarde), desc.
+  rows.sort((a, b) => {
+    const diff = (b.morning + b.afternoon) - (a.morning + a.afternoon);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
 
   // Seed se estiver vazio
   if (rows.length === 0) {

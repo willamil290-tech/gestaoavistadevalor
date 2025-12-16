@@ -42,7 +42,7 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
   };
 
   return (
-    <div className="bg-card rounded-lg p-5 border border-border hover:border-secondary/50 transition-all duration-300">
+    <div className="bg-card rounded-lg p-4 md:p-5 border border-border hover:border-secondary/50 transition-all duration-300">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
@@ -57,7 +57,7 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
             />
           ) : (
             <span 
-              className="font-semibold text-foreground text-lg cursor-pointer hover:text-secondary transition-colors"
+              className="font-semibold text-foreground text-xl md:text-2xl cursor-pointer hover:text-secondary transition-colors"
               onClick={() => setIsEditing(true)}
             >
               {member.name}
@@ -79,9 +79,9 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
               <Trash2 className="w-4 h-4" />
             </button>
           )}
-          <div className="text-right ml-2">
-            <span className="text-3xl md:text-4xl font-bold text-secondary">{member.total}</span>
-            <p className="text-sm text-muted-foreground">total</p>
+          <div className="text-right ml-3">
+            <span className="text-4xl md:text-5xl font-bold text-secondary">{member.total}</span>
+            <p className="text-base text-muted-foreground">total</p>
           </div>
         </div>
       </div>
@@ -89,7 +89,7 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-secondary" />
-          <span className="text-base text-muted-foreground w-16">Manhã</span>
+          <span className="text-lg text-muted-foreground w-20">Manhã</span>
           <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
             <div 
               className="h-full bg-secondary rounded-full transition-all duration-500"
@@ -101,11 +101,11 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
               type="number"
               value={editMorning}
               onChange={(e) => setEditMorning(Number(e.target.value))}
-              className="text-lg font-medium text-foreground w-16 text-right bg-muted border border-border rounded px-2 py-1"
+              className="text-xl font-medium text-foreground w-20 text-right bg-muted border border-border rounded px-2 py-1"
             />
           ) : (
             <span 
-              className="text-lg font-medium text-foreground w-10 text-right cursor-pointer hover:text-secondary"
+              className="text-xl font-medium text-foreground w-14 text-right cursor-pointer hover:text-secondary"
               onClick={() => setIsEditing(true)}
             >
               {member.morning}
@@ -115,7 +115,7 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
         
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-pink-500" />
-          <span className="text-base text-muted-foreground w-16">Tarde</span>
+          <span className="text-lg text-muted-foreground w-20">Tarde</span>
           <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
             <div 
               className="h-full bg-pink-500 rounded-full transition-all duration-500"
@@ -127,11 +127,11 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
               type="number"
               value={editAfternoon}
               onChange={(e) => setEditAfternoon(Number(e.target.value))}
-              className="text-lg font-medium text-foreground w-16 text-right bg-muted border border-border rounded px-2 py-1"
+              className="text-xl font-medium text-foreground w-20 text-right bg-muted border border-border rounded px-2 py-1"
             />
           ) : (
             <span 
-              className="text-lg font-medium text-foreground w-10 text-right cursor-pointer hover:text-secondary"
+              className="text-xl font-medium text-foreground w-14 text-right cursor-pointer hover:text-secondary"
               onClick={() => setIsEditing(true)}
             >
               {member.afternoon}

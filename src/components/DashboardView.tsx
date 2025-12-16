@@ -28,10 +28,10 @@ export const DashboardView = ({
   return (
     <div className="animate-fade-in-up">
       {/* Main metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         {/* Month Section */}
-        <div className="bg-card rounded-2xl p-6 md:p-8 border border-border">
-          <div className="flex flex-col items-center gap-6">
+        <div className="bg-card rounded-2xl p-5 md:p-6 border border-border">
+          <div className="flex flex-col items-center gap-4">
             <EditableValue
               value={atingidoMes}
               onChange={onAtingidoMesChange}
@@ -41,7 +41,7 @@ export const DashboardView = ({
               percentage={percentualMes}
               label="Meta (mês)"
               variant="primary"
-              size={220}
+              size={200}
             />
             <div className="w-full pt-4 border-t border-border">
               <EditableValue
@@ -55,8 +55,8 @@ export const DashboardView = ({
         </div>
 
         {/* Day Section */}
-        <div className="bg-card rounded-2xl p-6 md:p-8 border border-border">
-          <div className="flex flex-col items-center gap-6">
+        <div className="bg-card rounded-2xl p-5 md:p-6 border border-border">
+          <div className="flex flex-col items-center gap-4">
             <EditableValue
               value={atingidoDia}
               onChange={onAtingidoDiaChange}
@@ -66,7 +66,7 @@ export const DashboardView = ({
               percentage={percentualDia}
               label="Meta (dia)"
               variant="secondary"
-              size={220}
+              size={200}
             />
             <div className="w-full pt-4 border-t border-border">
               <EditableValue
@@ -82,21 +82,21 @@ export const DashboardView = ({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border text-center">
+        <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">% Mês</p>
           <p className="text-2xl md:text-3xl font-bold text-primary">{percentualMes.toFixed(1)}%</p>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border text-center">
+        <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">% Dia</p>
           <p className="text-2xl md:text-3xl font-bold text-secondary">{percentualDia.toFixed(1)}%</p>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border text-center">
+        <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Mês)</p>
           <p className="text-xl md:text-2xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaMes - atingidoMes))}
           </p>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border text-center">
+        <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Dia)</p>
           <p className="text-xl md:text-2xl font-bold text-foreground">
             {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, metaDia - atingidoDia))}

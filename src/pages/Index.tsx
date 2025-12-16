@@ -58,11 +58,11 @@ const Index = () => {
   }, [autoRotate, rotateInterval]);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background p-2 md:p-4">
+      <div className="mx-auto w-full max-w-[1600px]">
         {/* Header */}
-        <header className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
-          <Logo className="w-16 h-16 md:w-20 md:h-20" />
+        <header className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+          <Logo className="w-14 h-14 md:w-16 md:h-16" />
           
           {/* Tab Navigation */}
           <div className="flex bg-card rounded-xl p-1 border border-border">
