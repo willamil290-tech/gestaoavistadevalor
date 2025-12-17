@@ -17,6 +17,7 @@ export const EditableValue = ({
   label,
   size = "lg",
   className,
+  readOnly = false,
 }: EditableValueProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value.toString());
@@ -70,13 +71,13 @@ export const EditableValue = ({
               )}
               autoFocus
             />
-            <button
+            <button type="button"
               onClick={handleSave}
               className="p-2 rounded-full bg-green-600 hover:bg-green-700 transition-colors"
             >
               <Check className="w-4 h-4 text-foreground" />
             </button>
-            <button
+            <button type="button"
               onClick={handleCancel}
               className="p-2 rounded-full bg-destructive hover:bg-destructive/80 transition-colors"
             >
@@ -84,27 +85,14 @@ export const EditableValue = ({
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            className={cn(
-              "flex items-center gap-3 group focus:outline-none",
-              readOnly ? "cursor-default" : "cursor-pointer"
-            )}
-            onClick={() => {
-              if (readOnly) return;
-              setIsEditing(true);
-            }}
-            aria-label={`Editar ${label}`}
-          >
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => !readOnly && setIsEditing(true)}>
             <span className={cn("font-bold text-foreground", sizeClasses[size])}>
               {formatCurrency(value)}
             </span>
-            {!readOnly && (
-              <span className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
-                <Pencil className="w-4 h-4 text-muted-foreground" />
-              </span>
-            )}
-          </button>
+            <button type="button" className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
+              <Pencil className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         )}
       </div>
     </div>
