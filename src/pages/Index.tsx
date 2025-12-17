@@ -59,16 +59,23 @@ const Index = () => {
   // Persist TV mode locally
   useEffect(() => {
     localStorage.setItem("tvMode", tvMode ? "1" : "0");
+
     if (tvMode) {
       setAutoRotate(true);
       setRotateInterval(0.5);
-      // Try fullscreen (best-effort)
+
+      // Try fullscreen (best-effort) — evita erro "Document not active"
       try {
-        document.documentElement.requestFullscreen?.();
+        const p = document.documentElement.requestFullscreen?.();
+        (p as any)?.catch?.(() => {});
       } catch (_) {}
     } else {
+      // Só tenta sair do fullscreen se estiver ativo
       try {
-        document.exitFullscreen?.();
+        if (document.fullscreenElement) {
+          const p = document.exitFullscreen?.();
+          (p as any)?.catch?.(() => {});
+        }
       } catch (_) {}
     }
   }, [tvMode]);

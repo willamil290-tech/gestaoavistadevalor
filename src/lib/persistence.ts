@@ -1,5 +1,13 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
+let dailyEventsDisabled = false;
+const isMissingDailyEventsError = (msg?: string) => {
+  const m = String(msg ?? "");
+  return m.includes("daily_events") && (m.includes("Could not find the table") || m.includes("schema cache") || m.includes("404"));
+};
+export const isDailyEventsEnabled = () => !dailyEventsDisabled;
+
+
 export type DashboardSettings = {
   metaMes: number;
   metaDia: number;
@@ -217,6 +225,8 @@ export async function insertDailyEvent(event: {
   deltaAfternoon?: number;
   deltaBorderoDia?: number;
 }) {
+  if (!isSupabaseConfigured || dailyEventsDisabled) return;
+
   try {
     const { error } = await supabase!
       .from("daily_events")
@@ -229,16 +239,19 @@ export async function insertDailyEvent(event: {
         delta_afternoon: event.deltaAfternoon ?? 0,
         delta_bordero_dia: event.deltaBorderoDia ?? 0,
       });
+
     if (error) {
-      // Common case: table not created yet
-      console.warn("daily_events insert:", error.message);
+      if (isMissingDailyEventsError(error.message)) dailyEventsDisabled = true;
+      return;
     }
-  } catch (e) {
-    console.warn("daily_events insert failed");
+  } catch (e: any) {
+    // ignore
   }
 }
 
 export async function listDailyEvents(businessDate: string, beforeIso?: string): Promise<DailyEvent[]> {
+  if (!isSupabaseConfigured || dailyEventsDisabled) return [];
+
   try {
     let q = supabase!
       .from("daily_events")
@@ -250,7 +263,7 @@ export async function listDailyEvents(businessDate: string, beforeIso?: string):
 
     const { data, error } = await q;
     if (error) {
-      console.warn("daily_events list:", error.message);
+      if (isMissingDailyEventsError(error.message)) dailyEventsDisabled = true;
       return [];
     }
 
@@ -265,7 +278,7 @@ export async function listDailyEvents(businessDate: string, beforeIso?: string):
       deltaBorderoDia: Number(r.delta_bordero_dia ?? 0),
       createdAt: String(r.created_at),
     }));
-  } catch (e) {
+  } catch (e: any) {
     return [];
   }
 }
@@ -293,27 +306,13 @@ export async function resetDayCounters() {
 }
 
 /**
- * Returns the most recent activity timestamp (ISO string), preferring daily_events if available.
+ * Returns the most recent activity timestamp (ISO string).
+ * Uses updated_at columns to avoid depender de daily_events (que é opcional).
  */
 export async function getLastActivityIso(): Promise<string | null> {
   assertConfigured();
 
-  // Try daily_events
-  try {
-    const { data, error } = await supabase!
-      .from("daily_events")
-      .select("created_at")
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    if (!error && data && data[0]?.created_at) {
-      return String(data[0].created_at);
-    }
-  } catch (_) {
-    // ignore
-  }
-
-  // Fallback to updated_at columns (if exist)
+  // updated_at columns
   try {
     const { data: sData } = await supabase!
       .from("dashboard_settings")

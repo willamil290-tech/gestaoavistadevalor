@@ -1,6 +1,6 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
 import { ClipboardPaste, Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { TeamMember as PersistedMember } from "@/lib/persistence";
@@ -26,7 +26,7 @@ const initialTeamData: TeamMember[] = [
   { id: "6", name: "Raissa Flor", total: 1, morning: 1, afternoon: 0 },
 ];
 
-function genId(prefix = "m") {
+function genId(prefix = "emp") {
   const u = (globalThis.crypto as any)?.randomUUID?.();
   return u ? String(u) : `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
@@ -35,16 +35,10 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const remote = useTeamMembers("empresas");
   const [teamData, setTeamData] = useState<TeamMember[]>(initialTeamData);
 
-  // Bulk UI
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkMode, setBulkMode] = useState<BulkMode>("replace");
   const showUndo = useUndoToast();
-
-  // Dynamic highlight (+delta)
-  const prevTotalsRef = useRef<Map<string, number>>(new Map());
-  const deltaTimeoutsRef = useRef<Map<string, number>>(new Map());
-  const [deltas, setDeltas] = useState<Record<string, number>>({});
 
   // Sync from Supabase -> local state
   useEffect(() => {
@@ -62,42 +56,19 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
     setTeamData(mapped);
   }, [remote.data]);
 
-  // Compute deltas for highlight
+  // Atalho Ctrl+Shift+U / Cmd+Shift+U para abrir colar texto (quando não estiver em TV)
   useEffect(() => {
-    const prev = prevTotalsRef.current;
-    const next = new Map<string, number>();
-    const localDeltas: Record<string, number> = {};
-
-    for (const m of teamData) {
-      const total = m.total;
-      next.set(m.id, total);
-      const old = prev.get(m.id);
-      if (typeof old === "number") {
-        const diff = total - old;
-        if (diff > 0) localDeltas[m.id] = diff;
-      } else if (total > 0) {
-        localDeltas[m.id] = total;
+    const handler = (e: KeyboardEvent) => {
+      const isMac = /mac/i.test(navigator.platform);
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.shiftKey && (e.key === "u" || e.key === "U")) {
+        e.preventDefault();
+        if (!tvMode) setBulkOpen(true);
       }
-    }
-
-    // Apply and clear after 3s
-    for (const [id, diff] of Object.entries(localDeltas)) {
-      if (diff <= 0) continue;
-      setDeltas((p) => ({ ...p, [id]: diff }));
-      const oldT = deltaTimeoutsRef.current.get(id);
-      if (oldT) window.clearTimeout(oldT);
-      const t = window.setTimeout(() => {
-        setDeltas((p) => {
-          const copy = { ...p };
-          delete copy[id];
-          return copy;
-        });
-      }, 3000);
-      deltaTimeoutsRef.current.set(id, t);
-    }
-
-    prevTotalsRef.current = next;
-  }, [teamData]);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [tvMode]);
 
   const sortedTeamData = useMemo(() => {
     return [...teamData].sort((a, b) => {
@@ -163,7 +134,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       return;
     }
     const newMember: TeamMember = {
-      id: Date.now().toString(),
+      id: genId("emp"),
       name: "Novo Colaborador",
       total: 0,
       morning: 0,
@@ -179,8 +150,11 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       return;
     }
 
+    // snapshot para desfazer
+    const beforeLocal = teamData.map((m) => ({ ...m }));
+    const beforeRemote = (remote.data ?? []).map((m) => ({ ...m }));
+
     if (!isSupabaseConfigured) {
-      // Local fallback
       setTeamData((prev) => {
         const map = new Map(prev.map((m) => [normalizeNameKey(m.name), m]));
         for (const e of entries) {
@@ -201,16 +175,17 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       setBulkOpen(false);
       setBulkText("");
       toast.success("Atualizado");
+
+      showUndo({
+        message: "Atualização aplicada",
+        onUndo: () => setTeamData(beforeLocal),
+      });
       return;
     }
 
     const businessDate = getBusinessDate();
     const existingByName = new Map<string, PersistedMember>();
     for (const m of remote.data ?? []) existingByName.set(normalizeNameKey(m.name), m);
-
-    const createdIds: string[] = [];
-    const changedSnapshots: PersistedMember[] = [];
-    const appliedDeltas: Array<{ id: string; dm: number; da: number; created: boolean }> = [];
 
     for (const e of entries) {
       const key = normalizeNameKey(e.name);
@@ -225,17 +200,18 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
         const dm = newM - oldM;
         const da = newA - oldA;
 
-        changedSnapshots.push({ ...existing });
         await remote.upsertMemberAsync({ ...existing, morning: newM, afternoon: newA });
-        await insertDailyEvent({
-          businessDate,
-          scope: "empresas",
-          kind: "bulk",
-          memberId: existing.id,
-          deltaMorning: dm,
-          deltaAfternoon: da,
-        });
-        appliedDeltas.push({ id: existing.id, dm, da, created: false });
+
+        if (dm !== 0 || da !== 0) {
+          await insertDailyEvent({
+            businessDate,
+            scope: "empresas",
+            kind: "bulk",
+            memberId: existing.id,
+            deltaMorning: dm,
+            deltaAfternoon: da,
+          });
+        }
       } else {
         const id = genId("emp");
         const newMember: PersistedMember = {
@@ -245,8 +221,8 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
           morning: e.morning,
           afternoon: e.afternoon,
         };
-        createdIds.push(id);
         await remote.upsertMemberAsync(newMember);
+
         await insertDailyEvent({
           businessDate,
           scope: "empresas",
@@ -255,7 +231,6 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
           deltaMorning: e.morning,
           deltaAfternoon: e.afternoon,
         });
-        appliedDeltas.push({ id, dm: e.morning, da: e.afternoon, created: true });
       }
     }
 
@@ -263,45 +238,18 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
     setBulkText("");
     toast.success(`Atualizado: ${entries.length} colaborador(es)`);
 
-    // Undo
     showUndo({
       message: "Atualização aplicada",
       onUndo: async () => {
-        // Delete created
-        for (const id of createdIds) {
-          await remote.deleteMemberAsync(id);
-          await insertDailyEvent({
-            businessDate,
-            scope: "empresas",
-            kind: "undo",
-            memberId: id,
-            deltaMorning: 0,
-            deltaAfternoon: 0,
-          });
-        }
-        // Restore changed
-        for (const snap of changedSnapshots) {
-          await remote.upsertMemberAsync(snap);
-        }
-        for (const d of appliedDeltas) {
-          if (d.created) continue;
-          await insertDailyEvent({
-            businessDate,
-            scope: "empresas",
-            kind: "undo",
-            memberId: d.id,
-            deltaMorning: -d.dm,
-            deltaAfternoon: -d.da,
-          });
-        }
-        toast.success("Restaurado");
+        // restaura do snapshot remoto (upsert)
+        for (const m of beforeRemote) await remote.upsertMemberAsync(m);
       },
     });
   };
 
   return (
     <div className="animate-fade-in-up">
-      <div className={"flex items-center justify-between mb-5"}>
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-secondary" />
           <h2 className="text-2xl md:text-3xl font-semibold text-foreground">Empresas Acionadas</h2>
@@ -322,15 +270,13 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
         )}
       </div>
 
-      <div className={"grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4"}>
-        {sortedTeamData.map((member, idx) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        {sortedTeamData.map((member) => (
           <TeamMemberCard
             key={member.id}
             member={member}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
-            rank={idx + 1}
-            delta={deltas[member.id]}
             scale={scale}
             readOnly={tvMode}
           />
