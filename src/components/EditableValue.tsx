@@ -84,14 +84,27 @@ export const EditableValue = ({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => !readOnly && setIsEditing(true)}>
+          <button
+            type="button"
+            className={cn(
+              "flex items-center gap-3 group focus:outline-none",
+              readOnly ? "cursor-default" : "cursor-pointer"
+            )}
+            onClick={() => {
+              if (readOnly) return;
+              setIsEditing(true);
+            }}
+            aria-label={`Editar ${label}`}
+          >
             <span className={cn("font-bold text-foreground", sizeClasses[size])}>
               {formatCurrency(value)}
             </span>
-            <button className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
-              <Pencil className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </div>
+            {!readOnly && (
+              <span className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
+                <Pencil className="w-4 h-4 text-muted-foreground" />
+              </span>
+            )}
+          </button>
         )}
       </div>
     </div>
