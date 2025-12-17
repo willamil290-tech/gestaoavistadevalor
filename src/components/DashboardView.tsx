@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { CircularProgress } from "./CircularProgress";
@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import { isDailyEventsEnabled, listDailyEvents } from "@/lib/persistence";
 import { getBusinessDate } from "@/lib/businessDate";
 import { ChartContainer } from "@/components/ui/chart";
+import { toast } from "sonner";
 
 interface DashboardViewProps {
   metaMes: number;
@@ -35,8 +36,83 @@ export const DashboardView = ({
   tvMode = false,
   readOnly = false,
 }: DashboardViewProps) => {
+  // 🎵 Tema da vitória (Ayrton Senna)
+  // Adicione um arquivo MP3 licenciado em: public/audio/tema-da-vitoria.mp3
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playedRef = useRef({ day: false, month: false });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const a = new Audio("/audio/tema-da-vitoria.mp3");
+      a.preload = "auto";
+      audioRef.current = a;
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const playTheme = (which: "dia" | "mes") => {
+    const a = audioRef.current;
+    if (!a) {
+      toast(`Meta do ${which} atingida!`, {
+        description: "Adicione um MP3 licenciado em /public/audio/tema-da-vitoria.mp3 para tocar o tema.",
+      });
+      return;
+    }
+
+    // Se não houver fonte disponível (arquivo ausente), avisa sem quebrar
+    const anyA = a as any;
+    if (typeof anyA.networkState === "number" && typeof anyA.NETWORK_NO_SOURCE === "number" && anyA.networkState === anyA.NETWORK_NO_SOURCE) {
+      toast(`Meta do ${which} atingida!`, {
+        description: "Arquivo não encontrado: /public/audio/tema-da-vitoria.mp3",
+      });
+      return;
+    }
+
+    try {
+      a.currentTime = 0;
+      const p = a.play();
+      (p as any)?.catch?.(() => {
+        toast(`Meta do ${which} atingida!`, {
+          description: "O navegador bloqueou o autoplay. Clique para tocar.",
+          action: {
+            label: "Tocar tema",
+            onClick: () => {
+              try {
+                a.currentTime = 0;
+                a.play().catch(() => {
+                  toast("Não foi possível tocar o áudio.", {
+                    description: "Verifique se o arquivo existe em /public/audio/tema-da-vitoria.mp3",
+                  });
+                });
+              } catch {}
+            },
+          },
+        });
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+
   const percentualMes = metaMes > 0 ? (atingidoMes / metaMes) * 100 : 0;
   const percentualDia = metaDia > 0 ? (atingidoDia / metaDia) * 100 : 0;
+
+  useEffect(() => {
+    const hitDay = percentualDia >= 100;
+    const hitMonth = percentualMes >= 100;
+
+    if (hitDay && !playedRef.current.day) {
+      playedRef.current.day = true;
+      playTheme("dia");
+    }
+    if (hitMonth && !playedRef.current.month) {
+      playedRef.current.month = true;
+      playTheme("mes");
+    }
+  }, [percentualDia, percentualMes]);
 
   const circleSize = tvMode ? 170 : 200;
 
