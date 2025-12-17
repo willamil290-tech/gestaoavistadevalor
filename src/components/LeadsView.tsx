@@ -1,5 +1,7 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
 import { Plus } from "lucide-react";
+import { BulkPasteUpdater } from "./BulkPasteUpdater";
+import { normalizeName, type BulkEntry } from "@/lib/bulkParse";
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
@@ -75,6 +77,82 @@ export const LeadsView = () => {
     setLeadsData(prev => [...prev, newMember]);
   };
 
+
+  const applyBulk = async (entries: BulkEntry[]) => {
+    const byName = new Map<string, TeamMember>();
+    for (const m of leadsData) byName.set(normalizeName(m.name), m);
+
+    let next = [...leadsData];
+
+    for (const e of entries) {
+      const key = normalizeName(e.name);
+      const existing = byName.get(key);
+
+      if (isSupabaseConfigured) {
+        if (existing) {
+          const updated: TeamMember = {
+            ...existing,
+            name: e.name,
+            morning: e.morning,
+            afternoon: e.afternoon,
+            total: e.morning + e.afternoon,
+          };
+          next = next.map((m) => (m.id === updated.id ? updated : m));
+
+          const payload: PersistedMember = {
+            id: updated.id,
+            category: "leads",
+            name: updated.name,
+            morning: updated.morning,
+            afternoon: updated.afternoon,
+          };
+          await remote.upsertMemberAsync(payload);
+        } else {
+          const created = await remote.addMember();
+          const newLocal: TeamMember = {
+            id: created.id,
+            name: e.name,
+            morning: e.morning,
+            afternoon: e.afternoon,
+            total: e.morning + e.afternoon,
+          };
+          next = [...next, newLocal];
+
+          const payload: PersistedMember = {
+            id: created.id,
+            category: "leads",
+            name: e.name,
+            morning: e.morning,
+            afternoon: e.afternoon,
+          };
+          await remote.upsertMemberAsync(payload);
+        }
+      } else {
+        if (existing) {
+          const updated: TeamMember = {
+            ...existing,
+            name: e.name,
+            morning: e.morning,
+            afternoon: e.afternoon,
+            total: e.morning + e.afternoon,
+          };
+          next = next.map((m) => (m.id === updated.id ? updated : m));
+        } else {
+          const newMember: TeamMember = {
+            id: Date.now().toString() + Math.random().toString(16).slice(2),
+            name: e.name,
+            morning: e.morning,
+            afternoon: e.afternoon,
+            total: e.morning + e.afternoon,
+          };
+          next = [...next, newMember];
+        }
+      }
+    }
+
+    setLeadsData(next);
+  };
+
   return (
     <div className="animate-fade-in-up">
       <div className="flex items-center justify-between mb-6">
@@ -90,6 +168,12 @@ export const LeadsView = () => {
           <span className="hidden md:inline">Adicionar</span>
         </button>
       </div>
+
+      <BulkPasteUpdater
+        title="Atualização rápida (colar texto)"
+        subtitle="Cole o texto no padrão e clique em Aplicar para atualizar Manhã e Tarde automaticamente."
+        onApply={applyBulk}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {sortedLeadsData.map((member) => (

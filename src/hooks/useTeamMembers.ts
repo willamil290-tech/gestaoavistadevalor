@@ -70,6 +70,7 @@ export function useTeamMembers(category: TeamCategory) {
     ...query,
     addMember: () => addMutation.mutateAsync(),
     upsertMember: (member: TeamMember) => upsertMutation.mutate(member),
+    upsertMemberAsync: (member: TeamMember) => upsertMutation.mutateAsync(member),
     deleteMember: (id: string) => deleteMutation.mutate(id),
   };
 }
