@@ -17,7 +17,6 @@ export const EditableValue = ({
   label,
   size = "lg",
   className,
-  readOnly = false,
 }: EditableValueProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value.toString());
@@ -85,11 +84,11 @@ export const EditableValue = ({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => { if (!readOnly) setIsEditing(true); }}>
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => !readOnly && setIsEditing(true)}>
             <span className={cn("font-bold text-foreground", sizeClasses[size])}>
               {formatCurrency(value)}
             </span>
-            <button type="button" onClick={(e) => { e.stopPropagation(); if (!readOnly) setIsEditing(true); }} className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
+            <button className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
               <Pencil className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
