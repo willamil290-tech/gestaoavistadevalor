@@ -43,6 +43,7 @@ export function useDashboardSettings() {
   return {
     ...query,
     update: mutation.mutate,
+    updateAsync: mutation.mutateAsync,
     updating: mutation.isPending,
     updateError: mutation.error,
   };

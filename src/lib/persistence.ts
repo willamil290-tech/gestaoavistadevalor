@@ -72,6 +72,7 @@ export async function getDashboardSettings(): Promise<DashboardSettings> {
         meta_dia: DEFAULT_SETTINGS.metaDia,
         atingido_mes: DEFAULT_SETTINGS.atingidoMes,
         atingido_dia: DEFAULT_SETTINGS.atingidoDia,
+        updated_at: new Date().toISOString(),
       });
     if (insertError) throw insertError;
     return DEFAULT_SETTINGS;
@@ -88,7 +89,8 @@ export async function getDashboardSettings(): Promise<DashboardSettings> {
 export async function updateDashboardSettings(patch: Partial<DashboardSettings>) {
   assertConfigured();
 
-  const payload: Record<string, number> = {};
+  const payload: Record<string, any> = {};
+  payload.updated_at = new Date().toISOString();
   if (typeof patch.metaMes === "number") payload.meta_mes = patch.metaMes;
   if (typeof patch.metaDia === "number") payload.meta_dia = patch.metaDia;
   if (typeof patch.atingidoMes === "number") payload.atingido_mes = patch.atingidoMes;
@@ -131,7 +133,7 @@ export async function listTeamMembers(category: TeamCategory): Promise<TeamMembe
     const seed = category === "empresas" ? DEFAULT_EMPRESAS : DEFAULT_LEADS;
     const { error: insertError } = await supabase!
       .from("team_members")
-      .insert(seed.map((m) => ({ ...m })));
+      .insert(seed.map((m) => ({ ...m, updated_at: new Date().toISOString() })) );
     if (insertError) throw insertError;
     return seed;
   }
@@ -151,6 +153,7 @@ export async function upsertTeamMember(member: TeamMember) {
         name: member.name,
         morning: member.morning,
         afternoon: member.afternoon,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }
     );
@@ -161,12 +164,13 @@ export async function addTeamMember(category: TeamCategory): Promise<TeamMember>
   assertConfigured();
 
   const id = (globalThis.crypto?.randomUUID?.() ?? Date.now().toString()) as string;
-  const newMember: TeamMember = {
+  const newMember: any = {
     id,
     category,
     name: "Novo Colaborador",
     morning: 0,
     afternoon: 0,
+    updated_at: new Date().toISOString(),
   };
 
   const { error } = await supabase!.from("team_members").insert(newMember);
@@ -178,4 +182,158 @@ export async function deleteTeamMember(id: string) {
   assertConfigured();
   const { error } = await supabase!.from("team_members").delete().eq("id", id);
   if (error) throw error;
+}
+
+
+export type DailyEventScope = "empresas" | "leads" | "bordero";
+export type DailyEventKind = "bulk" | "single" | "reset" | "undo";
+
+export type DailyEvent = {
+  id: string;
+  businessDate: string;
+  scope: DailyEventScope;
+  kind: DailyEventKind;
+  memberId?: string | null;
+  deltaMorning: number;
+  deltaAfternoon: number;
+  deltaBorderoDia: number;
+  createdAt: string;
+};
+
+async function safeFrom(table: string) {
+  assertConfigured();
+  return supabase!.from(table);
+}
+
+/**
+ * Inserts a daily event. If the table doesn't exist, it fails silently (keeps the UI working).
+ */
+export async function insertDailyEvent(event: {
+  businessDate: string;
+  scope: DailyEventScope;
+  kind: DailyEventKind;
+  memberId?: string | null;
+  deltaMorning?: number;
+  deltaAfternoon?: number;
+  deltaBorderoDia?: number;
+}) {
+  try {
+    const { error } = await supabase!
+      .from("daily_events")
+      .insert({
+        business_date: event.businessDate,
+        scope: event.scope,
+        kind: event.kind,
+        member_id: event.memberId ?? null,
+        delta_morning: event.deltaMorning ?? 0,
+        delta_afternoon: event.deltaAfternoon ?? 0,
+        delta_bordero_dia: event.deltaBorderoDia ?? 0,
+      });
+    if (error) {
+      // Common case: table not created yet
+      console.warn("daily_events insert:", error.message);
+    }
+  } catch (e) {
+    console.warn("daily_events insert failed");
+  }
+}
+
+export async function listDailyEvents(businessDate: string, beforeIso?: string): Promise<DailyEvent[]> {
+  try {
+    let q = supabase!
+      .from("daily_events")
+      .select("id, business_date, scope, kind, member_id, delta_morning, delta_afternoon, delta_bordero_dia, created_at")
+      .eq("business_date", businessDate)
+      .order("created_at", { ascending: true });
+
+    if (beforeIso) q = q.lte("created_at", beforeIso);
+
+    const { data, error } = await q;
+    if (error) {
+      console.warn("daily_events list:", error.message);
+      return [];
+    }
+
+    return (data ?? []).map((r: any) => ({
+      id: String(r.id),
+      businessDate: String(r.business_date),
+      scope: r.scope as DailyEventScope,
+      kind: r.kind as DailyEventKind,
+      memberId: r.member_id ? String(r.member_id) : null,
+      deltaMorning: Number(r.delta_morning ?? 0),
+      deltaAfternoon: Number(r.delta_afternoon ?? 0),
+      deltaBorderoDia: Number(r.delta_bordero_dia ?? 0),
+      createdAt: String(r.created_at),
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Resets day counters:
+ * - dashboard_settings.atingido_dia = 0
+ * - team_members morning/afternoon = 0 for empresas/leads
+ */
+export async function resetDayCounters() {
+  assertConfigured();
+  const nowIso = new Date().toISOString();
+
+  const { error: e1 } = await supabase!
+    .from("dashboard_settings")
+    .update({ atingido_dia: 0, updated_at: nowIso })
+    .eq("key", SETTINGS_KEY);
+  if (e1) throw e1;
+
+  const { error: e2 } = await supabase!
+    .from("team_members")
+    .update({ morning: 0, afternoon: 0, updated_at: nowIso })
+    .in("category", ["empresas", "leads"]);
+  if (e2) throw e2;
+}
+
+/**
+ * Returns the most recent activity timestamp (ISO string), preferring daily_events if available.
+ */
+export async function getLastActivityIso(): Promise<string | null> {
+  assertConfigured();
+
+  // Try daily_events
+  try {
+    const { data, error } = await supabase!
+      .from("daily_events")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (!error && data && data[0]?.created_at) {
+      return String(data[0].created_at);
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // Fallback to updated_at columns (if exist)
+  try {
+    const { data: sData } = await supabase!
+      .from("dashboard_settings")
+      .select("updated_at")
+      .eq("key", SETTINGS_KEY)
+      .maybeSingle();
+
+    const sUpdated = sData?.updated_at ? new Date(sData.updated_at).getTime() : 0;
+
+    const { data: tData } = await supabase!
+      .from("team_members")
+      .select("updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    const tUpdated = tData?.[0]?.updated_at ? new Date(tData[0].updated_at).getTime() : 0;
+
+    const maxTs = Math.max(sUpdated, tUpdated);
+    return maxTs ? new Date(maxTs).toISOString() : null;
+  } catch (_) {
+    return null;
+  }
 }

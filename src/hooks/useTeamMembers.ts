@@ -69,7 +69,10 @@ export function useTeamMembers(category: TeamCategory) {
   return {
     ...query,
     addMember: () => addMutation.mutateAsync(),
+    addMemberAsync: () => addMutation.mutateAsync(),
     upsertMember: (member: TeamMember) => upsertMutation.mutate(member),
+    upsertMemberAsync: (member: TeamMember) => upsertMutation.mutateAsync(member),
     deleteMember: (id: string) => deleteMutation.mutate(id),
+    deleteMemberAsync: (id: string) => deleteMutation.mutateAsync(id),
   };
 }

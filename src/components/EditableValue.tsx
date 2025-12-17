@@ -8,6 +8,7 @@ interface EditableValueProps {
   label: string;
   size?: "sm" | "lg";
   className?: string;
+  readOnly?: boolean;
 }
 
 export const EditableValue = ({
@@ -83,7 +84,7 @@ export const EditableValue = ({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setIsEditing(true)}>
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => !readOnly && setIsEditing(true)}>
             <span className={cn("font-bold text-foreground", sizeClasses[size])}>
               {formatCurrency(value)}
             </span>

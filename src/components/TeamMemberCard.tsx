@@ -1,5 +1,6 @@
-import { User, Trash2, Check, X } from "lucide-react";
-import { useState } from "react";
+import { User, Trash2, Check, X, Crown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export interface TeamMember {
   id: string;
@@ -9,24 +10,63 @@ export interface TeamMember {
   afternoon: number;
 }
 
+type Scale = "lg" | "md" | "sm";
+
 interface TeamMemberCardProps {
   member: TeamMember;
   onUpdate: (member: TeamMember) => void;
   onDelete: (id: string) => void;
+  rank?: number; // 1-based rank in the sorted list
+  delta?: number; // recent increase (for highlight)
+  scale?: Scale;
+  readOnly?: boolean;
 }
 
-export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardProps) => {
+export const TeamMemberCard = ({
+  member,
+  onUpdate,
+  onDelete,
+  rank,
+  delta,
+  scale = "md",
+  readOnly = false,
+}: TeamMemberCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(member.name);
   const [editMorning, setEditMorning] = useState(member.morning);
   const [editAfternoon, setEditAfternoon] = useState(member.afternoon);
 
-  const maxValue = Math.max(member.morning, member.afternoon, 1);
+  const isTop = typeof rank === "number" && rank >= 1 && rank <= 3;
+
+  const size = useMemo(() => {
+    if (scale === "lg") {
+      return {
+        name: "text-2xl md:text-3xl",
+        num: "text-2xl md:text-3xl",
+        total: "text-4xl md:text-5xl",
+        pad: "p-5 md:p-6",
+      };
+    }
+    if (scale === "sm") {
+      return {
+        name: "text-lg md:text-xl",
+        num: "text-xl md:text-2xl",
+        total: "text-3xl md:text-4xl",
+        pad: "p-4 md:p-5",
+      };
+    }
+    return {
+      name: "text-xl md:text-2xl",
+      num: "text-2xl md:text-3xl",
+      total: "text-4xl md:text-5xl",
+      pad: "p-4 md:p-5",
+    };
+  }, [scale]);
 
   const handleSave = () => {
     onUpdate({
-      ...member,
-      name: editName,
+      id: member.id,
+      name: editName.trim() || member.name,
       morning: editMorning,
       afternoon: editAfternoon,
       total: editMorning + editAfternoon,
@@ -41,101 +81,146 @@ export const TeamMemberCard = ({ member, onUpdate, onDelete }: TeamMemberCardPro
     setIsEditing(false);
   };
 
+  const cardClasses = cn(
+    "relative bg-card rounded-2xl border transition-all duration-300",
+    size.pad,
+    isTop ? "border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.35)]" : "border-border hover:border-secondary/50",
+    delta && delta > 0 ? "ring-2 ring-secondary/40" : ""
+  );
+
   return (
-    <div className="bg-card rounded-lg p-4 md:p-5 border border-border hover:border-secondary/50 transition-all duration-300">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
-            <User className="w-5 h-5 text-gold" />
+    <div className={cardClasses}>
+      {/* Top badge / delta */}
+      <div className="absolute right-3 top-3 flex items-center gap-2">
+        {isTop && (
+          <div className="flex items-center gap-1 rounded-full bg-gold/20 px-2 py-1 text-xs font-semibold text-gold">
+            <Crown className="h-3.5 w-3.5" />
+            TOP {rank}
           </div>
-          {isEditing ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="font-semibold text-foreground text-lg bg-muted border border-border rounded px-2 py-1 w-40"
-            />
-          ) : (
-            <span 
-              className="font-semibold text-foreground text-xl md:text-2xl cursor-pointer hover:text-secondary transition-colors"
-              onClick={() => setIsEditing(true)}
-            >
-              {member.name}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <button onClick={handleSave} className="p-1 text-green-500 hover:bg-green-500/20 rounded">
-                <Check className="w-5 h-5" />
-              </button>
-              <button onClick={handleCancel} className="p-1 text-red-500 hover:bg-red-500/20 rounded">
-                <X className="w-5 h-5" />
-              </button>
-            </>
-          ) : (
-            <button onClick={() => onDelete(member.id)} className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/20 rounded transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-          <div className="text-right ml-3">
-            <span className="text-4xl md:text-5xl font-bold text-secondary">{member.total}</span>
-            <p className="text-base text-muted-foreground">total</p>
+        )}
+        {delta && delta > 0 && (
+          <div className="rounded-full bg-secondary/20 px-2 py-1 text-xs font-semibold text-secondary">
+            +{delta}
           </div>
-        </div>
+        )}
+        {!readOnly && (
+          <button
+            onClick={() => onDelete(member.id)}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+            title="Excluir"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
-      
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-secondary" />
-          <span className="text-lg text-muted-foreground w-20">Manhã</span>
-          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-secondary rounded-full transition-all duration-500"
-              style={{ width: `${(member.morning / maxValue) * 100}%` }}
-            />
+
+      {/* Header */}
+      <div className="flex items-center gap-3 pr-10">
+        <div className={cn("shrink-0 rounded-full flex items-center justify-center", isTop ? "bg-gold/20" : "bg-gold/15", "w-12 h-12")}>
+          <User className={cn("w-6 h-6", isTop ? "text-gold" : "text-gold")} />
+        </div>
+
+        {isEditing ? (
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            className={cn(
+              "font-semibold text-foreground bg-muted border border-border rounded-xl px-3 py-2 w-full",
+              size.name
+            )}
+            autoFocus
+          />
+        ) : (
+          <div
+            className={cn(
+              "font-semibold text-foreground leading-tight w-full",
+              size.name,
+              !readOnly ? "cursor-pointer hover:text-secondary transition-colors" : ""
+            )}
+            onClick={() => !readOnly && setIsEditing(true)}
+            title={!readOnly ? "Clique para editar" : undefined}
+          >
+            {member.name}
           </div>
+        )}
+      </div>
+
+      {/* Total */}
+      <div className="mt-4 flex items-end justify-between gap-4">
+        <div>
+          <div className="text-sm md:text-base text-muted-foreground">Total</div>
+          <div className={cn("font-extrabold tracking-tight text-foreground", size.total)}>{member.total}</div>
+        </div>
+
+        {/* Edit controls */}
+        {!readOnly && (
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <button onClick={handleSave} className="p-2 rounded-xl text-green-500 hover:bg-green-500/15 transition-all" title="Salvar">
+                  <Check className="w-5 h-5" />
+                </button>
+                <button onClick={handleCancel} className="p-2 rounded-xl text-red-500 hover:bg-red-500/15 transition-all" title="Cancelar">
+                  <X className="w-5 h-5" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {/* Morning/Afternoon */}
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="bg-muted/60 rounded-2xl p-3 md:p-4 border border-border/60">
+          <div className="text-xs md:text-sm text-muted-foreground mb-1">Manhã</div>
           {isEditing ? (
             <input
               type="number"
               value={editMorning}
               onChange={(e) => setEditMorning(Number(e.target.value))}
-              className="text-xl font-medium text-foreground w-20 text-right bg-muted border border-border rounded px-2 py-1"
+              className={cn(
+                "w-full text-right font-semibold text-foreground bg-muted border border-border rounded-xl px-3 py-2",
+                size.num
+              )}
             />
           ) : (
-            <span 
-              className="text-xl font-medium text-foreground w-14 text-right cursor-pointer hover:text-secondary"
-              onClick={() => setIsEditing(true)}
+            <div
+              className={cn(
+                "text-right font-semibold text-foreground",
+                size.num,
+                !readOnly ? "cursor-pointer hover:text-secondary transition-colors" : ""
+              )}
+              onClick={() => !readOnly && setIsEditing(true)}
             >
               {member.morning}
-            </span>
+            </div>
           )}
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-pink-500" />
-          <span className="text-lg text-muted-foreground w-20">Tarde</span>
-          <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-pink-500 rounded-full transition-all duration-500"
-              style={{ width: `${(member.afternoon / maxValue) * 100}%` }}
-            />
-          </div>
+
+        <div className="bg-muted/60 rounded-2xl p-3 md:p-4 border border-border/60">
+          <div className="text-xs md:text-sm text-muted-foreground mb-1">Tarde</div>
           {isEditing ? (
             <input
               type="number"
               value={editAfternoon}
               onChange={(e) => setEditAfternoon(Number(e.target.value))}
-              className="text-xl font-medium text-foreground w-20 text-right bg-muted border border-border rounded px-2 py-1"
+              className={cn(
+                "w-full text-right font-semibold text-foreground bg-muted border border-border rounded-xl px-3 py-2",
+                size.num
+              )}
             />
           ) : (
-            <span 
-              className="text-xl font-medium text-foreground w-14 text-right cursor-pointer hover:text-secondary"
-              onClick={() => setIsEditing(true)}
+            <div
+              className={cn(
+                "text-right font-semibold text-foreground",
+                size.num,
+                !readOnly ? "cursor-pointer hover:text-secondary transition-colors" : ""
+              )}
+              onClick={() => !readOnly && setIsEditing(true)}
             >
               {member.afternoon}
-            </span>
+            </div>
           )}
         </div>
       </div>
