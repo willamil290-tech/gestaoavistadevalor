@@ -1,8 +1,9 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
-import { Plus } from "lucide-react";
+import { Plus, ClipboardPaste } from "lucide-react";
 import { BulkPasteUpdater } from "./BulkPasteUpdater";
 import { normalizeName, type BulkEntry } from "@/lib/bulkParse";
 import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { TeamMember as PersistedMember } from "@/lib/persistence";
@@ -34,6 +35,32 @@ export const EmpresasView = () => {
     }));
     setTeamData(mapped);
   }, [remote.data]);
+// Modo de edição: não aparece na TV por padrão.
+// Para abrir a atualização rápida:
+// - atalho: Ctrl+Shift+U (ou Cmd+Shift+U no Mac)
+// - ou adicione ?edit=1 na URL para mostrar o botão discreto
+useEffect(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    setEditEnabled(params.get("edit") === "1");
+  } catch {
+    // ignore
+  }
+}, []);
+
+useEffect(() => {
+  const handler = (e: KeyboardEvent) => {
+    const isMac = /mac/i.test(navigator.platform);
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (mod && e.shiftKey && (e.key === "u" || e.key === "U")) {
+      e.preventDefault();
+      setBulkOpen(true);
+    }
+  };
+  window.addEventListener("keydown", handler);
+  return () => window.removeEventListener("keydown", handler);
+}, []);
+
 
   const sortedTeamData = [...teamData].sort((a, b) => {
     const diff = b.total - a.total;
@@ -164,20 +191,44 @@ export const EmpresasView = () => {
           <div className="w-3 h-3 rounded-full bg-secondary" />
           <h2 className="text-2xl md:text-3xl font-semibold text-foreground">Empresas Acionadas</h2>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="hidden md:inline">Adicionar</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {editEnabled && (
+            <button
+              onClick={() => setBulkOpen(true)}
+              title="Atualização rápida (Ctrl+Shift+U)"
+              className="p-2 rounded-lg border border-border bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+            >
+              <ClipboardPaste className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden md:inline">Adicionar</span>
+          </button>
+        </div>
       </div>
 
-      <BulkPasteUpdater
-        title="Atualização rápida (colar texto)"
-        subtitle="Cole o texto no padrão e clique em Aplicar para atualizar Manhã e Tarde automaticamente."
-        onApply={applyBulk}
-      />
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Atualização rápida</DialogTitle>
+            <DialogDescription>
+              Cole o texto no padrão e clique em Aplicar. Atalho: Ctrl+Shift+U (Cmd+Shift+U no Mac).
+            </DialogDescription>
+          </DialogHeader>
+          <BulkPasteUpdater
+            title="Colar texto"
+            subtitle="Atualiza Manhã e Tarde automaticamente. Se o colaborador não existir, ele será criado."
+            onApply={async (entries) => {
+              await applyBulk(entries);
+              setBulkOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {sortedTeamData.map((member) => (
