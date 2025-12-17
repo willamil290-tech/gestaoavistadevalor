@@ -194,30 +194,23 @@ useEffect(() => {
           <h2 className="text-2xl md:text-3xl font-semibold text-foreground">Empresas Acionadas</h2>
         </div>
         <div className="flex items-center gap-2">
-          
-          <div className="relative group">
-
-          
-            <button
+          <button
             onClick={() => setBulkOpen(true)}
             title="Atualização rápida (colar texto)"
-            className="absolute -left-11 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-border bg-muted/10 text-muted-foreground/70 hover:text-foreground hover:bg-muted/30 hover:border-muted-foreground/30 opacity-20 hover:opacity-100 focus:opacity-100 transition-opacity"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-secondary/50 bg-card/70 hover:bg-card/90 transition-colors shadow-sm"
           >
             <ClipboardPaste className="w-4 h-4" />
+            <span className="text-sm font-semibold">Colar texto</span>
           </button>
 
-          
-            <button
+          <button
             onClick={handleAdd}
             className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
           >
             <Plus className="w-5 h-5" />
             <span className="hidden md:inline">Adicionar</span>
           </button>
-
-
-          
-          </div>        </div>
+        </div>
       </div>
 
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
