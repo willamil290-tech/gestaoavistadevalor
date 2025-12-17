@@ -1,6 +1,6 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
 import { ClipboardPaste, Plus } from "lucide-react";
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { TeamMember as PersistedMember } from "@/lib/persistence";
@@ -288,7 +288,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
             onUpdate={handleUpdate}
             onDelete={handleDelete}
             rank={idx + 1}
-scale={scale}
+            scale={scale}
             readOnly={tvMode}
           />
         ))}

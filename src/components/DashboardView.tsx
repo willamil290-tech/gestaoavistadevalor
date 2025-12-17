@@ -66,40 +66,45 @@ export const DashboardView = ({
   });
 
   const computed = useMemo(() => {
-    const now = new Date();
-    const bd = getBusinessDate(now);
+  const now = new Date();
+  const bd = getBusinessDate(now);
 
-    const todayEvents = analytics.data?.todayEvents ?? [];
+  const todayEvents = (analytics.data as any)?.todayEvents ?? [];
 
-    const sumActions = (events: any[]) =>
-      events
-        .filter((e) => e.scope === "empresas" || e.scope === "leads")
-        .filter((e) => e.kind !== "reset")
-        .reduce((acc, e) => acc + (Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0)), 0);
+  const sumActions = (events: any[]) =>
+    events
+      .filter((e) => e.scope === "empresas" || e.scope === "leads")
+      .filter((e) => e.kind !== "reset")
+      .reduce((acc, e) => acc + (Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0)), 0);
 
-    // Trend per hour (06 -> now hour)
-    const startHour = 8;
-    const endHour = Math.max(startHour, now.getHours());
+  const actionsToday = sumActions(todayEvents);
 
-    const buckets = new Map<number, number>();
-    for (let h = startHour; h <= endHour; h++) buckets.set(h, 0);
+  // Trend per hour (08 -> now hour)
+  const startHour = 8;
+  const endHour = Math.max(startHour, now.getHours());
 
-    for (const e of todayEvents) {
-      if (!(e.scope === "empresas" || e.scope === "leads")) continue;
-      if (e.kind === "reset") continue;
-      const h = new Date(e.createdAt).getHours();
-      if (!buckets.has(h)) continue;
-      const v = (Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0));
-      buckets.set(h, (buckets.get(h) ?? 0) + v);
-    }
+  const buckets = new Map<number, number>();
+  for (let h = startHour; h <= endHour; h++) buckets.set(h, 0);
 
-    const trendData = Array.from(buckets.entries()).map(([hour, actions]) => ({
-      hour: String(hour).padStart(2, "0"),
-      actions,
-    }));
+  for (const e of todayEvents) {
+    if (!(e.scope === "empresas" || e.scope === "leads")) continue;
+    if (e.kind === "reset") continue;
 
-    return { bd, actionsToday, trendData };
-  }, [analytics.data]);
+    const h = new Date(e.createdAt).getHours();
+    if (h < startHour) continue;
+    if (!buckets.has(h)) continue;
+
+    const v = Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0);
+    buckets.set(h, (buckets.get(h) ?? 0) + v);
+  }
+
+  const trendData = Array.from(buckets.entries()).map(([hour, actions]) => ({
+    hour: String(hour).padStart(2, "0"),
+    actions,
+  }));
+
+  return { bd, actionsToday, trendData };
+}, [analytics.data]);
 
   const fmtBRL = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -189,7 +194,6 @@ export const DashboardView = ({
 
       {/* Analytics */}
       <div className="grid grid-cols-1 gap-4">
-
         {/* Trend */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
           <h3 className="text-lg md:text-xl font-semibold">Tendência do dia</h3>

@@ -82,11 +82,13 @@ export const TeamMemberCard = ({
   const cardClasses = cn(
     "relative bg-card rounded-2xl border transition-all duration-300",
     size.pad,
-    isTop ? "border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.35)]" : "border-border hover:border-secondary/50");
+    isTop ? "border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.35)]" : "border-border hover:border-secondary/50",
+    ""
+  );
 
   return (
     <div className={cardClasses}>
-      {/* Top badge / delta */}
+      {/* Top badge */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
         {isTop && (
           <div className="flex items-center gap-1 rounded-full bg-gold/20 px-2 py-1 text-xs font-semibold text-gold">

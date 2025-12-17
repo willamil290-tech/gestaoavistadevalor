@@ -1,6 +1,6 @@
 import { TeamMemberCard, TeamMember } from "./TeamMemberCard";
 import { ClipboardPaste, Plus } from "lucide-react";
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import type { TeamMember as PersistedMember } from "@/lib/persistence";
@@ -38,6 +38,7 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const [bulkText, setBulkText] = useState("");
   const [bulkMode, setBulkMode] = useState<BulkMode>("replace");
   const showUndo = useUndoToast();
+
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const data = remote.data;
@@ -52,6 +53,41 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     }));
     setLeadsData(mapped);
   }, [remote.data]);
+
+  useEffect(() => {
+    const prev = prevTotalsRef.current;
+    const next = new Map<string, number>();
+    const localDeltas: Record<string, number> = {};
+
+    for (const m of leadsData) {
+      const total = m.total;
+      next.set(m.id, total);
+      const old = prev.get(m.id);
+      if (typeof old === "number") {
+        const diff = total - old;
+        if (diff > 0) localDeltas[m.id] = diff;
+      } else if (total > 0) {
+        localDeltas[m.id] = total;
+      }
+    }
+
+    for (const [id, diff] of Object.entries(localDeltas)) {
+      if (diff <= 0) continue;
+      setDeltas((p) => ({ ...p, [id]: diff }));
+      const oldT = deltaTimeoutsRef.current.get(id);
+      if (oldT) window.clearTimeout(oldT);
+      const t = window.setTimeout(() => {
+        setDeltas((p) => {
+          const copy = { ...p };
+          delete copy[id];
+          return copy;
+        });
+      }, 3000);
+      deltaTimeoutsRef.current.set(id, t);
+    }
+
+    prevTotalsRef.current = next;
+  }, [leadsData]);
 
   const sortedLeadsData = useMemo(() => {
     return [...leadsData].sort((a, b) => {
@@ -280,7 +316,7 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
             onUpdate={handleUpdate}
             onDelete={handleDelete}
             rank={idx + 1}
-scale={scale}
+            scale={scale}
             readOnly={tvMode}
           />
         ))}
