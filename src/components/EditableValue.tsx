@@ -88,7 +88,12 @@ export const EditableValue = ({
             <span className={cn("font-bold text-foreground", sizeClasses[size])}>
               {formatCurrency(value)}
             </span>
-            <button className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (!readOnly) setIsEditing(true); }}
+              title={readOnly ? undefined : "Editar"}
+              className="p-2 rounded-full bg-muted opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/80"
+            >
               <Pencil className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>

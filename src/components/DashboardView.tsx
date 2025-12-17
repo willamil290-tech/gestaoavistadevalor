@@ -70,7 +70,6 @@ export const DashboardView = ({
     const bd = getBusinessDate(now);
 
     const todayEvents = analytics.data?.todayEvents ?? [];
-    const yesterdayEvents = analytics.data?.yesterdayEvents ?? [];
 
     const sumActions = (events: any[]) =>
       events
@@ -78,18 +77,8 @@ export const DashboardView = ({
         .filter((e) => e.kind !== "reset")
         .reduce((acc, e) => acc + (Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0)), 0);
 
-    const sumBordero = (events: any[]) =>
-      events
-        .filter((e) => e.scope === "bordero")
-        .reduce((acc, e) => acc + Number(e.deltaBorderoDia ?? 0), 0);
-
-    const actionsToday = sumActions(todayEvents);
-    const actionsYesterday = sumActions(yesterdayEvents);
-
-    const borderoYesterday = sumBordero(yesterdayEvents);
-
     // Trend per hour (06 -> now hour)
-    const startHour = 6;
+    const startHour = 8;
     const endHour = Math.max(startHour, now.getHours());
 
     const buckets = new Map<number, number>();
@@ -109,7 +98,7 @@ export const DashboardView = ({
       actions,
     }));
 
-    return { bd, actionsToday, actionsYesterday, borderoYesterday, trendData };
+    return { bd, actionsToday, trendData };
   }, [analytics.data]);
 
   const fmtBRL = (v: number) =>
@@ -199,43 +188,12 @@ export const DashboardView = ({
       </div>
 
       {/* Analytics */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Comparison */}
-        <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-lg md:text-xl font-semibold">Ontem vs Hoje (até agora)</h3>
-            <div className="text-xs text-muted-foreground">
-              {computed?.bd ? `Dia útil: ${computed.bd} (vira às 06:00)` : ""}
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="rounded-2xl bg-muted/50 border border-border p-4">
-              <div className="text-sm text-muted-foreground">Acionamentos (Hoje)</div>
-              <div className="text-3xl md:text-4xl font-bold text-foreground">{computed?.actionsToday ?? 0}</div>
-            </div>
-            <div className="rounded-2xl bg-muted/50 border border-border p-4">
-              <div className="text-sm text-muted-foreground">Acionamentos (Ontem)</div>
-              <div className="text-3xl md:text-4xl font-bold text-foreground">{computed?.actionsYesterday ?? 0}</div>
-            </div>
-
-            <div className="rounded-2xl bg-muted/50 border border-border p-4 col-span-2">
-              <div className="text-sm text-muted-foreground">Borderô (Hoje)</div>
-              <div className="text-2xl md:text-3xl font-bold text-foreground">{fmtBRL(atingidoDia)}</div>
-              <div className="mt-2 text-sm text-muted-foreground">Borderô (Ontem até agora): {fmtBRL(computed?.borderoYesterday ?? 0)}</div>
-              {(!analytics.data?.todayEvents?.length || !analytics.data?.yesterdayEvents?.length) && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  *O comparativo/tendência começa a ficar mais preciso conforme esta versão vai registrando eventos.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-4">
 
         {/* Trend */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
           <h3 className="text-lg md:text-xl font-semibold">Tendência do dia</h3>
-          <p className="text-sm text-muted-foreground mt-1">Acionamentos por hora (06:00 → agora)</p>
+          <p className="text-sm text-muted-foreground mt-1">Acionamentos por hora (08:00 → agora)</p>
 
           <div className="mt-4 h-[260px]">
             <ChartContainer

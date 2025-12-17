@@ -17,7 +17,6 @@ interface TeamMemberCardProps {
   onUpdate: (member: TeamMember) => void;
   onDelete: (id: string) => void;
   rank?: number; // 1-based rank in the sorted list
-  delta?: number; // recent increase (for highlight)
   scale?: Scale;
   readOnly?: boolean;
 }
@@ -27,7 +26,6 @@ export const TeamMemberCard = ({
   onUpdate,
   onDelete,
   rank,
-  delta,
   scale = "md",
   readOnly = false,
 }: TeamMemberCardProps) => {
@@ -84,9 +82,7 @@ export const TeamMemberCard = ({
   const cardClasses = cn(
     "relative bg-card rounded-2xl border transition-all duration-300",
     size.pad,
-    isTop ? "border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.35)]" : "border-border hover:border-secondary/50",
-    delta && delta > 0 ? "ring-2 ring-secondary/40" : ""
-  );
+    isTop ? "border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.35)]" : "border-border hover:border-secondary/50");
 
   return (
     <div className={cardClasses}>
@@ -96,11 +92,6 @@ export const TeamMemberCard = ({
           <div className="flex items-center gap-1 rounded-full bg-gold/20 px-2 py-1 text-xs font-semibold text-gold">
             <Crown className="h-3.5 w-3.5" />
             TOP {rank}
-          </div>
-        )}
-        {delta && delta > 0 && (
-          <div className="rounded-full bg-secondary/20 px-2 py-1 text-xs font-semibold text-secondary">
-            +{delta}
           </div>
         )}
         {!readOnly && (
