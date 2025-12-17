@@ -20,6 +20,8 @@ const initialTeamData: TeamMember[] = [
 export const EmpresasView = () => {
   const remote = useTeamMembers("empresas");
   const [teamData, setTeamData] = useState<TeamMember[]>(initialTeamData);
+  const [editEnabled, setEditEnabled] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Sincroniza do Supabase -> state local (para manter o componente e o card quase iguais)
   useEffect(() => {

@@ -18,6 +18,8 @@ const initialLeadsData: TeamMember[] = [
 export const LeadsView = () => {
   const remote = useTeamMembers("leads");
   const [leadsData, setLeadsData] = useState<TeamMember[]>(initialLeadsData);
+  const [editEnabled, setEditEnabled] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Sincroniza do Supabase -> state local
   useEffect(() => {
