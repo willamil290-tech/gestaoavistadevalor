@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, Calendar, PieChart, BarChart3, Play, Pause, Tv2, RotateCcw, List } from "lucide-react";
+import { LayoutDashboard, Phone, FileText, Calendar, BarChart3, Play, Pause, Tv2, RotateCcw, List } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -36,12 +36,6 @@ const initialFaixas: FaixaVencimento[] = [
   { faixa: "720+", valorMes: 0, valorDia: 0 },
 ];
 
-const initialCategorias: CategoriaData[] = [
-  { categoria: "Efetivo", valorMes: 0, valorDia: 0 },
-  { categoria: "Indevido", valorMes: 0, valorDia: 0 },
-  { categoria: "Campanha", valorMes: 0, valorDia: 0 },
-  { categoria: "Repique", valorMes: 0, valorDia: 0 },
-];
 
 const initialAgendadasMes: AgendadaRealizada[] = [
   { label: "Semana 1", agendadas: 0, realizadas: 0 },
@@ -78,7 +72,7 @@ const Index = () => {
   const [acionamentoDetalhado, setAcionamentoDetalhado] = useState(initialAcionamentoDetalhado);
   const [faixas, setFaixas] = useState(initialFaixas);
   const [clientes, setClientes] = useState<ClienteBordero[]>([]);
-  const [categorias, setCategorias] = useState(initialCategorias);
+  
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
 
@@ -109,7 +103,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "faixa-vencimento", "bordero-diario", "bordero-categorizado", "agendadas-realizadas"];
+    const tabs: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "faixa-vencimento", "bordero-diario", "agendadas-realizadas"];
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -163,7 +157,6 @@ const Index = () => {
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
     { id: "faixa-vencimento" as const, label: "Faixa Venc.", icon: Calendar, color: "bg-gold" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
-    { id: "bordero-categorizado" as const, label: "Categorizado", icon: PieChart, color: "bg-primary" },
     { id: "agendadas-realizadas" as const, label: "Agendadas", icon: BarChart3, color: "bg-secondary" },
   ];
 
@@ -249,7 +242,7 @@ const Index = () => {
           {activeTab === "bordero-diario" && (
             <BorderoDiarioView clientes={clientes} metaDia={metaDia} onClienteAdd={() => setClientes((prev) => [...prev, { id: `cli_${Date.now()}`, cliente: "Novo Cliente", comercial: "", valor: 0, horario: "", observacao: "" }])} onClienteUpdate={(c) => setClientes((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onClienteDelete={(id) => setClientes((prev) => prev.filter((x) => x.id !== id))} onMetaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }} readOnly={readOnly} tvMode={tvMode} />
           )}
-          {activeTab === "bordero-categorizado" && <BorderoCategorizadoView categorias={categorias} onUpdate={setCategorias} readOnly={readOnly} tvMode={tvMode} />}
+          
           {activeTab === "agendadas-realizadas" && <AgendadasRealizadasView dadosMes={agendadasMes} dadosDia={agendadasDia} onUpdateMes={setAgendadasMes} onUpdateDia={setAgendadasDia} readOnly={readOnly} tvMode={tvMode} />}
         </div>
 
