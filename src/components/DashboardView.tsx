@@ -19,12 +19,12 @@ interface DashboardViewProps {
 }
 
 const initialCommercials: Commercial[] = [
-  { id: "c1", name: "Samara", currentValue: 0, goal: 5000 },
-  { id: "c2", name: "Luciane", currentValue: 0, goal: 5000 },
-  { id: "c3", name: "Raissa", currentValue: 0, goal: 5000 },
-  { id: "c4", name: "Alessandra", currentValue: 0, goal: 5000 },
-  { id: "c5", name: "Rodrigo", currentValue: 0, goal: 5000 },
-  { id: "c6", name: "Bruna", currentValue: 0, goal: 5000 },
+  { id: "c1", name: "Samara", currentValue: 0, goal: 50000, group: "closer" },
+  { id: "c2", name: "Luciane", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c3", name: "Raissa", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c4", name: "Alessandra", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c5", name: "Rodrigo", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c6", name: "Bruna", currentValue: 0, goal: 50000, group: "cs" },
 ];
 
 function genId() {
@@ -94,7 +94,7 @@ export const DashboardView = ({
   };
 
   const handleCommercialAdd = () => {
-    setCommercials((prev) => [...prev, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 5000 }]);
+    setCommercials((prev) => [...prev, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 50000, group: "executivo" }]);
   };
 
   const handleCommercialDelete = (id: string) => {

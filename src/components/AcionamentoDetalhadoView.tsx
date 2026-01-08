@@ -25,7 +25,7 @@ interface AcionamentoDetalhadoViewProps {
   tvMode?: boolean;
 }
 
-const defaultCategorias = ["WhatsApp", "Ligação", "E-mail", "Visita"];
+export const defaultCategorias = ["ETAPA_ALTERADA", "ATIVIDADE_CRIADA", "STATUS_ALTERADA", "CHAMADA_TELEFONICA", "OUTROS"];
 
 export const AcionamentoDetalhadoView = ({
   colaboradores,
@@ -64,6 +64,17 @@ export const AcionamentoDetalhadoView = ({
         cat.tipo === tipo ? { ...cat, quantidade } : cat
       ),
     });
+  };
+
+  const formatCategoryLabel = (tipo: string) => {
+    const labels: Record<string, string> = {
+      "ETAPA_ALTERADA": "Etapa Alterada",
+      "ATIVIDADE_CRIADA": "Atividade Criada",
+      "STATUS_ALTERADA": "Status Alterada",
+      "CHAMADA_TELEFONICA": "Chamada Telefônica",
+      "OUTROS": "Outros",
+    };
+    return labels[tipo] || tipo;
   };
 
   const sortedColaboradores = [...colaboradores].sort((a, b) => b.total - a.total);
@@ -107,7 +118,7 @@ export const AcionamentoDetalhadoView = ({
                   <div className="space-y-2">
                     {editValues.categorias.map((cat) => (
                       <div key={cat.tipo} className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-muted-foreground">{cat.tipo}</span>
+                        <span className="text-sm text-muted-foreground">{formatCategoryLabel(cat.tipo)}</span>
                         <Input
                           type="number"
                           value={cat.quantidade}
@@ -156,7 +167,7 @@ export const AcionamentoDetalhadoView = ({
                   <div className="grid grid-cols-2 gap-2">
                     {c.categorias.map((cat) => (
                       <div key={cat.tipo} className="p-2 bg-muted/30 rounded-lg text-center">
-                        <p className="text-xs text-muted-foreground">{cat.tipo}</p>
+                        <p className="text-xs text-muted-foreground truncate">{formatCategoryLabel(cat.tipo)}</p>
                         <p className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>{cat.quantidade}</p>
                       </div>
                     ))}
@@ -176,5 +187,3 @@ export const AcionamentoDetalhadoView = ({
     </div>
   );
 };
-
-export { defaultCategorias };
