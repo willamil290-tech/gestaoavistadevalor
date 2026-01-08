@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BulkPasteUpdater } from "./BulkPasteUpdater";
+import { parseDashboardBulk, parseClienteTable } from "@/lib/bulkParse";
+import { toast } from "sonner";
 
 export interface ClienteBordero {
   id: string;
@@ -20,6 +23,7 @@ interface BorderoDiarioViewProps {
   onClienteAdd: () => void;
   onClienteUpdate: (cliente: ClienteBordero) => void;
   onClienteDelete: (id: string) => void;
+  onClientesBulkUpdate?: (clientes: ClienteBordero[]) => void;
   onMetaChange: (value: number) => void;
   readOnly?: boolean;
   tvMode?: boolean;
@@ -31,6 +35,7 @@ export const BorderoDiarioView = ({
   onClienteAdd,
   onClienteUpdate,
   onClienteDelete,
+  onClientesBulkUpdate,
   onMetaChange,
   readOnly = false,
   tvMode = false,
@@ -64,6 +69,22 @@ export const BorderoDiarioView = ({
     cancelEdit();
   };
 
+  const handleBulkPaste = async (text: string) => {
+    const entries = parseClienteTable(text);
+    if (entries.length > 0 && onClientesBulkUpdate) {
+      const newClientes: ClienteBordero[] = entries.map((e, i) => ({
+        id: `cli_${Date.now()}_${i}`,
+        cliente: e.cliente,
+        comercial: "",
+        valor: e.valor,
+        horario: "",
+        observacao: "",
+      }));
+      onClientesBulkUpdate(newClientes);
+      toast.success(`${entries.length} clientes adicionados!`);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center gap-3 mb-5">
@@ -72,6 +93,15 @@ export const BorderoDiarioView = ({
           Borderô Diário
         </h2>
       </div>
+
+      {/* Bulk paste for clients */}
+      {!tvMode && (
+        <BulkPasteUpdater
+          title="Atualizar Clientes do Dia"
+          subtitle="Cole a tabela com Cliente e Valor (formato: NOME_CLIENTE 12345,67)"
+          onApply={handleBulkPaste}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Tabela de Clientes */}
@@ -91,10 +121,7 @@ export const BorderoDiarioView = ({
               <TableHeader>
                 <TableRow>
                   <TableHead className={tvMode ? "text-base" : ""}>Cliente</TableHead>
-                  <TableHead className={tvMode ? "text-base" : ""}>Comercial</TableHead>
                   <TableHead className={cn("text-right", tvMode ? "text-base" : "")}>Valor</TableHead>
-                  <TableHead className={tvMode ? "text-base" : ""}>Horário</TableHead>
-                  <TableHead className={tvMode ? "text-base" : ""}>Obs.</TableHead>
                   {!readOnly && <TableHead className="w-20"></TableHead>}
                 </TableRow>
               </TableHeader>
@@ -115,31 +142,10 @@ export const BorderoDiarioView = ({
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={editValues.comercial}
-                              onChange={(e) => setEditValues({ ...editValues, comercial: e.target.value })}
-                              className="min-w-[100px]"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
                               type="number"
                               value={editValues.valor}
                               onChange={(e) => setEditValues({ ...editValues, valor: Number(e.target.value) })}
                               className="min-w-[80px] text-right"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={editValues.horario}
-                              onChange={(e) => setEditValues({ ...editValues, horario: e.target.value })}
-                              className="min-w-[60px]"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={editValues.observacao}
-                              onChange={(e) => setEditValues({ ...editValues, observacao: e.target.value })}
-                              className="min-w-[80px]"
                             />
                           </TableCell>
                           <TableCell>
@@ -158,13 +164,8 @@ export const BorderoDiarioView = ({
                           <TableCell className={cn("font-medium", tvMode ? "text-lg" : "")}>
                             {c.cliente}
                           </TableCell>
-                          <TableCell className={tvMode ? "text-lg" : ""}>{c.comercial}</TableCell>
                           <TableCell className={cn("text-right font-semibold", tvMode ? "text-lg" : "")}>
                             {fmtBRL(c.valor)}
-                          </TableCell>
-                          <TableCell className={tvMode ? "text-lg" : ""}>{c.horario}</TableCell>
-                          <TableCell className={cn("text-muted-foreground", tvMode ? "text-base" : "text-sm")}>
-                            {c.observacao}
                           </TableCell>
                           {!readOnly && (
                             <TableCell>
@@ -191,7 +192,7 @@ export const BorderoDiarioView = ({
 
                 {clientes.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={readOnly ? 5 : 6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={readOnly ? 2 : 3} className="text-center text-muted-foreground py-8">
                       Nenhum cliente registrado hoje
                     </TableCell>
                   </TableRow>

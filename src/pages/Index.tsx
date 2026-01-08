@@ -7,7 +7,6 @@ import { AcionamentosView } from "@/components/AcionamentosView";
 import { AcionamentoDetalhadoView, ColaboradorAcionamento, defaultCategorias } from "@/components/AcionamentoDetalhadoView";
 import { FaixaVencimentoView, FaixaVencimento } from "@/components/FaixaVencimentoView";
 import { BorderoDiarioView, ClienteBordero } from "@/components/BorderoDiarioView";
-import { BorderoCategorizadoView, CategoriaData } from "@/components/BorderoCategorizadoView";
 import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/AgendadasRealizadasView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -19,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
 
-type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "faixa-vencimento" | "bordero-diario" | "bordero-categorizado" | "agendadas-realizadas";
+type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "faixa-vencimento" | "bordero-diario" | "agendadas-realizadas";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -31,13 +30,10 @@ const initialAcionamentoDetalhado: ColaboradorAcionamento[] = [
 ];
 
 const initialFaixas: FaixaVencimento[] = [
-  { faixa: "0-30", valorMes: 0, valorDia: 0 },
-  { faixa: "31-60", valorMes: 0, valorDia: 0 },
-  { faixa: "61-120", valorMes: 0, valorDia: 0 },
-  { faixa: "121-180", valorMes: 0, valorDia: 0 },
+  { faixa: "0-180", valorMes: 0, valorDia: 0 },
   { faixa: "181-360", valorMes: 0, valorDia: 0 },
   { faixa: "361-720", valorMes: 0, valorDia: 0 },
-  { faixa: "721+", valorMes: 0, valorDia: 0 },
+  { faixa: "720+", valorMes: 0, valorDia: 0 },
 ];
 
 const initialCategorias: CategoriaData[] = [

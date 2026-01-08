@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,24 @@ export const FaixaVencimentoView = ({
 }: FaixaVencimentoViewProps) => {
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<FaixaVencimento[]>([]);
+  const [activeTab, setActiveTab] = useState<"mes" | "dia">("mes");
+  const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-switch tabs in TV mode
+  useEffect(() => {
+    if (!tvMode) {
+      if (tabIntervalRef.current) clearInterval(tabIntervalRef.current);
+      return;
+    }
+
+    tabIntervalRef.current = setInterval(() => {
+      setActiveTab((prev) => (prev === "mes" ? "dia" : "mes"));
+    }, 10000); // Switch every 10 seconds
+
+    return () => {
+      if (tabIntervalRef.current) clearInterval(tabIntervalRef.current);
+    };
+  }, [tvMode]);
 
   const startEdit = () => {
     setEditing(true);
@@ -90,7 +108,7 @@ export const FaixaVencimentoView = ({
         )}
       </div>
 
-      <Tabs defaultValue="mes" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "mes" | "dia")} className="space-y-4">
         <TabsList className="grid w-full max-w-[300px] grid-cols-2">
           <TabsTrigger value="mes">Mês</TabsTrigger>
           <TabsTrigger value="dia">Dia</TabsTrigger>
@@ -124,10 +142,10 @@ export const FaixaVencimentoView = ({
               <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--primary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 60, right: 20 }}>
+                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 80, right: 20 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
                       <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={75} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 8, 8, 0]} />
                     </BarChart>
@@ -166,10 +184,10 @@ export const FaixaVencimentoView = ({
               <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--secondary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 60, right: 20 }}>
+                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 80, right: 20 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
                       <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={75} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 8, 8, 0]} />
                     </BarChart>
