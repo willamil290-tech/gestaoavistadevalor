@@ -96,6 +96,9 @@ const Index = () => {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     if (extrasHydrated) return;
+
+    // Evita hidratar com placeholderData do React Query (antes de buscar do Supabase)
+    if (remoteExtras.isPlaceholderData || remoteExtras.isLoading) return;
     if (!remoteExtras.data) return;
 
     const ex = remoteExtras.data;
@@ -108,7 +111,7 @@ const Index = () => {
     if (Array.isArray(ex.agendadasDia) && ex.agendadasDia.length) setAgendadasDia(ex.agendadasDia as any);
 
     setExtrasHydrated(true);
-  }, [remoteExtras.data, extrasHydrated]);
+  }, [remoteExtras.data, remoteExtras.isPlaceholderData, remoteExtras.isLoading, extrasHydrated]);
 
   // Persist extras with debounce
   useEffect(() => {
@@ -233,11 +236,25 @@ const Index = () => {
       // Update main values
       if (dashData.valorBorderoMes > 0) {
         setAtingidoMes(dashData.valorBorderoMes);
-        if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoMes: dashData.valorBorderoMes });
+        if (isSupabaseConfigured) {
+          try {
+            await remoteSettings.updateAsync({ atingidoMes: dashData.valorBorderoMes });
+          } catch (e: any) {
+            console.error(e);
+            toast.error(e?.message ?? "Falha ao salvar no Supabase");
+          }
+        }
       }
       if (dashData.valorBorderoDia > 0) {
         setAtingidoDia(dashData.valorBorderoDia);
-        if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoDia: dashData.valorBorderoDia });
+        if (isSupabaseConfigured) {
+          try {
+            await remoteSettings.updateAsync({ atingidoDia: dashData.valorBorderoDia });
+          } catch (e: any) {
+            console.error(e);
+            toast.error(e?.message ?? "Falha ao salvar no Supabase");
+          }
+        }
       }
 
       // Update commercials by matching first name
