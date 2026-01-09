@@ -90,14 +90,6 @@ const Index = () => {
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
 
-  // New views state
-  const [acionamentoDetalhado, setAcionamentoDetalhado] = useState(initialAcionamentoDetalhado);
-  const [faixas, setFaixas] = useState(initialFaixas);
-  const [clientes, setClientes] = useState<ClienteBordero[]>([]);
-  
-  const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
-  const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
-
   const [extrasHydrated, setExtrasHydrated] = useState(false);
 
   // Hydrate extras once (avoid overwriting local edits on every poll)
