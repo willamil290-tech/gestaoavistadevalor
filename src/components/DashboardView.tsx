@@ -14,18 +14,11 @@ interface DashboardViewProps {
   onMetaDiaChange: (value: number) => void;
   onAtingidoMesChange: (value: number) => void;
   onAtingidoDiaChange: (value: number) => void;
+  commercials: Commercial[];
+  onCommercialsChange: (commercials: Commercial[]) => void;
   tvMode?: boolean;
   readOnly?: boolean;
 }
-
-const initialCommercials: Commercial[] = [
-  { id: "c1", name: "Samara", currentValue: 0, goal: 50000, group: "closer" },
-  { id: "c2", name: "Luciane", currentValue: 0, goal: 100000, group: "executivo" },
-  { id: "c3", name: "Raissa", currentValue: 0, goal: 100000, group: "executivo" },
-  { id: "c4", name: "Alessandra", currentValue: 0, goal: 100000, group: "executivo" },
-  { id: "c5", name: "Rodrigo", currentValue: 0, goal: 100000, group: "executivo" },
-  { id: "c6", name: "Bruna", currentValue: 0, goal: 50000, group: "cs" },
-];
 
 function genId() {
   return `com_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -40,12 +33,15 @@ export const DashboardView = ({
   onMetaDiaChange,
   onAtingidoMesChange,
   onAtingidoDiaChange,
+  commercials,
+  onCommercialsChange,
   tvMode = false,
   readOnly = false,
 }: DashboardViewProps) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playedRef = useRef({ day: false, month: false });
-  const [commercials, setCommercials] = useState<Commercial[]>(initialCommercials);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,6 +51,41 @@ export const DashboardView = ({
       audioRef.current = a;
     } catch {}
   }, []);
+
+  // Auto-scroll in TV mode
+  useEffect(() => {
+    if (!tvMode || !scrollRef.current) {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      return;
+    }
+
+    let scrollingDown = true;
+    const scrollStep = 2;
+    const scrollDelay = 50;
+
+    scrollIntervalRef.current = setInterval(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      
+      if (scrollingDown) {
+        el.scrollTop += scrollStep;
+        if (el.scrollTop >= maxScroll) {
+          scrollingDown = false;
+        }
+      } else {
+        el.scrollTop -= scrollStep;
+        if (el.scrollTop <= 0) {
+          scrollingDown = true;
+        }
+      }
+    }, scrollDelay);
+
+    return () => {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    };
+  }, [tvMode]);
 
   const playTheme = (which: "dia" | "mes") => {
     const a = audioRef.current;
@@ -90,19 +121,19 @@ export const DashboardView = ({
   const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   const handleCommercialUpdate = (c: Commercial) => {
-    setCommercials((prev) => prev.map((item) => (item.id === c.id ? c : item)));
+    onCommercialsChange(commercials.map((item) => (item.id === c.id ? c : item)));
   };
 
   const handleCommercialAdd = () => {
-    setCommercials((prev) => [...prev, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 50000, group: "executivo" }]);
+    onCommercialsChange([...commercials, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 50000, group: "executivo" }]);
   };
 
   const handleCommercialDelete = (id: string) => {
-    setCommercials((prev) => prev.filter((c) => c.id !== id));
+    onCommercialsChange(commercials.filter((c) => c.id !== id));
   };
 
   return (
-    <div className={tvMode ? "space-y-4" : "space-y-6"}>
+    <div ref={scrollRef} className={cn(tvMode ? "space-y-4 h-[calc(100vh-120px)] overflow-y-auto" : "space-y-6")}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Month Section */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">

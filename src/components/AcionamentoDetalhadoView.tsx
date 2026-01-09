@@ -25,7 +25,7 @@ interface AcionamentoDetalhadoViewProps {
   tvMode?: boolean;
 }
 
-export const defaultCategorias = ["ETAPA_ALTERADA", "ATIVIDADE_CRIADA", "STATUS_ALTERADA", "CHAMADA_TELEFONICA", "OUTROS"];
+export const defaultCategorias = ["ETAPA_ALTERADA", "ATIVIDADE_CRIADA", "STATUS_ATIVIDADE_ALTERADA", "CHAMADA_TELEFONICA", "OUTROS"];
 
 export const AcionamentoDetalhadoView = ({
   colaboradores,
@@ -70,7 +70,7 @@ export const AcionamentoDetalhadoView = ({
     const labels: Record<string, string> = {
       "ETAPA_ALTERADA": "Etapa Alterada",
       "ATIVIDADE_CRIADA": "Atividade Criada",
-      "STATUS_ALTERADA": "Status Alterada",
+      "STATUS_ATIVIDADE_ALTERADA": "Status Alterada",
       "CHAMADA_TELEFONICA": "Chamada Telefônica",
       "OUTROS": "Outros",
     };

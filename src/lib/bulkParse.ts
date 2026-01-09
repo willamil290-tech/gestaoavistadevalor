@@ -124,6 +124,7 @@ export function parseHourlyTrend(text: string): HourlyTrend[] {
  * ETAPA_ALTERADA: 11
  * ATIVIDADE_CRIADA: 14
  * ...
+ * Supports format with or without TOTAL_ACIONAMENTOS
  */
 export function parseDetailedAcionamento(text: string): DetailedEntry[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
@@ -135,11 +136,21 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
   const rxChamada = /^CHAMADA_TELEFONICA\s*:\s*(\d+)/i;
   const rxOutros = /^OUTROS\s*:\s*(\d+)/i;
   const rxTotal = /^TOTAL_ACIONAMENTOS\s*:\s*(\d+)/i;
+  // Match name lines like "### **Bruna Domingos**" or just "Bruna Domingos"
+  const rxName = /^(?:#{1,3}\s*)?(?:\*\*)?([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)(?:\*\*)?$/;
 
   let current: Partial<DetailedEntry> & { name?: string } = {};
 
   const pushCurrent = () => {
     if (!current.name) return;
+    // Calculate total if not provided
+    const total = current.total ?? (
+      (current.etapaAlterada ?? 0) +
+      (current.atividadeCriada ?? 0) +
+      (current.statusAlterada ?? 0) +
+      (current.chamadaTelefonica ?? 0) +
+      (current.outros ?? 0)
+    );
     out.push({
       name: current.name,
       etapaAlterada: current.etapaAlterada ?? 0,
@@ -147,13 +158,15 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
       statusAlterada: current.statusAlterada ?? 0,
       chamadaTelefonica: current.chamadaTelefonica ?? 0,
       outros: current.outros ?? 0,
-      total: current.total ?? 0,
+      total,
     });
     current = {};
   };
 
   for (const line of lines) {
     if (!line) continue;
+    // Skip headers and separators
+    if (line.startsWith("---") || line.toLowerCase().includes("resumo")) continue;
 
     if (rxEtapa.test(line)) {
       current.etapaAlterada = Number(line.match(rxEtapa)![1]);
@@ -173,6 +186,10 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
     }
     if (rxOutros.test(line)) {
       current.outros = Number(line.match(rxOutros)![1]);
+      // If OUTROS is the last field (no TOTAL), push current
+      if (current.name && current.etapaAlterada !== undefined) {
+        pushCurrent();
+      }
       continue;
     }
     if (rxTotal.test(line)) {
@@ -181,16 +198,24 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
       continue;
     }
 
-    // If it doesn't match any pattern, it's a name
+    // Check if it's a name line (no colon, matches name pattern)
     if (!line.includes(":")) {
-      if (current.name && (current.etapaAlterada !== undefined || current.total !== undefined)) {
-        pushCurrent();
+      const nameMatch = line.match(rxName);
+      if (nameMatch) {
+        // If we have a previous entry with data, push it first
+        if (current.name && current.etapaAlterada !== undefined) {
+          pushCurrent();
+        }
+        current.name = nameMatch[1].trim();
       }
-      current.name = line;
     }
   }
 
-  pushCurrent();
+  // Push the last entry if exists
+  if (current.name && current.etapaAlterada !== undefined) {
+    pushCurrent();
+  }
+
   return out;
 }
 

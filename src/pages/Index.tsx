@@ -8,6 +8,8 @@ import { AcionamentoDetalhadoView, ColaboradorAcionamento, defaultCategorias } f
 import { FaixaVencimentoView, FaixaVencimento } from "@/components/FaixaVencimentoView";
 import { BorderoDiarioView, ClienteBordero } from "@/components/BorderoDiarioView";
 import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/AgendadasRealizadasView";
+import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
+import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
@@ -17,12 +19,22 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
+import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, normalizeName, type DetailedEntry } from "@/lib/bulkParse";
 
 type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "faixa-vencimento" | "bordero-diario" | "agendadas-realizadas";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
 // Initial data
+const initialCommercials: Commercial[] = [
+  { id: "c1", name: "Samara", currentValue: 0, goal: 50000, group: "closer" },
+  { id: "c2", name: "Luciane", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c3", name: "Raissa", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c4", name: "Alessandra", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c5", name: "Rodrigo", currentValue: 0, goal: 100000, group: "executivo" },
+  { id: "c6", name: "Bruna", currentValue: 0, goal: 50000, group: "cs" },
+];
+
 const initialAcionamentoDetalhado: ColaboradorAcionamento[] = [
   { id: "ad1", name: "Alessandra", total: 0, categorias: defaultCategorias.map(t => ({ tipo: t, quantidade: 0 })) },
   { id: "ad2", name: "Luciane", total: 0, categorias: defaultCategorias.map(t => ({ tipo: t, quantidade: 0 })) },
@@ -35,7 +47,6 @@ const initialFaixas: FaixaVencimento[] = [
   { faixa: "361-720", valorMes: 0, valorDia: 0 },
   { faixa: "720+", valorMes: 0, valorDia: 0 },
 ];
-
 
 const initialAgendadasMes: AgendadaRealizada[] = [
   { label: "Semana 1", agendadas: 0, realizadas: 0 },
@@ -67,6 +78,7 @@ const Index = () => {
   const [metaDia, setMetaDia] = useState(DEFAULT_SETTINGS.metaDia);
   const [atingidoMes, setAtingidoMes] = useState(DEFAULT_SETTINGS.atingidoMes);
   const [atingidoDia, setAtingidoDia] = useState(DEFAULT_SETTINGS.atingidoDia);
+  const [commercials, setCommercials] = useState<Commercial[]>(initialCommercials);
 
   // New views state
   const [acionamentoDetalhado, setAcionamentoDetalhado] = useState(initialAcionamentoDetalhado);
@@ -149,6 +161,109 @@ const Index = () => {
     }
   };
 
+  // Handler for bulk dashboard data paste
+  const handleBulkDashboardPaste = async (text: string) => {
+    // Parse dashboard data
+    const dashData = parseDashboardBulk(text);
+    
+    if (dashData) {
+      // Update main values
+      if (dashData.valorBorderoMes > 0) {
+        setAtingidoMes(dashData.valorBorderoMes);
+        if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoMes: dashData.valorBorderoMes });
+      }
+      if (dashData.valorBorderoDia > 0) {
+        setAtingidoDia(dashData.valorBorderoDia);
+        if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoDia: dashData.valorBorderoDia });
+      }
+
+      // Update commercials by matching first name
+      if (dashData.commercials.length > 0) {
+        setCommercials(prev => {
+          const updated = [...prev];
+          for (const parsed of dashData.commercials) {
+            const parsedFirstName = normalizeName(parsed.name.split(" ")[0]);
+            const idx = updated.findIndex(c => normalizeName(c.name) === parsedFirstName);
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], currentValue: parsed.value };
+            }
+          }
+          return updated;
+        });
+      }
+
+      // Update faixas
+      if (dashData.faixasMes.length > 0 || dashData.faixasDia.length > 0) {
+        setFaixas(prev => {
+          const updated = [...prev];
+          for (const f of dashData.faixasMes) {
+            const faixaKey = f.faixa.includes("720") && !f.faixa.includes("-") ? "720+" : f.faixa;
+            const idx = updated.findIndex(u => u.faixa === faixaKey);
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], valorMes: f.valor };
+            }
+          }
+          for (const f of dashData.faixasDia) {
+            const faixaKey = f.faixa.includes("720") && !f.faixa.includes("-") ? "720+" : f.faixa;
+            const idx = updated.findIndex(u => u.faixa === faixaKey);
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], valorDia: f.valor };
+            }
+          }
+          return updated;
+        });
+      }
+
+      toast.success("Dashboard, Faixas e Comerciais atualizados!");
+    }
+
+    // Parse client table
+    const clienteEntries = parseClienteTable(text);
+    if (clienteEntries.length > 0) {
+      const newClientes: ClienteBordero[] = clienteEntries.map((c, i) => ({
+        id: `cli_${Date.now()}_${i}`,
+        cliente: c.cliente,
+        comercial: "",
+        valor: c.valor,
+        horario: "",
+        observacao: "",
+      }));
+      setClientes(newClientes);
+      toast.success(`${clienteEntries.length} clientes importados!`);
+    }
+
+    if (!dashData && clienteEntries.length === 0) {
+      toast.error("Formato de texto não reconhecido");
+    }
+  };
+
+  // Handler for detailed acionamento updates from AcionamentosView
+  const handleDetailedUpdate = (entries: DetailedEntry[]) => {
+    setAcionamentoDetalhado(prev => {
+      const updated: ColaboradorAcionamento[] = [];
+      
+      for (const entry of entries) {
+        const firstName = entry.name.split(" ")[0];
+        const existing = prev.find(p => normalizeName(p.name) === normalizeName(firstName));
+        
+        updated.push({
+          id: existing?.id ?? `ad_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          name: firstName,
+          total: entry.total,
+          categorias: [
+            { tipo: "ETAPA_ALTERADA", quantidade: entry.etapaAlterada },
+            { tipo: "ATIVIDADE_CRIADA", quantidade: entry.atividadeCriada },
+            { tipo: "STATUS_ATIVIDADE_ALTERADA", quantidade: entry.statusAlterada },
+            { tipo: "CHAMADA_TELEFONICA", quantidade: entry.chamadaTelefonica },
+            { tipo: "OUTROS", quantidade: entry.outros },
+          ],
+        });
+      }
+      
+      return updated;
+    });
+  };
+
   const readOnly = tvMode;
 
   const tabs = [
@@ -225,16 +340,33 @@ const Index = () => {
           </header>
         )}
 
+        {/* Bulk paste area - hidden in TV mode */}
+        {!tvMode && (
+          <BulkPasteUpdater
+            title="Atualizar Dashboard, Faixas e Borderô"
+            subtitle="Cole os dados de borderô (mês/dia), comerciais, faixas de vencimento e tabela de clientes"
+            onApply={handleBulkDashboardPaste}
+          />
+        )}
+
         <div className={cn(tvMode ? "p-2 md:p-3" : "")}>
           {activeTab === "dashboard" && (
-            <DashboardView metaMes={metaMes} metaDia={metaDia} atingidoMes={atingidoMes} atingidoDia={atingidoDia} tvMode={tvMode} readOnly={readOnly}
+            <DashboardView 
+              metaMes={metaMes} 
+              metaDia={metaDia} 
+              atingidoMes={atingidoMes} 
+              atingidoDia={atingidoDia} 
+              commercials={commercials}
+              onCommercialsChange={setCommercials}
+              tvMode={tvMode} 
+              readOnly={readOnly}
               onMetaMesChange={(v) => { setMetaMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaMes: v }); }}
               onMetaDiaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }}
               onAtingidoMesChange={(v) => { setAtingidoMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoMes: v }); }}
               onAtingidoDiaChange={(v) => { const old = atingidoDia; setAtingidoDia(v); if (isSupabaseConfigured) { remoteSettings.updateAsync({ atingidoDia: v }); if (v - old !== 0) insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "single", deltaBorderoDia: v - old }); } }}
             />
           )}
-          {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} />}
+          {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
           {activeTab === "acionamento-detalhado" && (
             <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} />
           )}
