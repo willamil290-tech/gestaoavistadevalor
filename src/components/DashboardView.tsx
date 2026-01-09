@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useRef, useState } from "react";
 import { CircularProgress } from "./CircularProgress";
 import { EditableValue } from "./EditableValue";
-import { isSupabaseConfigured } from "@/lib/supabase";
-import { isDailyEventsEnabled, listDailyEvents } from "@/lib/persistence";
-import { getBusinessDate } from "@/lib/businessDate";
-import { ChartContainer } from "@/components/ui/chart";
+import { CommercialProgressView, Commercial } from "./CommercialProgressView";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface DashboardViewProps {
   metaMes: number;
@@ -18,11 +14,15 @@ interface DashboardViewProps {
   onMetaDiaChange: (value: number) => void;
   onAtingidoMesChange: (value: number) => void;
   onAtingidoDiaChange: (value: number) => void;
+  commercials: Commercial[];
+  onCommercialsChange: (commercials: Commercial[]) => void;
   tvMode?: boolean;
   readOnly?: boolean;
 }
 
-const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
+function genId() {
+  return `com_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
 
 export const DashboardView = ({
   metaMes,
@@ -33,13 +33,15 @@ export const DashboardView = ({
   onMetaDiaChange,
   onAtingidoMesChange,
   onAtingidoDiaChange,
+  commercials,
+  onCommercialsChange,
   tvMode = false,
   readOnly = false,
 }: DashboardViewProps) => {
-  // 🎵 Tema da vitória (Ayrton Senna)
-  // Adicione um arquivo MP3 licenciado em: public/audio/tema-da-vitoria.mp3
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playedRef = useRef({ day: false, month: false });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -47,127 +49,91 @@ export const DashboardView = ({
       const a = new Audio("/audio/tema-da-vitoria.mp3");
       a.preload = "auto";
       audioRef.current = a;
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
+
+  // Auto-scroll in TV mode
+  useEffect(() => {
+    if (!tvMode || !scrollRef.current) {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      return;
+    }
+
+    let scrollingDown = true;
+    const scrollStep = 2;
+    const scrollDelay = 50;
+
+    scrollIntervalRef.current = setInterval(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      
+      if (scrollingDown) {
+        el.scrollTop += scrollStep;
+        if (el.scrollTop >= maxScroll) {
+          scrollingDown = false;
+        }
+      } else {
+        el.scrollTop -= scrollStep;
+        if (el.scrollTop <= 0) {
+          scrollingDown = true;
+        }
+      }
+    }, scrollDelay);
+
+    return () => {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    };
+  }, [tvMode]);
 
   const playTheme = (which: "dia" | "mes") => {
     const a = audioRef.current;
     if (!a) {
-      toast(`Meta do ${which} atingida!`, {
-        description: "Adicione um MP3 licenciado em /public/audio/tema-da-vitoria.mp3 para tocar o tema.",
-      });
+      toast(`Meta do ${which} atingida!`);
       return;
     }
-
-    // Se não houver fonte disponível (arquivo ausente), avisa sem quebrar
-    const anyA = a as any;
-    if (typeof anyA.networkState === "number" && typeof anyA.NETWORK_NO_SOURCE === "number" && anyA.networkState === anyA.NETWORK_NO_SOURCE) {
-      toast(`Meta do ${which} atingida!`, {
-        description: "Arquivo não encontrado: /public/audio/tema-da-vitoria.mp3",
-      });
-      return;
-    }
-
     try {
       a.currentTime = 0;
-      const p = a.play();
-      (p as any)?.catch?.(() => {
+      a.play().catch(() => {
         toast(`Meta do ${which} atingida!`, {
-          description: "O navegador bloqueou o autoplay. Clique para tocar.",
-          action: {
-            label: "Tocar tema",
-            onClick: () => {
-              try {
-                a.currentTime = 0;
-                a.play().catch(() => {
-                  toast("Não foi possível tocar o áudio.", {
-                    description: "Verifique se o arquivo existe em /public/audio/tema-da-vitoria.mp3",
-                  });
-                });
-              } catch {}
-            },
-          },
+          action: { label: "Tocar tema", onClick: () => { a.currentTime = 0; a.play().catch(() => {}); } },
         });
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
-
 
   const percentualMes = metaMes > 0 ? (atingidoMes / metaMes) * 100 : 0;
   const percentualDia = metaDia > 0 ? (atingidoDia / metaDia) * 100 : 0;
 
   useEffect(() => {
-    const hitDay = percentualDia >= 100;
-    const hitMonth = percentualMes >= 100;
-
-    if (hitDay && !playedRef.current.day) {
+    if (percentualDia >= 100 && !playedRef.current.day) {
       playedRef.current.day = true;
       playTheme("dia");
     }
-    if (hitMonth && !playedRef.current.month) {
+    if (percentualMes >= 100 && !playedRef.current.month) {
       playedRef.current.month = true;
       playTheme("mes");
     }
   }, [percentualDia, percentualMes]);
 
   const circleSize = tvMode ? 170 : 200;
-
-  const analytics = useQuery({
-    queryKey: ["daily-analytics", "08h"],
-    enabled: isSupabaseConfigured && isDailyEventsEnabled(),
-    queryFn: async () => {
-      const now = new Date();
-      const bd = getBusinessDate(now);
-      const beforeIso = now.toISOString();
-      const events = await listDailyEvents(bd, beforeIso);
-      return { bd, events, beforeIso };
-    },
-    refetchInterval: pollInterval,
-    staleTime: 0,
-  });
-
-  const computed = useMemo(() => {
-    const now = new Date();
-    const startHour = 8;
-    const endHour = Math.max(startHour, now.getHours());
-
-    const events = analytics.data?.events ?? [];
-
-    const actionEvents = events
-      .filter((e: any) => e.scope === "empresas" || e.scope === "leads")
-      .filter((e: any) => e.kind !== "reset")
-      .filter((e: any) => {
-        const h = new Date(e.createdAt).getHours();
-        return h >= startHour && h <= endHour;
-      });
-
-    const totalActionsSince8 = actionEvents.reduce(
-      (acc: number, e: any) => acc + Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0),
-      0
-    );
-
-    const trendData = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i).map((hour) => {
-      const actions = actionEvents
-        .filter((e: any) => new Date(e.createdAt).getHours() === hour)
-        .reduce((acc: number, e: any) => acc + Number(e.deltaMorning ?? 0) + Number(e.deltaAfternoon ?? 0), 0);
-
-      return { hour: String(hour).padStart(2, "0"), actions };
-    });
-
-    return { totalActionsSince8, trendData, endHour };
-  }, [analytics.data]);
-
   const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-  const showDailyEventsHint = isSupabaseConfigured && !isDailyEventsEnabled();
+  const handleCommercialUpdate = (c: Commercial) => {
+    onCommercialsChange(commercials.map((item) => (item.id === c.id ? c : item)));
+  };
+
+  const handleCommercialAdd = () => {
+    onCommercialsChange([...commercials, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 50000, group: "executivo" }]);
+  };
+
+  const handleCommercialDelete = (id: string) => {
+    onCommercialsChange(commercials.filter((c) => c.id !== id));
+  };
 
   return (
-    <div className={tvMode ? "space-y-4" : "space-y-6"}>
-      {/* Main Grid */}
+    <div ref={scrollRef} className={cn(tvMode ? "space-y-4 h-[calc(100vh-120px)] overflow-y-auto" : "space-y-6")}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Month Section */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
@@ -212,39 +178,15 @@ export const DashboardView = ({
         </div>
       </div>
 
-      {/* Trend (full width / melhor para TV) */}
-      <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg md:text-xl font-semibold">Tendência do dia</h3>
-            <p className="text-sm text-muted-foreground mt-1">Acionamentos por hora (08:00 → agora)</p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">Total (08:00 → agora)</div>
-            <div className="text-2xl md:text-3xl font-bold text-foreground">{computed?.totalActionsSince8 ?? 0}</div>
-          </div>
-        </div>
-
-        {showDailyEventsHint ? (
-          <div className="mt-4 text-sm text-muted-foreground">
-            Para habilitar a tendência, rode o SQL <span className="font-semibold">SUPABASE_DAILY_EVENTS.sql</span> no Supabase.
-          </div>
-        ) : (
-          <div className={tvMode ? "mt-4 h-[320px]" : "mt-4 h-[260px]"}>
-            <ChartContainer config={{ actions: { label: "Acionamentos", color: "hsl(var(--secondary))" } }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={computed?.trendData ?? []} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                  <RTooltip />
-                  <Bar dataKey="actions" fill="var(--color-actions)" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </div>
-        )}
-      </div>
+      {/* Commercial Progress */}
+      <CommercialProgressView
+        commercials={commercials}
+        onUpdate={handleCommercialUpdate}
+        onAdd={handleCommercialAdd}
+        onDelete={handleCommercialDelete}
+        readOnly={readOnly}
+        tvMode={tvMode}
+      />
     </div>
   );
 };

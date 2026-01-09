@@ -1,11 +1,21 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 let dailyEventsDisabled = false;
+let dashboardExtrasDisabled = false;
 const isMissingDailyEventsError = (msg?: string) => {
   const m = String(msg ?? "");
   return m.includes("daily_events") && (m.includes("Could not find the table") || m.includes("schema cache") || m.includes("404"));
 };
+const isMissingDashboardExtrasError = (msg?: string) => {
+  const m = String(msg ?? "");
+  // Column missing on dashboard_settings (e.g., "column dashboard_settings.commercials does not exist")
+  return (
+    m.includes("dashboard_settings") &&
+    (m.includes("does not exist") || m.includes("schema cache") || m.includes("42703"))
+  );
+};
 export const isDailyEventsEnabled = () => !dailyEventsDisabled;
+export const isDashboardExtrasEnabled = () => !dashboardExtrasDisabled;
 
 
 export type DashboardSettings = {
@@ -13,6 +23,57 @@ export type DashboardSettings = {
   metaDia: number;
   atingidoMes: number;
   atingidoDia: number;
+};
+
+// Extras persistidos como JSONB no mesmo registro de dashboard_settings (key='default')
+// Motivo: evita criar várias tabelas novas e simplifica o sync.
+export type CommercialGroup = "executivo" | "cs" | "closer";
+
+export type CommercialProgress = {
+  id: string;
+  name: string;
+  currentValue: number;
+  goal: number;
+  group: CommercialGroup;
+};
+
+export type FaixaVencimentoRow = {
+  faixa: string;
+  valorMes: number;
+  valorDia: number;
+};
+
+export type ClienteBorderoRow = {
+  id: string;
+  cliente: string;
+  comercial: string;
+  valor: number;
+  horario: string;
+  observacao: string;
+};
+
+export type AgendadaRealizadaRow = {
+  label: string;
+  agendadas: number;
+  realizadas: number;
+};
+
+export type AcionamentoCategoriaRow = { tipo: string; quantidade: number };
+
+export type ColaboradorAcionamentoRow = {
+  id: string;
+  name: string;
+  total: number;
+  categorias: AcionamentoCategoriaRow[];
+};
+
+export type DashboardExtras = {
+  commercials: CommercialProgress[];
+  faixas: FaixaVencimentoRow[];
+  clientes: ClienteBorderoRow[];
+  acionamentoDetalhado: ColaboradorAcionamentoRow[];
+  agendadasMes: AgendadaRealizadaRow[];
+  agendadasDia: AgendadaRealizadaRow[];
 };
 
 export type TeamCategory = "empresas" | "leads";
@@ -31,6 +92,15 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
   metaDia: 1053333.33,
   atingidoMes: 5556931.1,
   atingidoDia: 292434.31,
+};
+
+export const DEFAULT_EXTRAS: DashboardExtras = {
+  commercials: [],
+  faixas: [],
+  clientes: [],
+  acionamentoDetalhado: [],
+  agendadasMes: [],
+  agendadasDia: [],
 };
 
 export const DEFAULT_EMPRESAS: TeamMember[] = [
@@ -109,6 +179,69 @@ export async function updateDashboardSettings(patch: Partial<DashboardSettings>)
     .update(payload)
     .eq("key", SETTINGS_KEY);
   if (error) throw error;
+}
+
+/**
+ * Carrega extras (comerciais, faixas, clientes, etc.) a partir do mesmo registro
+ * de dashboard_settings (key='default').
+ *
+ * Se as colunas ainda não existirem no Supabase, o app continua funcionando,
+ * porém sem persistir esses extras (dashboardExtrasDisabled=true).
+ */
+export async function getDashboardExtras(): Promise<DashboardExtras> {
+  if (!isSupabaseConfigured || dashboardExtrasDisabled) return DEFAULT_EXTRAS;
+
+  try {
+    assertConfigured();
+    const { data, error } = await supabase!
+      .from("dashboard_settings")
+      .select("commercials, faixas, clientes, acionamento_detalhado, agendadas_mes, agendadas_dia")
+      .eq("key", SETTINGS_KEY)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingDashboardExtrasError(error.message)) dashboardExtrasDisabled = true;
+      return DEFAULT_EXTRAS;
+    }
+
+    return {
+      commercials: (data?.commercials ?? []) as CommercialProgress[],
+      faixas: (data?.faixas ?? []) as FaixaVencimentoRow[],
+      clientes: (data?.clientes ?? []) as ClienteBorderoRow[],
+      acionamentoDetalhado: (data?.acionamento_detalhado ?? []) as ColaboradorAcionamentoRow[],
+      agendadasMes: (data?.agendadas_mes ?? []) as AgendadaRealizadaRow[],
+      agendadasDia: (data?.agendadas_dia ?? []) as AgendadaRealizadaRow[],
+    };
+  } catch (e: any) {
+    if (isMissingDashboardExtrasError(e?.message)) dashboardExtrasDisabled = true;
+    return DEFAULT_EXTRAS;
+  }
+}
+
+export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
+  if (!isSupabaseConfigured || dashboardExtrasDisabled) return;
+  assertConfigured();
+
+  const payload: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (patch.commercials) payload.commercials = patch.commercials;
+  if (patch.faixas) payload.faixas = patch.faixas;
+  if (patch.clientes) payload.clientes = patch.clientes;
+  if (patch.acionamentoDetalhado) payload.acionamento_detalhado = patch.acionamentoDetalhado;
+  if (patch.agendadasMes) payload.agendadas_mes = patch.agendadasMes;
+  if (patch.agendadasDia) payload.agendadas_dia = patch.agendadasDia;
+
+  const { error } = await supabase!
+    .from("dashboard_settings")
+    .update(payload)
+    .eq("key", SETTINGS_KEY);
+
+  if (error) {
+    if (isMissingDashboardExtrasError(error.message)) {
+      dashboardExtrasDisabled = true;
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function listTeamMembers(category: TeamCategory): Promise<TeamMember[]> {
