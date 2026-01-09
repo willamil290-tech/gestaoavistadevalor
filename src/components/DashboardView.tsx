@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { CircularProgress } from "./CircularProgress";
 import { EditableValue } from "./EditableValue";
-import { CommercialProgressView, Commercial } from "./CommercialProgressView";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -14,14 +13,8 @@ interface DashboardViewProps {
   onMetaDiaChange: (value: number) => void;
   onAtingidoMesChange: (value: number) => void;
   onAtingidoDiaChange: (value: number) => void;
-  commercials: Commercial[];
-  onCommercialsChange: (commercials: Commercial[]) => void;
   tvMode?: boolean;
   readOnly?: boolean;
-}
-
-function genId() {
-  return `com_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 export const DashboardView = ({
@@ -33,8 +26,6 @@ export const DashboardView = ({
   onMetaDiaChange,
   onAtingidoMesChange,
   onAtingidoDiaChange,
-  commercials,
-  onCommercialsChange,
   tvMode = false,
   readOnly = false,
 }: DashboardViewProps) => {
@@ -120,18 +111,6 @@ export const DashboardView = ({
   const circleSize = tvMode ? 170 : 200;
   const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-  const handleCommercialUpdate = (c: Commercial) => {
-    onCommercialsChange(commercials.map((item) => (item.id === c.id ? c : item)));
-  };
-
-  const handleCommercialAdd = () => {
-    onCommercialsChange([...commercials, { id: genId(), name: "Novo Comercial", currentValue: 0, goal: 50000, group: "executivo" }]);
-  };
-
-  const handleCommercialDelete = (id: string) => {
-    onCommercialsChange(commercials.filter((c) => c.id !== id));
-  };
-
   return (
     <div ref={scrollRef} className={cn(tvMode ? "space-y-4 h-[calc(100vh-120px)] overflow-y-auto" : "space-y-6")}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
@@ -177,16 +156,6 @@ export const DashboardView = ({
           <p className="text-xl md:text-2xl font-bold text-foreground">{fmtBRL(Math.max(0, metaDia - atingidoDia))}</p>
         </div>
       </div>
-
-      {/* Commercial Progress */}
-      <CommercialProgressView
-        commercials={commercials}
-        onUpdate={handleCommercialUpdate}
-        onAdd={handleCommercialAdd}
-        onDelete={handleCommercialDelete}
-        readOnly={readOnly}
-        tvMode={tvMode}
-      />
     </div>
   );
 };
