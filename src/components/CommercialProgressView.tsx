@@ -177,7 +177,10 @@ export const CommercialProgressView = ({
 
             <Progress
               value={percentage}
-              className={cn("h-3", isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-muted-foreground/40")}
+              className={cn(
+                "h-3 bg-[hsl(222,47%,18%)]",
+                isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-[hsl(var(--primary))]"
+              )}
             />
 
             <div className="flex justify-between mt-2 text-sm text-muted-foreground">
@@ -221,7 +224,10 @@ export const CommercialProgressView = ({
 
         <Progress
           value={percentage}
-          className={cn("h-4", isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-accent")}
+          className={cn(
+            "h-4 bg-[hsl(222,47%,18%)]",
+            isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-[hsl(var(--primary))]"
+          )}
         />
 
         <div className="flex justify-between mt-2 text-sm text-muted-foreground">

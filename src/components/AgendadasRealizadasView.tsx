@@ -188,18 +188,6 @@ export const AgendadasRealizadasView = ({
                     {totalRealizadasMes}
                   </p>
                 </div>
-                <div className="p-4 bg-muted/30 rounded-xl text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Taxa de Conversão</p>
-                  <p
-                    className={cn(
-                      "font-bold",
-                      tvMode ? "text-3xl" : "text-2xl",
-                      taxaConversaoMes >= 80 ? "text-green-500" : taxaConversaoMes >= 50 ? "text-gold" : "text-destructive"
-                    )}
-                  >
-                    {taxaConversaoMes.toFixed(1)}%
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -303,18 +291,6 @@ export const AgendadasRealizadasView = ({
                   <p className="text-sm text-muted-foreground mb-1">Realizadas</p>
                   <p className={cn("font-bold text-secondary", tvMode ? "text-4xl" : "text-3xl")}>
                     {totalRealizadasDia}
-                  </p>
-                </div>
-                <div className="p-4 bg-muted/30 rounded-xl text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Taxa de Conversão</p>
-                  <p
-                    className={cn(
-                      "font-bold",
-                      tvMode ? "text-3xl" : "text-2xl",
-                      taxaConversaoDia >= 80 ? "text-green-500" : taxaConversaoDia >= 50 ? "text-gold" : "text-destructive"
-                    )}
-                  >
-                    {taxaConversaoDia.toFixed(1)}%
                   </p>
                 </div>
               </div>
