@@ -137,13 +137,13 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[180px]" : "h-[160px]"}>
+              <div className={tvMode ? "h-[120px]" : "h-[100px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--primary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 70, right: 10 }}>
+                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 60, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 10 }} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 9 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={55} tick={{ fontSize: 9 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
@@ -183,13 +183,13 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[180px]" : "h-[160px]"}>
+              <div className={tvMode ? "h-[120px]" : "h-[100px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--secondary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 70, right: 10 }}>
+                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 60, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 10 }} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 9 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={55} tick={{ fontSize: 9 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
