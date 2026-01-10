@@ -72,16 +72,11 @@ export const AgendadasRealizadasView = ({
 
   return (
     <div className="animate-fade-in-up">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-secondary" />
-          <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-            Agendadas × Realizadas
-          </h2>
-        </div>
-        <span className="text-xs text-muted-foreground">
-          Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-        </span>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-3 h-3 rounded-full bg-secondary" />
+        <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+          Agendadas × Realizadas
+        </h2>
       </div>
 
       <Tabs defaultValue="mes" className="space-y-4">
@@ -151,6 +146,7 @@ export const AgendadasRealizadasView = ({
                   ))}
                 </div>
               ) : (
+              <>
                 <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
                   <ChartContainer
                     config={{
@@ -171,6 +167,10 @@ export const AgendadasRealizadasView = ({
                     </ResponsiveContainer>
                   </ChartContainer>
                 </div>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </>
               )}
             </div>
 
@@ -256,6 +256,7 @@ export const AgendadasRealizadasView = ({
                   ))}
                 </div>
               ) : (
+              <>
                 <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
                   <ChartContainer
                     config={{
@@ -276,6 +277,10 @@ export const AgendadasRealizadasView = ({
                     </ResponsiveContainer>
                   </ChartContainer>
                 </div>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </>
               )}
             </div>
 

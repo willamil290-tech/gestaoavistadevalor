@@ -112,13 +112,13 @@ export const FaixaVencimentoView = ({
           <TabsTrigger value="dia">Dia</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="mes" className="space-y-3">
-          <div className="bg-card rounded-2xl p-3 md:p-4 border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className={cn("font-semibold", tvMode ? "text-lg" : "text-base")}>Visão Mensal</h3>
+        <TabsContent value="mes" className="space-y-2">
+          <div className="bg-card rounded-2xl p-3 border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className={cn("font-semibold", tvMode ? "text-base" : "text-sm")}>Visão Mensal</h3>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Total Mês</p>
-                <p className={cn("font-bold text-primary", tvMode ? "text-xl" : "text-lg")}>{fmtBRL(totalMes)}</p>
+                <p className={cn("font-bold text-primary", tvMode ? "text-lg" : "text-base")}>{fmtBRL(totalMes)}</p>
               </div>
             </div>
 
@@ -137,13 +137,13 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[280px]" : "h-[220px]"}>
+              <div className={tvMode ? "h-[180px]" : "h-[160px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--primary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartDataMes} layout="vertical" margin={{ left: 70, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 11 }} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 11 }} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 10 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
@@ -151,16 +151,20 @@ export const FaixaVencimentoView = ({
                 </ChartContainer>
               </div>
             )}
+            
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
           </div>
         </TabsContent>
 
-        <TabsContent value="dia" className="space-y-3">
-          <div className="bg-card rounded-2xl p-3 md:p-4 border border-border">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className={cn("font-semibold", tvMode ? "text-lg" : "text-base")}>Visão Diária</h3>
+        <TabsContent value="dia" className="space-y-2">
+          <div className="bg-card rounded-2xl p-3 border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className={cn("font-semibold", tvMode ? "text-base" : "text-sm")}>Visão Diária</h3>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Total Dia</p>
-                <p className={cn("font-bold text-secondary", tvMode ? "text-xl" : "text-lg")}>{fmtBRL(totalDia)}</p>
+                <p className={cn("font-bold text-secondary", tvMode ? "text-lg" : "text-base")}>{fmtBRL(totalDia)}</p>
               </div>
             </div>
 
@@ -179,13 +183,13 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[280px]" : "h-[220px]"}>
+              <div className={tvMode ? "h-[180px]" : "h-[160px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--secondary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartDataDia} layout="vertical" margin={{ left: 70, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 11 }} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 11 }} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 10 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 10 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
                       <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
@@ -193,6 +197,10 @@ export const FaixaVencimentoView = ({
                 </ChartContainer>
               </div>
             )}
+            
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
           </div>
         </TabsContent>
       </Tabs>
