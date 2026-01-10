@@ -252,10 +252,10 @@ export const CommercialProgressView = ({
         )}
       </div>
 
-      {/* Group Summaries - CS and Closer side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      {/* Group Summaries - Executivo on top, CS and Closer side by side below */}
+      <div className="space-y-4 mb-6">
         {renderGroupSummary(groups[0])}
-        <div className="grid grid-cols-2 gap-4 md:col-span-2">
+        <div className="grid grid-cols-2 gap-4">
           {renderGroupSummary(groups[1])}
           {renderGroupSummary(groups[2])}
         </div>
