@@ -79,56 +79,54 @@ export const FaixaVencimentoView = ({
 
   return (
     <div className="animate-fade-in-up">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-gold" />
-          <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+          <h2 className={cn("font-semibold text-foreground", tvMode ? "text-2xl" : "text-xl md:text-2xl")}>
             Faixa de Vencimento
           </h2>
         </div>
 
         {!readOnly && !editing && (
-          <Button variant="outline" onClick={startEdit} className="rounded-xl">
-            <Pencil className="w-4 h-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={startEdit} className="rounded-xl">
+            <Pencil className="w-4 h-4 mr-1" />
             Editar
           </Button>
         )}
 
         {editing && (
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={cancelEdit}>
-              <X className="w-4 h-4 mr-1" />
-              Cancelar
+            <Button variant="ghost" size="sm" onClick={cancelEdit}>
+              <X className="w-4 h-4" />
             </Button>
-            <Button onClick={saveEdit}>
-              <Check className="w-4 h-4 mr-1" />
-              Salvar
+            <Button size="sm" onClick={saveEdit}>
+              <Check className="w-4 h-4" />
             </Button>
           </div>
         )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "mes" | "dia")} className="space-y-4">
-        <TabsList className="grid w-full max-w-[300px] grid-cols-2">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "mes" | "dia")} className="space-y-3">
+        <TabsList className="grid w-full max-w-[240px] grid-cols-2">
           <TabsTrigger value="mes">Mês</TabsTrigger>
           <TabsTrigger value="dia">Dia</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="mes" className="space-y-4">
-          <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>Visão Mensal</h3>
+        <TabsContent value="mes" className="space-y-3">
+          <div className="bg-card rounded-2xl p-3 md:p-4 border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={cn("font-semibold", tvMode ? "text-lg" : "text-base")}>Visão Mensal</h3>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Total Mês</p>
-                <p className={cn("font-bold text-primary", tvMode ? "text-2xl" : "text-xl")}>{fmtBRL(totalMes)}</p>
+                <p className={cn("font-bold text-primary", tvMode ? "text-xl" : "text-lg")}>{fmtBRL(totalMes)}</p>
               </div>
             </div>
 
             {editing ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {editValues.map((f, i) => (
-                  <div key={f.faixa} className="flex items-center gap-3">
-                    <span className="w-24 text-sm text-muted-foreground">{f.faixa}</span>
+                  <div key={f.faixa} className="flex items-center gap-2">
+                    <span className="w-20 text-sm text-muted-foreground">{f.faixa}</span>
                     <Input
                       type="number"
                       value={f.valorMes}
@@ -139,15 +137,15 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
+              <div className={tvMode ? "h-[280px]" : "h-[220px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--primary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 80, right: 20 }}>
+                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 70, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={75} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 11 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
-                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 8, 8, 0]} />
+                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
@@ -156,21 +154,21 @@ export const FaixaVencimentoView = ({
           </div>
         </TabsContent>
 
-        <TabsContent value="dia" className="space-y-4">
-          <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>Visão Diária</h3>
+        <TabsContent value="dia" className="space-y-3">
+          <div className="bg-card rounded-2xl p-3 md:p-4 border border-border">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={cn("font-semibold", tvMode ? "text-lg" : "text-base")}>Visão Diária</h3>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Total Dia</p>
-                <p className={cn("font-bold text-secondary", tvMode ? "text-2xl" : "text-xl")}>{fmtBRL(totalDia)}</p>
+                <p className={cn("font-bold text-secondary", tvMode ? "text-xl" : "text-lg")}>{fmtBRL(totalDia)}</p>
               </div>
             </div>
 
             {editing ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {editValues.map((f, i) => (
-                  <div key={f.faixa} className="flex items-center gap-3">
-                    <span className="w-24 text-sm text-muted-foreground">{f.faixa}</span>
+                  <div key={f.faixa} className="flex items-center gap-2">
+                    <span className="w-20 text-sm text-muted-foreground">{f.faixa}</span>
                     <Input
                       type="number"
                       value={f.valorDia}
@@ -181,15 +179,15 @@ export const FaixaVencimentoView = ({
                 ))}
               </div>
             ) : (
-              <div className={tvMode ? "h-[400px]" : "h-[300px]"}>
+              <div className={tvMode ? "h-[280px]" : "h-[220px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--secondary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 80, right: 20 }}>
+                    <BarChart data={chartDataDia} layout="vertical" margin={{ left: 70, right: 10 }}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} />
-                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={75} />
+                      <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={65} tick={{ fontSize: 11 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
-                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 8, 8, 0]} />
+                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>

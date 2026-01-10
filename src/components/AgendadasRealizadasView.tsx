@@ -70,16 +70,18 @@ export const AgendadasRealizadasView = ({
   const totalAgendadasDia = dadosDia.reduce((sum, d) => sum + d.agendadas, 0);
   const totalRealizadasDia = dadosDia.reduce((sum, d) => sum + d.realizadas, 0);
 
-  const taxaConversaoMes = totalAgendadasMes > 0 ? (totalRealizadasMes / totalAgendadasMes) * 100 : 0;
-  const taxaConversaoDia = totalAgendadasDia > 0 ? (totalRealizadasDia / totalAgendadasDia) * 100 : 0;
-
   return (
     <div className="animate-fade-in-up">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-3 h-3 rounded-full bg-secondary" />
-        <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-          Agendadas × Realizadas
-        </h2>
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-secondary" />
+          <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+            Agendadas × Realizadas
+          </h2>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          Atualizado: {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+        </span>
       </div>
 
       <Tabs defaultValue="mes" className="space-y-4">

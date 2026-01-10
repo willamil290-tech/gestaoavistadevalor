@@ -206,42 +206,6 @@ export const AcionamentosView = ({
           <LeadsView tvMode={tvMode} />
         </TabsContent>
       </Tabs>
-
-      {/* Tendência do Dia - moved to bottom */}
-      <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className={cn("font-semibold", tvMode ? "text-xl" : "text-lg md:text-xl")}>Tendência do Dia</h3>
-            <p className="text-sm text-muted-foreground mt-1">Acionamentos por hora</p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">Total</div>
-            <div className={cn("font-bold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-              {totalActions}
-            </div>
-          </div>
-        </div>
-
-        {showDailyEventsHint && !externalTrendData?.length && !manualTrendData.length ? (
-          <div className="mt-4 text-sm text-muted-foreground">
-            Cole os dados de acionamento acima ou rode o SQL <span className="font-semibold">SUPABASE_DAILY_EVENTS.sql</span> no Supabase.
-          </div>
-        ) : (
-          <div className={tvMode ? "mt-4 h-[320px]" : "mt-4 h-[260px]"}>
-            <ChartContainer config={{ actions: { label: "Acionamentos", color: "hsl(var(--secondary))" } }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={displayTrendData} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                  <RTooltip />
-                  <Bar dataKey="actions" fill="var(--color-actions)" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
