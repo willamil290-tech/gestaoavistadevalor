@@ -140,12 +140,12 @@ export const FaixaVencimentoView = ({
               <div className={tvMode ? "h-[120px]" : "h-[100px]"}>
                 <ChartContainer config={{ valor: { label: "Valor", color: "hsl(var(--primary))" } }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 60, right: 10 }} barCategoryGap={8} barGap={4}>
+                    <BarChart data={chartDataMes} layout="vertical" margin={{ left: 60, right: 10 }} barCategoryGap={4} barGap={2}>
                       <CartesianGrid horizontal strokeDasharray="3 3" />
                       <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 9 }} />
                       <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={55} tick={{ fontSize: 9 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
-                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} barSize={18} maxBarSize={18} />
+                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} barSize={28} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
@@ -191,7 +191,7 @@ export const FaixaVencimentoView = ({
                       <XAxis type="number" tickFormatter={(v) => fmtBRL(v)} tick={{ fontSize: 9 }} />
                       <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} width={55} tick={{ fontSize: 9 }} />
                       <RTooltip formatter={(v: number) => fmtBRL(v)} />
-                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} barSize={18} maxBarSize={18} />
+                      <Bar dataKey="valor" fill="var(--color-valor)" radius={[0, 6, 6, 0]} barSize={28} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>
