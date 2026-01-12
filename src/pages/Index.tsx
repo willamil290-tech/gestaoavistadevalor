@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, Calendar, BarChart3, Play, Pause, Tv2, RotateCcw, List } from "lucide-react";
+import { LayoutDashboard, Phone, FileText, Calendar, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Users } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -8,8 +8,9 @@ import { AcionamentoDetalhadoView, ColaboradorAcionamento, defaultCategorias } f
 import { FaixaVencimentoView, FaixaVencimento } from "@/components/FaixaVencimentoView";
 import { BorderoDiarioView, ClienteBordero } from "@/components/BorderoDiarioView";
 import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/AgendadasRealizadasView";
+import { TendenciaDiaView } from "@/components/TendenciaDiaView";
 import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
-import { Commercial } from "@/components/CommercialProgressView";
+import { Commercial, CommercialProgressView } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
@@ -20,9 +21,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
-import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, normalizeName, type DetailedEntry } from "@/lib/bulkParse";
+import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 
-type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "faixa-vencimento" | "bordero-diario" | "agendadas-realizadas";
+type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "agendadas-realizadas";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -89,6 +90,7 @@ const Index = () => {
   
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
+  const [trendData, setTrendData] = useState<HourlyTrend[]>([]);
 
   const [extrasHydrated, setExtrasHydrated] = useState(false);
 
@@ -181,7 +183,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "faixa-vencimento", "bordero-diario", "agendadas-realizadas"];
+    const tabs: TabType[] = ["dashboard", "comerciais", "faixa-vencimento", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario", "agendadas-realizadas"];
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -348,9 +350,11 @@ const Index = () => {
 
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, color: "bg-primary" },
+    { id: "comerciais" as const, label: "Comerciais", icon: Users, color: "bg-primary" },
+    { id: "faixa-vencimento" as const, label: "Faixa Venc.", icon: Calendar, color: "bg-gold" },
     { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
-    { id: "faixa-vencimento" as const, label: "Faixa Venc.", icon: Calendar, color: "bg-gold" },
+    { id: "tendencia" as const, label: "Tendência", icon: TrendingUp, color: "bg-accent" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
     { id: "agendadas-realizadas" as const, label: "Agendadas", icon: BarChart3, color: "bg-secondary" },
   ];
@@ -436,8 +440,6 @@ const Index = () => {
               metaDia={metaDia} 
               atingidoMes={atingidoMes} 
               atingidoDia={atingidoDia} 
-              commercials={commercials}
-              onCommercialsChange={setCommercials}
               tvMode={tvMode} 
               readOnly={readOnly}
               onMetaMesChange={(v) => { setMetaMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaMes: v }); }}
@@ -446,11 +448,39 @@ const Index = () => {
               onAtingidoDiaChange={(v) => { const old = atingidoDia; setAtingidoDia(v); if (isSupabaseConfigured) { remoteSettings.updateAsync({ atingidoDia: v }); if (v - old !== 0) insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "single", deltaBorderoDia: v - old }); } }}
             />
           )}
+          {activeTab === "comerciais" && (
+            <div className="animate-fade-in-up">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+                  Progresso por Comercial
+                </h2>
+              </div>
+              <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
+                <CommercialProgressView
+                  commercials={commercials}
+                  onUpdate={(c) => setCommercials((prev) => prev.map((x) => (x.id === c.id ? c : x)))}
+                  onAdd={() => setCommercials((prev) => [...prev, { id: `c_${Date.now()}`, name: "Novo", currentValue: 0, goal: 50000, group: "executivo" }])}
+                  onDelete={(id) => setCommercials((prev) => prev.filter((x) => x.id !== id))}
+                  readOnly={readOnly}
+                  tvMode={tvMode}
+                />
+              </div>
+            </div>
+          )}
+          {activeTab === "faixa-vencimento" && <FaixaVencimentoView faixas={faixas} onUpdate={setFaixas} readOnly={readOnly} tvMode={tvMode} />}
           {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
           {activeTab === "acionamento-detalhado" && (
             <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} />
           )}
-          {activeTab === "faixa-vencimento" && <FaixaVencimentoView faixas={faixas} onUpdate={setFaixas} readOnly={readOnly} tvMode={tvMode} />}
+          {activeTab === "tendencia" && (
+            <TendenciaDiaView 
+              tvMode={tvMode} 
+              trendData={trendData}
+              onTrendUpdate={setTrendData}
+              onDetailedUpdate={handleDetailedUpdate}
+            />
+          )}
           {activeTab === "bordero-diario" && (
             <BorderoDiarioView clientes={clientes} metaDia={metaDia} onClienteAdd={() => setClientes((prev) => [...prev, { id: `cli_${Date.now()}`, cliente: "Novo Cliente", comercial: "", valor: 0, horario: "", observacao: "" }])} onClienteUpdate={(c) => setClientes((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onClienteDelete={(id) => setClientes((prev) => prev.filter((x) => x.id !== id))} onMetaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }} readOnly={readOnly} tvMode={tvMode} />
           )}

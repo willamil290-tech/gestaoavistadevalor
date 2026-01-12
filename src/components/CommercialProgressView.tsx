@@ -177,7 +177,10 @@ export const CommercialProgressView = ({
 
             <Progress
               value={percentage}
-              className={cn("h-3", isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-muted-foreground/40")}
+              className={cn(
+                "h-3 bg-[hsl(222,47%,18%)]",
+                isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-[hsl(var(--primary))]"
+              )}
             />
 
             <div className="flex justify-between mt-2 text-sm text-muted-foreground">
@@ -221,7 +224,10 @@ export const CommercialProgressView = ({
 
         <Progress
           value={percentage}
-          className={cn("h-4", isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-accent")}
+          className={cn(
+            "h-4 bg-[hsl(222,47%,18%)]",
+            isGoalReached ? "[&>div]:bg-green-500" : "[&>div]:bg-[hsl(var(--primary))]"
+          )}
         />
 
         <div className="flex justify-between mt-2 text-sm text-muted-foreground">
@@ -246,25 +252,52 @@ export const CommercialProgressView = ({
         )}
       </div>
 
-      {/* Group Summaries */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {groups.map(renderGroupSummary)}
+      {/* Group Summaries - Executivo on top, CS and Closer side by side below */}
+      <div className="space-y-4 mb-6">
+        {renderGroupSummary(groups[0])}
+        <div className="grid grid-cols-2 gap-4">
+          {renderGroupSummary(groups[1])}
+          {renderGroupSummary(groups[2])}
+        </div>
       </div>
 
-      {/* Individual Commercials by Group */}
-      {groups.map((group) => {
-        if (group.members.length === 0) return null;
-        return (
-          <div key={group.key} className="mb-6 last:mb-0">
-            <h4 className={cn("font-medium text-muted-foreground mb-3", tvMode ? "text-lg" : "text-base")}>
-              {group.name}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {group.members.map(renderCommercial)}
-            </div>
+      {/* Individual Commercials - Executivo section */}
+      {groups[0].members.length > 0 && (
+        <div className="mb-6">
+          <h4 className={cn("font-medium text-muted-foreground mb-3", tvMode ? "text-lg" : "text-base")}>
+            Executivo
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {groups[0].members.map(renderCommercial)}
           </div>
-        );
-      })}
+        </div>
+      )}
+
+      {/* CS and Closer side by side */}
+      {(groups[1].members.length > 0 || groups[2].members.length > 0) && (
+        <div className="grid grid-cols-2 gap-4">
+          {groups[1].members.length > 0 && (
+            <div>
+              <h4 className={cn("font-medium text-muted-foreground mb-3", tvMode ? "text-lg" : "text-base")}>
+                CS
+              </h4>
+              <div className="space-y-3">
+                {groups[1].members.map(renderCommercial)}
+              </div>
+            </div>
+          )}
+          {groups[2].members.length > 0 && (
+            <div>
+              <h4 className={cn("font-medium text-muted-foreground mb-3", tvMode ? "text-lg" : "text-base")}>
+                Closer
+              </h4>
+              <div className="space-y-3">
+                {groups[2].members.map(renderCommercial)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {commercials.length === 0 && (
         <p className="text-center text-muted-foreground py-4">Nenhum comercial cadastrado</p>

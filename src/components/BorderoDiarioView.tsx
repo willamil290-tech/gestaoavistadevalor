@@ -207,9 +207,9 @@ export const BorderoDiarioView = ({
           <h3 className={cn("font-semibold mb-4", tvMode ? "text-xl" : "text-lg")}>Resumo do Dia</h3>
 
           <div className="space-y-4">
-            <div className="p-4 bg-muted/30 rounded-xl text-center">
+            <div className="p-4 bg-secondary/10 rounded-xl text-center">
               <p className="text-sm text-muted-foreground mb-1">Borderô do Dia</p>
-              <p className={cn("font-bold text-primary", tvMode ? "text-4xl" : "text-3xl")}>
+              <p className={cn("font-bold text-secondary", tvMode ? "text-4xl" : "text-3xl")}>
                 {fmtBRL(totalDia)}
               </p>
             </div>

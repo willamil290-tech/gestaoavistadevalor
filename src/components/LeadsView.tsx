@@ -7,6 +7,7 @@ import type { TeamMember as PersistedMember } from "@/lib/persistence";
 import { insertDailyEvent } from "@/lib/persistence";
 import { getBusinessDate } from "@/lib/businessDate";
 import { parseBulkText, normalizeNameKey } from "@/lib/bulkText";
+import { parseNameTag } from "@/lib/parseNameTag";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -155,7 +156,14 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
       setLeadsData((prev) => {
         const map = new Map(prev.map((m) => [normalizeNameKey(m.name), m]));
         for (const e of entries) {
-          const key = normalizeNameKey(e.name);
+          const parsed = parseNameTag(e.name);
+          // Se veio TAG desconhecida, ignora o bloco
+          if (parsed.hasTag && parsed.category === null) continue;
+          // Se veio TAG e NÃO é desta aba, ignora o bloco
+          if (parsed.category && parsed.category !== "leads") continue;
+
+          const base = parsed.baseName;
+          const key = normalizeNameKey(base);
           const existing = map.get(key);
           if (existing) {
             const morning = bulkMode === "sum" ? existing.morning + e.morning : e.morning;
@@ -163,7 +171,7 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
             map.set(key, { ...existing, morning, afternoon, total: morning + afternoon });
           } else {
             const id = genId("le");
-            map.set(key, { id, name: e.name, morning: e.morning, afternoon: e.afternoon, total: e.morning + e.afternoon });
+            map.set(key, { id, name: base, morning: e.morning, afternoon: e.afternoon, total: e.morning + e.afternoon });
           }
         }
         return Array.from(map.values());
@@ -185,7 +193,14 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     for (const m of remote.data ?? []) existingByName.set(normalizeNameKey(m.name), m);
 
     for (const e of entries) {
-      const key = normalizeNameKey(e.name);
+      const parsed = parseNameTag(e.name);
+      // Se veio TAG desconhecida, ignora o bloco
+      if (parsed.hasTag && parsed.category === null) continue;
+      // Se veio TAG e NÃO é desta aba, ignora o bloco
+      if (parsed.category && parsed.category !== "leads") continue;
+
+      const base = parsed.baseName;
+      const key = normalizeNameKey(base);
       const existing = existingByName.get(key);
 
       if (existing) {
@@ -214,7 +229,7 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
         const newMember: PersistedMember = {
           id,
           category: "leads",
-          name: e.name,
+          name: base,
           morning: e.morning,
           afternoon: e.afternoon,
         };
