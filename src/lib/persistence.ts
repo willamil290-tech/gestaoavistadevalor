@@ -58,6 +58,11 @@ export type AgendadaRealizadaRow = {
   realizadas: number;
 };
 
+export type HourlyTrendRow = {
+  hour: string;
+  actions: number;
+};
+
 export type AcionamentoCategoriaRow = { tipo: string; quantidade: number };
 
 export type ColaboradorAcionamentoRow = {
@@ -74,6 +79,7 @@ export type DashboardExtras = {
   acionamentoDetalhado: ColaboradorAcionamentoRow[];
   agendadasMes: AgendadaRealizadaRow[];
   agendadasDia: AgendadaRealizadaRow[];
+  trendData: HourlyTrendRow[];
 };
 
 export type TeamCategory = "empresas" | "leads";
@@ -101,6 +107,7 @@ export const DEFAULT_EXTRAS: DashboardExtras = {
   acionamentoDetalhado: [],
   agendadasMes: [],
   agendadasDia: [],
+  trendData: [],
 };
 
 export const DEFAULT_EMPRESAS: TeamMember[] = [
@@ -204,6 +211,19 @@ export async function getDashboardExtras(): Promise<DashboardExtras> {
       return DEFAULT_EXTRAS;
     }
 
+        // trend_data é opcional (coluna pode não existir). Tentamos ler sem derrubar os outros extras.
+    let trendData: HourlyTrendRow[] = [];
+    try {
+      const { data: td, error: tdErr } = await supabase!
+        .from("dashboard_settings")
+        .select("trend_data")
+        .eq("key", SETTINGS_KEY)
+        .maybeSingle();
+      if (!tdErr) trendData = (td?.trend_data ?? []) as HourlyTrendRow[];
+    } catch {
+      // ignore
+    }
+
     return {
       commercials: (data?.commercials ?? []) as CommercialProgress[],
       faixas: (data?.faixas ?? []) as FaixaVencimentoRow[],
@@ -211,6 +231,7 @@ export async function getDashboardExtras(): Promise<DashboardExtras> {
       acionamentoDetalhado: (data?.acionamento_detalhado ?? []) as ColaboradorAcionamentoRow[],
       agendadasMes: (data?.agendadas_mes ?? []) as AgendadaRealizadaRow[],
       agendadasDia: (data?.agendadas_dia ?? []) as AgendadaRealizadaRow[],
+      trendData,
     };
   } catch (e: any) {
     if (isMissingDashboardExtrasError(e?.message)) dashboardExtrasDisabled = true;
@@ -230,6 +251,10 @@ export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
   if (patch.agendadasMes) payload.agendadas_mes = patch.agendadasMes;
   if (patch.agendadasDia) payload.agendadas_dia = patch.agendadasDia;
 
+  // trend_data é opcional (coluna pode não existir).
+  // Mantemos update separado para não derrubar outros campos se a coluna não existir.
+  const trendPatch = patch.trendData;
+
   const { error } = await supabase!
     .from("dashboard_settings")
     .update(payload)
@@ -241,6 +266,24 @@ export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
       return;
     }
     throw error;
+  }
+
+  if (trendPatch) {
+    try {
+      const { error: tErr } = await supabase!
+        .from("dashboard_settings")
+        .update({ updated_at: new Date().toISOString(), trend_data: trendPatch })
+        .eq("key", SETTINGS_KEY);
+
+      // Se a coluna não existir, ignoramos silenciosamente (não desabilita os extras).
+      if (tErr) {
+        const msg = String(tErr.message ?? "");
+        const isMissingTrend = msg.includes("trend_data") && (msg.includes("does not exist") || msg.includes("42703") || msg.includes("schema cache"));
+        if (!isMissingTrend) throw tErr;
+      }
+    } catch {
+      // ignore (ex.: coluna não existe)
+    }
   }
 }
 

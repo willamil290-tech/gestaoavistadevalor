@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
+import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 
 type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "agendadas-realizadas";
 
@@ -90,9 +91,15 @@ const Index = () => {
   
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
-  const [trendData, setTrendData] = useState<HourlyTrend[]>([]);
+  const [trendStorageKey] = useState(() => `trendData:${getBusinessDate()}`);
+  const [trendData, setTrendData] = useState<HourlyTrend[]>(() => loadJson(trendStorageKey, [] as HourlyTrend[]));
 
   const [extrasHydrated, setExtrasHydrated] = useState(false);
+
+  // Persist tendência por hora (localStorage)
+  useEffect(() => {
+    saveJson(trendStorageKey, trendData);
+  }, [trendData, trendStorageKey]);
 
   // Hydrate extras once (avoid overwriting local edits on every poll)
   useEffect(() => {
@@ -111,6 +118,7 @@ const Index = () => {
     if (Array.isArray(ex.acionamentoDetalhado) && ex.acionamentoDetalhado.length) setAcionamentoDetalhado(ex.acionamentoDetalhado as any);
     if (Array.isArray(ex.agendadasMes) && ex.agendadasMes.length) setAgendadasMes(ex.agendadasMes as any);
     if (Array.isArray(ex.agendadasDia) && ex.agendadasDia.length) setAgendadasDia(ex.agendadasDia as any);
+    if (Array.isArray((ex as any).trendData) && (ex as any).trendData.length) setTrendData((ex as any).trendData as any);
 
     setExtrasHydrated(true);
   }, [remoteExtras.data, remoteExtras.isPlaceholderData, remoteExtras.isLoading, extrasHydrated]);
@@ -155,6 +163,14 @@ const Index = () => {
     }, 700);
     return () => clearTimeout(t);
   }, [agendadasMes, agendadasDia, extrasHydrated]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !extrasHydrated) return;
+    const t = setTimeout(() => {
+      remoteExtras.update({ trendData: trendData as any });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [trendData, extrasHydrated]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !remoteSettings.data) return;
@@ -207,8 +223,12 @@ const Index = () => {
       const businessDate = getBusinessDate();
       const [empresas, leads] = await Promise.all([listTeamMembers("empresas"), listTeamMembers("leads")]);
       const oldAtingidoDia = atingidoDia;
+      const oldTrendData = trendData;
       await resetDayCounters();
       setAtingidoDia(0);
+      setTrendData([]);
+      removeKey(trendStorageKey);
+      try { await remoteExtras.updateAsync({ trendData: [] as any }); } catch {}
       await insertDailyEvent({ businessDate, scope: "bordero", kind: "reset", deltaBorderoDia: -oldAtingidoDia });
       toast.success("Reset do dia aplicado");
       showUndo({
@@ -216,6 +236,9 @@ const Index = () => {
         onUndo: async () => {
           await updateDashboardSettings({ atingidoDia: oldAtingidoDia });
           setAtingidoDia(oldAtingidoDia);
+          setTrendData(oldTrendData);
+          saveJson(trendStorageKey, oldTrendData);
+          try { await remoteExtras.updateAsync({ trendData: oldTrendData as any }); } catch {}
           for (const m of [...empresas, ...leads]) await upsertTeamMember(m);
           await insertDailyEvent({ businessDate, scope: "bordero", kind: "undo", deltaBorderoDia: oldAtingidoDia });
           qc.invalidateQueries({ queryKey: ["dashboard-settings"] });
