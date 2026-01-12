@@ -142,15 +142,6 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     setLeadsData((prev) => [...prev, newMember]);
   };
 
-  
-const parseSuffix = (name: string) => {
-  const parts = name.split("--");
-  return {
-    base: parts[0].trim(),
-    suffix: parts[1]?.trim().toLowerCase() ?? null,
-  };
-};
-
   const applyBulk = async () => {
     const entries = parseBulkText(bulkText);
     if (entries.length === 0) {
@@ -171,15 +162,8 @@ const parseSuffix = (name: string) => {
           // Se veio TAG e NÃO é desta aba, ignora o bloco
           if (parsed.category && parsed.category !== "leads") continue;
 
-          const base = parsed.baseName;
-      const { base, suffix } = parseSuffix(e.name);
-      if (suffix) {
-        const isLead = suffix.includes("lead");
-        const isEmpresa = suffix.includes("empresa") || suffix.includes("negocio") || suffix.includes("negócio") || suffix.includes("business");
-        if (!isLead) continue;
-      }
-
-          const key = normalizeNameKey(base);
+		  const baseName = parsed.baseName;
+		  const key = normalizeNameKey(baseName);
           const existing = map.get(key);
           if (existing) {
             const morning = bulkMode === "sum" ? existing.morning + e.morning : e.morning;
@@ -187,7 +171,7 @@ const parseSuffix = (name: string) => {
             map.set(key, { ...existing, morning, afternoon, total: morning + afternoon });
           } else {
             const id = genId("le");
-            map.set(key, { id, name: base, morning: e.morning, afternoon: e.afternoon, total: e.morning + e.afternoon });
+			map.set(key, { id, name: baseName, morning: e.morning, afternoon: e.afternoon, total: e.morning + e.afternoon });
           }
         }
         return Array.from(map.values());
@@ -215,15 +199,8 @@ const parseSuffix = (name: string) => {
       // Se veio TAG e NÃO é desta aba, ignora o bloco
       if (parsed.category && parsed.category !== "leads") continue;
 
-      const base = parsed.baseName;
-      const { base, suffix } = parseSuffix(e.name);
-      if (suffix) {
-        const isLead = suffix.includes("lead");
-        const isEmpresa = suffix.includes("empresa") || suffix.includes("negocio") || suffix.includes("negócio") || suffix.includes("business");
-        if (!isLead) continue;
-      }
-
-      const key = normalizeNameKey(base);
+	  const baseName = parsed.baseName;
+	  const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);
 
       if (existing) {
@@ -252,7 +229,7 @@ const parseSuffix = (name: string) => {
         const newMember: PersistedMember = {
           id,
           category: "leads",
-          name: base,
+		  name: baseName,
           morning: e.morning,
           afternoon: e.afternoon,
         };
