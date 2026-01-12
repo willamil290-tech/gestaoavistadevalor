@@ -142,6 +142,15 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     setLeadsData((prev) => [...prev, newMember]);
   };
 
+  
+const parseSuffix = (name: string) => {
+  const parts = name.split("--");
+  return {
+    base: parts[0].trim(),
+    suffix: parts[1]?.trim().toLowerCase() ?? null,
+  };
+};
+
   const applyBulk = async () => {
     const entries = parseBulkText(bulkText);
     if (entries.length === 0) {
@@ -163,6 +172,13 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
           if (parsed.category && parsed.category !== "leads") continue;
 
           const base = parsed.baseName;
+      const { base, suffix } = parseSuffix(e.name);
+      if (suffix) {
+        const isLead = suffix.includes("lead");
+        const isEmpresa = suffix.includes("empresa") || suffix.includes("negocio") || suffix.includes("negócio") || suffix.includes("business");
+        if (!isLead) continue;
+      }
+
           const key = normalizeNameKey(base);
           const existing = map.get(key);
           if (existing) {
@@ -200,6 +216,13 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
       if (parsed.category && parsed.category !== "leads") continue;
 
       const base = parsed.baseName;
+      const { base, suffix } = parseSuffix(e.name);
+      if (suffix) {
+        const isLead = suffix.includes("lead");
+        const isEmpresa = suffix.includes("empresa") || suffix.includes("negocio") || suffix.includes("negócio") || suffix.includes("business");
+        if (!isLead) continue;
+      }
+
       const key = normalizeNameKey(base);
       const existing = existingByName.get(key);
 
