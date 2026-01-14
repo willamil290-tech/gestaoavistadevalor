@@ -24,6 +24,15 @@ import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
+import { type BitrixReport } from "@/lib/bitrixLogs";
+
+function normalizeNameKeyLoose(name: string) {
+  return name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
 
 type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
 
@@ -370,6 +379,99 @@ const Index = () => {
     });
   };
 
+  // Apply Bitrix Analyzer result directly into the site (tendência + acionamentos + detalhado)
+  const applyBitrixReportToSite = async (bitrix: BitrixReport) => {
+    // 1) Tendência por hora
+    const newTrend: HourlyTrend[] = Object.keys(bitrix.hourlyCounts)
+      .map((h) => Number(h))
+      .filter((h) => Number.isFinite(h) && (bitrix.hourlyCounts[h] ?? 0) > 0)
+      .sort((a, b) => a - b)
+      .map((h) => ({ hour: pad2(h), actions: bitrix.hourlyCounts[h] ?? 0 }));
+    setTrendData(newTrend);
+    try {
+      if (isSupabaseConfigured) await remoteExtras.updateAsync({ trendData: newTrend as any });
+    } catch {}
+
+    // 2) Acionamento normal (Empresas/Leads)
+    const byCategory: Record<"empresas" | "leads", Array<{ name: string; morning: number; afternoon: number }>> = {
+      empresas: [],
+      leads: [],
+    };
+    for (const r of bitrix.uniqueResumo) {
+      const category = r.entityType === "NEGÓCIO" ? "empresas" : "leads";
+      byCategory[category].push({ name: r.comercial, morning: r.morning, afternoon: r.afternoon });
+    }
+
+    const businessDate = getBusinessDate();
+
+    // Local-only fallback (sem Supabase): salva para as views lerem quando abrir a aba
+    if (!isSupabaseConfigured) {
+      const toLocal = (category: "empresas" | "leads") =>
+        byCategory[category].map((e, i) => ({
+          id: `tm_${category}_${Date.now()}_${i}`,
+          name: e.name,
+          morning: e.morning,
+          afternoon: e.afternoon,
+          total: e.morning + e.afternoon,
+        }));
+      saveJson(`teamMembers:${businessDate}:empresas`, toLocal("empresas"));
+      saveJson(`teamMembers:${businessDate}:leads`, toLocal("leads"));
+    }
+
+    // Supabase: upsert + daily_events deltas
+    if (isSupabaseConfigured) {
+      for (const category of ["empresas", "leads"] as const) {
+        const incoming = byCategory[category];
+        if (!incoming.length) continue;
+
+        const existing = await listTeamMembers(category);
+        const existingByKey = new Map(existing.map((m) => [normalizeNameKeyLoose(m.name), m]));
+
+        for (const e of incoming) {
+          const key = normalizeNameKeyLoose(e.name);
+          const old = existingByKey.get(key);
+          const id = old?.id ?? ((globalThis.crypto as any)?.randomUUID?.() ? (globalThis.crypto as any).randomUUID() : `tm_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+
+          await upsertTeamMember({ id, category, name: e.name, morning: e.morning, afternoon: e.afternoon } as any);
+
+          const dm = e.morning - (old?.morning ?? 0);
+          const da = e.afternoon - (old?.afternoon ?? 0);
+          if (dm !== 0 || da !== 0) {
+            await insertDailyEvent({
+              businessDate,
+              scope: category,
+              kind: "bulk",
+              memberId: id,
+              deltaMorning: dm,
+              deltaAfternoon: da,
+            });
+          }
+        }
+
+        // Atualiza cache das views Empresas/Leads
+        qc.invalidateQueries({ queryKey: ["team-members", category] });
+      }
+    }
+
+    // 3) Acionamento detalhado
+    const detailed = bitrix.actionResumo.map((r) => {
+      const total = defaultCategorias.reduce((sum, k) => sum + Number((r.counts as any)[k] ?? 0), 0);
+      const match = acionamentoDetalhado.find(
+        (x) => normalizeName(x.name) === normalizeName(r.comercial) || normalizeName(x.name) === normalizeName(r.comercial.split(" ")[0])
+      );
+      return {
+        id: match?.id ?? `ad_${normalizeNameKeyLoose(r.comercial).replace(/[^a-z0-9]+/g, "_")}`,
+        name: r.comercial,
+        total,
+        categorias: defaultCategorias.map((k) => ({ tipo: k, quantidade: Number((r.counts as any)[k] ?? 0) })),
+      } as ColaboradorAcionamento;
+    });
+    setAcionamentoDetalhado(detailed);
+    try {
+      if (isSupabaseConfigured) await remoteExtras.updateAsync({ acionamentoDetalhado: detailed as any });
+    } catch {}
+  };
+
   const readOnly = tvMode;
 
   const tabs = [
@@ -506,7 +608,7 @@ const Index = () => {
             />
           )}
           {activeTab === "bitrix" && (
-            <BitrixLogsAnalyzerView tvMode={tvMode} />
+            <BitrixLogsAnalyzerView tvMode={tvMode} onApplyToDashboard={applyBitrixReportToSite} />
           )}
           {activeTab === "bordero-diario" && (
             <BorderoDiarioView clientes={clientes} metaDia={metaDia} onClienteAdd={() => setClientes((prev) => [...prev, { id: `cli_${Date.now()}`, cliente: "Novo Cliente", comercial: "", valor: 0, horario: "", observacao: "" }])} onClienteUpdate={(c) => setClientes((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onClienteDelete={(id) => setClientes((prev) => prev.filter((x) => x.id !== id))} onMetaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }} readOnly={readOnly} tvMode={tvMode} />

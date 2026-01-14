@@ -335,7 +335,9 @@ export function parseAndBuildBitrixReport(params: {
   currentHHMM: string;
   negociosText: string;
   leadsText: string;
-}): { ok: true; reportText: string; eventsCount: number } | { ok: false; error: string } {
+}):
+  | { ok: true; reportText: string; eventsCount: number; report: BitrixReport }
+  | { ok: false; error: string } {
   const a = parseBitrixTextToEvents(params.negociosText, params.currentHHMM, 0);
   if (!a.ok) return { ok: false, error: a.error };
   const b = parseBitrixTextToEvents(params.leadsText, params.currentHHMM, a.events.length);
@@ -343,5 +345,5 @@ export function parseAndBuildBitrixReport(params: {
   const all = [...a.events, ...b.events];
   const report = buildBitrixReport(all);
   const reportText = formatBitrixReport(report);
-  return { ok: true, reportText, eventsCount: all.length };
+  return { ok: true, reportText, eventsCount: all.length, report };
 }

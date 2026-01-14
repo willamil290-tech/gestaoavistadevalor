@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useUndoToast } from "@/hooks/useUndoToast";
+import { loadJson, saveJson } from "@/lib/localStore";
 
 type BulkMode = "replace" | "sum";
 
@@ -34,7 +35,12 @@ function genId(prefix = "emp") {
 
 export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const remote = useTeamMembers("empresas");
-  const [teamData, setTeamData] = useState<TeamMember[]>(initialTeamData);
+  const businessDate = getBusinessDate();
+  const localKey = `teamMembers:${businessDate}:empresas`;
+  const [teamData, setTeamData] = useState<TeamMember[]>(() => {
+    if (isSupabaseConfigured) return initialTeamData;
+    return loadJson(localKey, initialTeamData as any) as TeamMember[];
+  });
 
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -56,6 +62,12 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
     }));
     setTeamData(mapped);
   }, [remote.data]);
+
+  // Persist local state when Supabase is not configured
+  useEffect(() => {
+    if (isSupabaseConfigured) return;
+    saveJson(localKey, teamData as any);
+  }, [teamData, localKey]);
 
   // Atalho Ctrl+Shift+U / Cmd+Shift+U para abrir colar texto (quando não estiver em TV)
   useEffect(() => {

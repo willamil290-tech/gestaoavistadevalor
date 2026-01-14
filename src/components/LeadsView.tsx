@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useUndoToast } from "@/hooks/useUndoToast";
+import { loadJson, saveJson } from "@/lib/localStore";
 
 type BulkMode = "replace" | "sum";
 
@@ -32,7 +33,12 @@ function genId(prefix = "lead") {
 
 export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const remote = useTeamMembers("leads");
-  const [leadsData, setLeadsData] = useState<TeamMember[]>(initialLeadsData);
+  const businessDate = getBusinessDate();
+  const localKey = `teamMembers:${businessDate}:leads`;
+  const [leadsData, setLeadsData] = useState<TeamMember[]>(() => {
+    if (isSupabaseConfigured) return initialLeadsData;
+    return loadJson(localKey, initialLeadsData as any) as TeamMember[];
+  });
 
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -54,6 +60,12 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     }));
     setLeadsData(mapped);
   }, [remote.data]);
+
+  // Persist local state when Supabase is not configured
+  useEffect(() => {
+    if (isSupabaseConfigured) return;
+    saveJson(localKey, leadsData as any);
+  }, [leadsData, localKey]);
 
   // Atalho Ctrl+Shift+U / Cmd+Shift+U
   useEffect(() => {

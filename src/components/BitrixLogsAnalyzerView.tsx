@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { parseAndBuildBitrixReport } from "@/lib/bitrixLogs";
+import { parseAndBuildBitrixReport, type BitrixReport } from "@/lib/bitrixLogs";
 import { cn } from "@/lib/utils";
 
 type Props = {
   tvMode?: boolean;
+  onApplyToDashboard?: (report: BitrixReport) => Promise<void> | void;
 };
 
 function normalizeHHMM(input: string) {
@@ -17,7 +18,7 @@ function normalizeHHMM(input: string) {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-export function BitrixLogsAnalyzerView({ tvMode }: Props) {
+export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [currentTime, setCurrentTime] = useState("");
@@ -26,6 +27,7 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
 
   const [report, setReport] = useState<string>("");
   const [eventsCount, setEventsCount] = useState<number>(0);
+  const [applied, setApplied] = useState(false);
 
   const canGoStep2 = useMemo(() => normalizeHHMM(currentTime) !== null, [currentTime]);
   const canGoStep3 = useMemo(() => negociosText.trim().length > 0, [negociosText]);
@@ -38,6 +40,7 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
     setLeadsText("");
     setReport("");
     setEventsCount(0);
+    setApplied(false);
   };
 
   const confirmTime = () => {
@@ -59,7 +62,7 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
     setEventsCount(0);
   };
 
-  const generate = () => {
+  const generate = async () => {
     const t = normalizeHHMM(currentTime);
     if (!t) {
       toast.error("Horário inválido. Use HH:MM (24h).");
@@ -75,6 +78,18 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
 
     setReport(res.reportText);
     setEventsCount(res.eventsCount);
+    setApplied(false);
+
+    // Aplica automaticamente no dashboard, se estiver disponível
+    if (onApplyToDashboard) {
+      try {
+        await onApplyToDashboard(res.report);
+        setApplied(true);
+        toast.success("Relatório aplicado no dashboard");
+      } catch (e: any) {
+        toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
+      }
+    }
   };
 
   const copyReport = async () => {
@@ -170,6 +185,7 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
             Gerar relatório completo
           </Button>
           {eventsCount > 0 && <span className="text-xs text-muted-foreground">{eventsCount} eventos válidos</span>}
+          {report && applied && <span className="text-xs text-muted-foreground">• aplicado</span>}
         </div>
       </div>
 
@@ -181,6 +197,32 @@ export function BitrixLogsAnalyzerView({ tvMode }: Props) {
               <div className="text-base font-semibold">Resultado</div>
               <div className="text-xs text-muted-foreground">Contagens determinísticas (sem interpretações subjetivas).</div>
             </div>
+            {onApplyToDashboard && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={applied ? "outline" : "default"}
+                  className="rounded-xl"
+                  onClick={async () => {
+                    const t2 = normalizeHHMM(currentTime);
+                    if (!t2) return;
+                    const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText });
+                    if (!res2.ok) {
+                      toast.error(res2.error);
+                      return;
+                    }
+                    try {
+                      await onApplyToDashboard(res2.report);
+                      setApplied(true);
+                      toast.success("Relatório aplicado no dashboard");
+                    } catch (e: any) {
+                      toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
+                    }
+                  }}
+                >
+                  {applied ? "Aplicado" : "Aplicar no dashboard"}
+                </Button>
+              </div>
+            )}
           </div>
 
           <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 border border-border p-3 text-sm leading-relaxed overflow-auto">
