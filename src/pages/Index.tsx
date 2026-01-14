@@ -24,7 +24,7 @@ import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 
-type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "agendadas-realizadas";
+type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -199,7 +199,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "comerciais", "faixa-vencimento", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario", "agendadas-realizadas"];
+    const tabs: TabType[] = ["dashboard", "comerciais", "faixa-vencimento", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -379,7 +379,6 @@ const Index = () => {
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
     { id: "tendencia" as const, label: "Tendência", icon: TrendingUp, color: "bg-accent" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
-    { id: "agendadas-realizadas" as const, label: "Agendadas", icon: BarChart3, color: "bg-secondary" },
   ];
 
   return (
@@ -507,8 +506,6 @@ const Index = () => {
           {activeTab === "bordero-diario" && (
             <BorderoDiarioView clientes={clientes} metaDia={metaDia} onClienteAdd={() => setClientes((prev) => [...prev, { id: `cli_${Date.now()}`, cliente: "Novo Cliente", comercial: "", valor: 0, horario: "", observacao: "" }])} onClienteUpdate={(c) => setClientes((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onClienteDelete={(id) => setClientes((prev) => prev.filter((x) => x.id !== id))} onMetaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }} readOnly={readOnly} tvMode={tvMode} />
           )}
-          
-          {activeTab === "agendadas-realizadas" && <AgendadasRealizadasView dadosMes={agendadasMes} dadosDia={agendadasDia} onUpdateMes={setAgendadasMes} onUpdateDia={setAgendadasDia} readOnly={readOnly} tvMode={tvMode} />}
         </div>
 
         <footer className={cn("mt-4 text-xs text-muted-foreground", tvMode ? "p-2" : "")}>
