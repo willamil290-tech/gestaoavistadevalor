@@ -268,21 +268,27 @@ export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
     throw error;
   }
 
-  if (trendPatch) {
-    try {
-      const { error: tErr } = await supabase!
-        .from("dashboard_settings")
-        .update({ updated_at: new Date().toISOString(), trend_data: trendPatch })
-        .eq("key", SETTINGS_KEY);
+  if (trendPatch !== undefined) {
+    const { error: tErr } = await supabase!
+      .from("dashboard_settings")
+      .update({ updated_at: new Date().toISOString(), trend_data: trendPatch })
+      .eq("key", SETTINGS_KEY);
 
-      // Se a coluna não existir, ignoramos silenciosamente (não desabilita os extras).
-      if (tErr) {
-        const msg = String(tErr.message ?? "");
-        const isMissingTrend = msg.includes("trend_data") && (msg.includes("does not exist") || msg.includes("42703") || msg.includes("schema cache"));
-        if (!isMissingTrend) throw tErr;
+    if (tErr) {
+      const msg = String(tErr.message ?? "");
+      const isMissingTrend =
+        msg.includes("trend_data") &&
+        (msg.includes("does not exist") || msg.includes("42703") || msg.includes("schema cache"));
+
+      // Em vez de falhar silenciosamente (o que dá impressão de "salvou só no meu PC"),
+      // levantamos um erro com instrução clara de como habilitar a sincronização.
+      if (isMissingTrend) {
+        throw new Error(
+          "Supabase: falta a coluna trend_data em public.dashboard_settings. Rode o SQL em supabase/add_dashboard_extras.sql para habilitar a sincronização da Tendência entre computadores."
+        );
       }
-    } catch {
-      // ignore (ex.: coluna não existe)
+
+      throw tErr;
     }
   }
 }

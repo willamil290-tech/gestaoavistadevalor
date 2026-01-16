@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard, Phone, FileText, Calendar, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Users } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -104,6 +104,9 @@ const Index = () => {
   const [trendStorageKey] = useState(() => `trendData:${getBusinessDate()}`);
   const [trendData, setTrendData] = useState<HourlyTrend[]>(() => loadJson(trendStorageKey, [] as HourlyTrend[]));
 
+  // Evita spam de toast caso o Supabase não esteja pronto para salvar trend_data
+  const trendSyncWarnedRef = useRef(false);
+
   const [extrasHydrated, setExtrasHydrated] = useState(false);
 
   // Persist tendência por hora (localStorage)
@@ -176,8 +179,17 @@ const Index = () => {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !extrasHydrated) return;
-    const t = setTimeout(() => {
-      remoteExtras.update({ trendData: trendData as any });
+    const t = setTimeout(async () => {
+      try {
+        await remoteExtras.updateAsync({ trendData: trendData as any });
+      } catch (e: any) {
+        // Ex.: coluna trend_data não existe ou RLS bloqueando update
+        if (!trendSyncWarnedRef.current) {
+          trendSyncWarnedRef.current = true;
+          toast.error(e?.message ?? "Falha ao salvar Tendência no Supabase");
+        }
+        console.error(e);
+      }
     }, 700);
     return () => clearTimeout(t);
   }, [trendData, extrasHydrated]);
@@ -387,10 +399,8 @@ const Index = () => {
       .filter((h) => Number.isFinite(h) && (bitrix.hourlyCounts[h] ?? 0) > 0)
       .sort((a, b) => a - b)
       .map((h) => ({ hour: pad2(h), actions: bitrix.hourlyCounts[h] ?? 0 }));
+    // Persistência remota fica no efeito debounce acima (evita duplicar writes)
     setTrendData(newTrend);
-    try {
-      if (isSupabaseConfigured) await remoteExtras.updateAsync({ trendData: newTrend as any });
-    } catch {}
 
     // 2) Acionamento normal (Empresas/Leads)
     const byCategory: Record<"empresas" | "leads", Array<{ name: string; morning: number; afternoon: number }>> = {
