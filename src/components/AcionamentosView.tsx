@@ -31,9 +31,7 @@ export const AcionamentosView = ({
   onDetailedUpdate,
 }: AcionamentosViewProps) => {
   const [activeSubTab, setActiveSubTab] = useState<"empresas" | "leads">("empresas");
-  const scrollRef = useRef<HTMLDivElement>(null);
   const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [manualTrendData, setManualTrendData] = useState<HourlyTrend[]>([]);
 
   const analytics = useQuery({
@@ -101,41 +99,6 @@ export const AcionamentosView = ({
     };
   }, [tvMode]);
 
-  // Auto-scroll in TV mode
-  useEffect(() => {
-    if (!tvMode || !scrollRef.current) {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
-      return;
-    }
-
-    let scrollingDown = true;
-    const scrollStep = 2;
-    const scrollDelay = 50;
-
-    scrollIntervalRef.current = setInterval(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      
-      if (scrollingDown) {
-        el.scrollTop += scrollStep;
-        if (el.scrollTop >= maxScroll) {
-          scrollingDown = false;
-        }
-      } else {
-        el.scrollTop -= scrollStep;
-        if (el.scrollTop <= 0) {
-          scrollingDown = true;
-        }
-      }
-    }, scrollDelay);
-
-    return () => {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
-    };
-  }, [tvMode]);
-
   const handleBulkPaste = async (text: string) => {
     // Parse all three types from the text
     const sections = text.split(/\(\d+\)\s+RESUMO/i);
@@ -174,7 +137,7 @@ export const AcionamentosView = ({
   const showDailyEventsHint = isSupabaseConfigured && !isDailyEventsEnabled();
 
   return (
-    <div ref={scrollRef} className={cn("animate-fade-in-up space-y-6", tvMode ? "h-[calc(100vh-120px)] overflow-y-auto" : "")}>
+    <div className={cn("animate-fade-in-up space-y-6")}>
       <div className="flex items-center gap-3 mb-5">
         <div className="w-3 h-3 rounded-full bg-secondary" />
         <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>

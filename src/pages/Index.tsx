@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
 import { useDashboardExtras } from "@/hooks/useDashboardExtras";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { DEFAULT_SETTINGS, getLastActivityIso, insertDailyEvent, listTeamMembers, resetDayCounters, updateDashboardSettings, upsertTeamMember } from "@/lib/persistence";
 import { formatDateTimeBR, getBusinessDate } from "@/lib/businessDate";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -81,9 +82,21 @@ const Index = () => {
   const tvFromUrl = params.get("tv") === "1";
   const [tvMode, setTvMode] = useState(() => tvFromUrl || localStorage.getItem("tvMode") === "1");
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [autoRotate, setAutoRotate] = useState(false);
   const [rotateInterval, setRotateInterval] = useState(1);
+
+  // Auto-scroll global (modo TV): desce ate o fim, pausa e volta ao topo.
+  // Quando a aba muda (auto-rotate), reseta o scroll para o topo.
+  useAutoScroll(scrollContainerRef, {
+    enabled: tvMode,
+    resetKey: activeTab,
+    speedPxPerFrame: 1,
+    bottomPauseMs: 2000,
+    topPauseMs: 600,
+  });
 
   // Dashboard values
   const remoteSettings = useDashboardSettings();
@@ -496,8 +509,8 @@ const Index = () => {
   ];
 
   return (
-    <div className={cn("min-h-screen bg-background", tvMode ? "p-0" : "p-2 md:p-4")}>
-      <div className={cn("mx-auto w-full", tvMode ? "max-w-none" : "max-w-[1600px]")}>
+    <div className={cn("bg-background", tvMode ? "h-screen overflow-hidden p-0" : "min-h-screen p-2 md:p-4")}>
+      <div ref={scrollContainerRef} className={cn("mx-auto w-full", tvMode ? "max-w-none h-full overflow-y-auto" : "max-w-[1600px]")}>
         {!tvMode && (
           <header className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
             <Logo className="w-14 h-14 md:w-16 md:h-16" />
