@@ -1,3 +1,5 @@
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
+
 export type BitrixEntityType = "NEGÓCIO" | "LEAD";
 
 export type BitrixActionCategory =
@@ -190,9 +192,10 @@ function compareCommercial(a: string, b: string) {
 }
 
 export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
+  const filteredEvents = events.filter((e) => !isIgnoredCommercial(e.comercial));
   // (A) Acionamentos por hora (total geral)
   const hourlyCounts: Record<number, number> = {};
-  for (const e of events) {
+  for (const e of filteredEvents) {
     hourlyCounts[e.hour] = (hourlyCounts[e.hour] ?? 0) + 1;
   }
 
@@ -204,7 +207,7 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
     { comercialKey: string; comercial: string; entityType: BitrixEntityType; empresaKey: string; oldest: BitrixEvent }
   >();
 
-  for (const e of events) {
+  for (const e of filteredEvents) {
     const comercialKey = normalizeForCompare(e.comercial);
     const empresaKey = normalizeEmpresaForDedupe(e.empresa);
 
@@ -267,7 +270,7 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
     "OUTROS",
   ];
 
-  for (const e of events) {
+  for (const e of filteredEvents) {
     const comercialKey = normalizeForCompare(e.comercial);
     if (!commercialDisplayByKey.has(comercialKey)) commercialDisplayByKey.set(comercialKey, e.comercial);
     const comercial = commercialDisplayByKey.get(comercialKey) ?? e.comercial;
@@ -343,7 +346,8 @@ export function parseAndBuildBitrixReport(params: {
   const b = parseBitrixTextToEvents(params.leadsText, params.currentHHMM, a.events.length);
   if (!b.ok) return { ok: false, error: b.error };
   const all = [...a.events, ...b.events];
-  const report = buildBitrixReport(all);
+  const filtered = all.filter((e) => !isIgnoredCommercial(e.comercial));
+  const report = buildBitrixReport(filtered);
   const reportText = formatBitrixReport(report);
-  return { ok: true, reportText, eventsCount: all.length, report };
+  return { ok: true, reportText, eventsCount: filtered.length, report };
 }

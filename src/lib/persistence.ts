@@ -122,7 +122,6 @@ export const DEFAULT_EMPRESAS: TeamMember[] = [
 export const DEFAULT_LEADS: TeamMember[] = [
   { id: "l1", category: "leads", name: "Sabrina Fulas", morning: 45, afternoon: 0 },
   { id: "l2", category: "leads", name: "Nayad Souza", morning: 41, afternoon: 0 },
-  { id: "l3", category: "leads", name: "Caio Zapelini", morning: 14, afternoon: 0 },
   { id: "l4", category: "leads", name: "Alana Silveira", morning: 16, afternoon: 0 },
 ];
 

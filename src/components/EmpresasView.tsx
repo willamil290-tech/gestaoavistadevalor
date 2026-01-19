@@ -8,6 +8,7 @@ import { insertDailyEvent } from "@/lib/persistence";
 import { getBusinessDate } from "@/lib/businessDate";
 import { parseBulkText, normalizeNameKey } from "@/lib/bulkText";
 import { parseNameTag } from "@/lib/parseNameTag";
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,8 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const localKey = `teamMembers:${businessDate}:empresas`;
   const [teamData, setTeamData] = useState<TeamMember[]>(() => {
     if (isSupabaseConfigured) return initialTeamData;
-    return loadJson(localKey, initialTeamData as any) as TeamMember[];
+    const base = loadJson(localKey, initialTeamData as any) as TeamMember[];
+    return (base ?? []).filter((m) => !isIgnoredCommercial(m.name));
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -53,7 +55,9 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
     const data = remote.data;
     if (!data) return;
 
-    const mapped: TeamMember[] = data.map((m) => ({
+    const mapped: TeamMember[] = data
+      .filter((m) => !isIgnoredCommercial(m.name))
+      .map((m) => ({
       id: m.id,
       name: m.name,
       morning: m.morning,
@@ -84,7 +88,9 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
   }, [tvMode]);
 
   const sortedTeamData = useMemo(() => {
-    return [...teamData].sort((a, b) => {
+    return [...teamData]
+      .filter((m) => !isIgnoredCommercial(m.name))
+      .sort((a, b) => {
       const diff = b.total - a.total;
       if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
@@ -178,6 +184,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
           if (parsed.category && parsed.category !== "empresas") continue;
 
           const baseName = parsed.baseName;
+          if (isIgnoredCommercial(baseName)) continue;
           const key = normalizeNameKey(baseName);
           const existing = map.get(key);
           if (existing) {
@@ -215,6 +222,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       if (parsed.category && parsed.category !== "empresas") continue;
 
       const baseName = parsed.baseName;
+      if (isIgnoredCommercial(baseName)) continue;
       const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);
 

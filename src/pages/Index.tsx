@@ -26,6 +26,7 @@ import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 import { type BitrixReport } from "@/lib/bitrixLogs";
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 
 function normalizeNameKeyLoose(name: string) {
   return name.toLowerCase().replace(/\s+/g, " ").trim();
@@ -383,6 +384,7 @@ const Index = () => {
       const updated: ColaboradorAcionamento[] = [];
       
       for (const entry of entries) {
+        if (isIgnoredCommercial(entry.name)) continue;
         const firstName = entry.name.split(" ")[0];
         const existing = prev.find(p => normalizeName(p.name) === normalizeName(firstName));
         
@@ -421,6 +423,7 @@ const Index = () => {
       leads: [],
     };
     for (const r of bitrix.uniqueResumo) {
+      if (isIgnoredCommercial(r.comercial)) continue;
       const category = r.entityType === "NEGÓCIO" ? "empresas" : "leads";
       byCategory[category].push({ name: r.comercial, morning: r.morning, afternoon: r.afternoon });
     }
@@ -477,7 +480,9 @@ const Index = () => {
     }
 
     // 3) Acionamento detalhado
-    const detailed = bitrix.actionResumo.map((r) => {
+    const detailed = bitrix.actionResumo
+      .filter((r) => !isIgnoredCommercial(r.comercial))
+      .map((r) => {
       const total = defaultCategorias.reduce((sum, k) => sum + Number((r.counts as any)[k] ?? 0), 0);
       const match = acionamentoDetalhado.find(
         (x) => normalizeName(x.name) === normalizeName(r.comercial) || normalizeName(x.name) === normalizeName(r.comercial.split(" ")[0])

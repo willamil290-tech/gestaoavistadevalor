@@ -8,6 +8,7 @@ import { insertDailyEvent } from "@/lib/persistence";
 import { getBusinessDate } from "@/lib/businessDate";
 import { parseBulkText, normalizeNameKey } from "@/lib/bulkText";
 import { parseNameTag } from "@/lib/parseNameTag";
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,6 @@ type BulkMode = "replace" | "sum";
 const initialLeadsData: TeamMember[] = [
   { id: "l1", name: "Sabrina Fulas", total: 45, morning: 45, afternoon: 0 },
   { id: "l2", name: "Nayad Souza", total: 41, morning: 41, afternoon: 0 },
-  { id: "l3", name: "Caio Zapelini", total: 14, morning: 14, afternoon: 0 },
   { id: "l4", name: "Alana Silveira", total: 16, morning: 16, afternoon: 0 },
 ];
 
@@ -36,8 +36,10 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
   const businessDate = getBusinessDate();
   const localKey = `teamMembers:${businessDate}:leads`;
   const [leadsData, setLeadsData] = useState<TeamMember[]>(() => {
-    if (isSupabaseConfigured) return initialLeadsData;
-    return loadJson(localKey, initialLeadsData as any) as TeamMember[];
+    const base = isSupabaseConfigured
+      ? initialLeadsData
+      : (loadJson(localKey, initialLeadsData as any) as TeamMember[]);
+    return (base ?? []).filter((m) => !isIgnoredCommercial(m.name));
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -51,7 +53,9 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
     const data = remote.data;
     if (!data) return;
 
-    const mapped: TeamMember[] = data.map((m) => ({
+    const mapped: TeamMember[] = data
+      .filter((m) => !isIgnoredCommercial(m.name))
+      .map((m) => ({
       id: m.id,
       name: m.name,
       morning: m.morning,
@@ -82,7 +86,9 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
   }, [tvMode]);
 
   const sortedLeadsData = useMemo(() => {
-    return [...leadsData].sort((a, b) => {
+    return [...leadsData]
+      .filter((m) => !isIgnoredCommercial(m.name))
+      .sort((a, b) => {
       const diff = b.total - a.total;
       if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
@@ -174,7 +180,8 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
           // Se veio TAG e NÃO é desta aba, ignora o bloco
           if (parsed.category && parsed.category !== "leads") continue;
 
-		  const baseName = parsed.baseName;
+          const baseName = parsed.baseName;
+          if (isIgnoredCommercial(baseName)) continue;
 		  const key = normalizeNameKey(baseName);
           const existing = map.get(key);
           if (existing) {
@@ -212,6 +219,7 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
       if (parsed.category && parsed.category !== "leads") continue;
 
 	  const baseName = parsed.baseName;
+	  if (isIgnoredCommercial(baseName)) continue;
 	  const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);
 

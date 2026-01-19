@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { isDailyEventsEnabled, listDailyEvents } from "@/lib/persistence";
+import { isDailyEventsEnabled, listDailyEvents, listTeamMembers } from "@/lib/persistence";
 import { getBusinessDate } from "@/lib/businessDate";
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import { ChartContainer } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import { EmpresasView } from "./EmpresasView";
@@ -48,16 +49,37 @@ export const AcionamentosView = ({
     staleTime: 0,
   });
 
+  // IDs de colaboradores que devem ser ignorados nos totais/tendencia (apenas quando ha Supabase).
+  const ignoredMemberIds = useQuery({
+    queryKey: ["ignored-member-ids"],
+    enabled: isSupabaseConfigured,
+    queryFn: async () => {
+      const [empresas, leads] = await Promise.all([
+        listTeamMembers("empresas"),
+        listTeamMembers("leads"),
+      ]);
+      const ids = new Set<string>();
+      for (const m of [...empresas, ...leads]) {
+        if (isIgnoredCommercial(m.name)) ids.add(String(m.id));
+      }
+      return Array.from(ids);
+    },
+    refetchInterval: pollInterval,
+    staleTime: 0,
+  });
+
   const computed = useMemo(() => {
     const now = new Date();
     const startHour = 8;
     const endHour = Math.max(startHour, now.getHours());
 
     const events = analytics.data?.events ?? [];
+    const ignoredIds = new Set<string>((ignoredMemberIds.data ?? []).map(String));
 
     const actionEvents = events
       .filter((e: any) => e.scope === "empresas" || e.scope === "leads")
       .filter((e: any) => e.kind !== "reset")
+      .filter((e: any) => !ignoredIds.has(String(e.memberId ?? "")))
       .filter((e: any) => {
         const h = new Date(e.createdAt).getHours();
         return h >= startHour && h <= endHour;
@@ -77,7 +99,7 @@ export const AcionamentosView = ({
     });
 
     return { totalActionsSince8, trendData, endHour };
-  }, [analytics.data]);
+  }, [analytics.data, ignoredMemberIds.data]);
 
   // Use external or manual trend data
   const displayTrendData = externalTrendData?.length ? externalTrendData : (manualTrendData.length ? manualTrendData : computed?.trendData ?? []);

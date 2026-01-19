@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 
 export interface AcionamentoCategoria {
   tipo: string;
@@ -77,7 +78,9 @@ export const AcionamentoDetalhadoView = ({
     return labels[tipo] || tipo;
   };
 
-  const sortedColaboradores = [...colaboradores].sort((a, b) => b.total - a.total);
+  const sortedColaboradores = [...colaboradores]
+    .filter((c) => !isIgnoredCommercial(c.name))
+    .sort((a, b) => b.total - a.total);
 
   return (
     <div className="animate-fade-in-up">
