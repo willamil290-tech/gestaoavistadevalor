@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, Calendar, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Users } from "lucide-react";
+import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Users } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
 import { AcionamentoDetalhadoView, ColaboradorAcionamento, defaultCategorias } from "@/components/AcionamentoDetalhadoView";
-import { FaixaVencimentoView, FaixaVencimento } from "@/components/FaixaVencimentoView";
+import type { FaixaVencimento } from "@/components/FaixaVencimentoView";
 import { BorderoDiarioView, ClienteBordero } from "@/components/BorderoDiarioView";
 import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/AgendadasRealizadasView";
 import { TendenciaDiaView } from "@/components/TendenciaDiaView";
@@ -36,7 +36,7 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TabType = "dashboard" | "comerciais" | "faixa-vencimento" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
+type TabType = "dashboard" | "comerciais" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -235,7 +235,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "comerciais", "faixa-vencimento", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+    const tabs: TabType[] = ["dashboard", "comerciais", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -355,7 +355,7 @@ const Index = () => {
         });
       }
 
-      toast.success("Dashboard, Faixas e Comerciais atualizados!");
+      toast.success("Dashboard e Comerciais atualizados!");
     }
 
     // Parse client table
@@ -505,7 +505,6 @@ const Index = () => {
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, color: "bg-primary" },
     { id: "comerciais" as const, label: "Comerciais", icon: Users, color: "bg-primary" },
-    { id: "faixa-vencimento" as const, label: "Faixa Venc.", icon: Calendar, color: "bg-gold" },
     { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
     { id: "tendencia" as const, label: "Tendência", icon: TrendingUp, color: "bg-accent" },
@@ -581,8 +580,8 @@ const Index = () => {
         {/* Bulk paste area - hidden in TV mode */}
         {!tvMode && (
           <BulkPasteUpdater
-            title="Atualizar Dashboard, Faixas e Borderô"
-            subtitle="Cole os dados de borderô (mês/dia), comerciais, faixas de vencimento e tabela de clientes"
+            title="Atualizar Dashboard e Borderô"
+            subtitle="Cole os dados de borderô (mês/dia), comerciais e tabela de clientes"
             onApply={handleBulkDashboardPaste}
           />
         )}
@@ -622,7 +621,6 @@ const Index = () => {
               </div>
             </div>
           )}
-          {activeTab === "faixa-vencimento" && <FaixaVencimentoView faixas={faixas} onUpdate={setFaixas} readOnly={readOnly} tvMode={tvMode} />}
           {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
           {activeTab === "acionamento-detalhado" && (
             <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} />
