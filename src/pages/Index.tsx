@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Users } from "lucide-react";
+import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -11,7 +11,7 @@ import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/Agendad
 import { TendenciaDiaView } from "@/components/TendenciaDiaView";
 import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
 import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
-import { Commercial, CommercialProgressView } from "@/components/CommercialProgressView";
+import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useDashboardSettings } from "@/hooks/useDashboardSettings";
@@ -36,7 +36,7 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TabType = "dashboard" | "comerciais" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
+type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -235,7 +235,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "comerciais", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+    const tabs: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -504,8 +504,7 @@ const Index = () => {
 
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, color: "bg-primary" },
-    { id: "comerciais" as const, label: "Comerciais", icon: Users, color: "bg-primary" },
-    { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
+        { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
     { id: "tendencia" as const, label: "Tendência", icon: TrendingUp, color: "bg-accent" },
     { id: "bitrix" as const, label: "Bitrix", icon: BarChart3, color: "bg-primary" },
@@ -581,7 +580,7 @@ const Index = () => {
         {!tvMode && (
           <BulkPasteUpdater
             title="Atualizar Dashboard e Borderô"
-            subtitle="Cole os dados de borderô (mês/dia), comerciais e tabela de clientes"
+            subtitle="Cole os dados de borderô (mês/dia) e tabela de clientes"
             onApply={handleBulkDashboardPaste}
           />
         )}
@@ -601,27 +600,7 @@ const Index = () => {
               onAtingidoDiaChange={(v) => { const old = atingidoDia; setAtingidoDia(v); if (isSupabaseConfigured) { remoteSettings.updateAsync({ atingidoDia: v }); if (v - old !== 0) insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "single", deltaBorderoDia: v - old }); } }}
             />
           )}
-          {activeTab === "comerciais" && (
-            <div className="animate-fade-in-up">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-                  Progresso por Comercial
-                </h2>
-              </div>
-              <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
-                <CommercialProgressView
-                  commercials={commercials}
-                  onUpdate={(c) => setCommercials((prev) => prev.map((x) => (x.id === c.id ? c : x)))}
-                  onAdd={() => setCommercials((prev) => [...prev, { id: `c_${Date.now()}`, name: "Novo", currentValue: 0, goal: 50000, group: "executivo" }])}
-                  onDelete={(id) => setCommercials((prev) => prev.filter((x) => x.id !== id))}
-                  readOnly={readOnly}
-                  tvMode={tvMode}
-                />
-              </div>
-            </div>
-          )}
-          {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
+                    {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
           {activeTab === "acionamento-detalhado" && (
             <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} />
           )}
