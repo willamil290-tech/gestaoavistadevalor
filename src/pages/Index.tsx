@@ -11,6 +11,7 @@ import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/Agendad
 import { TendenciaDiaView } from "@/components/TendenciaDiaView";
 import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
 import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
+import { ExcelBorderoImporter } from "@/components/ExcelBorderoImporter";
 import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -27,6 +28,7 @@ import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseH
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 import { type BitrixReport } from "@/lib/bitrixLogs";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
+import type { ExcelImportResult } from "@/lib/excelImport";
 
 function normalizeNameKeyLoose(name: string) {
   return name.toLowerCase().replace(/\s+/g, " ").trim();
@@ -378,6 +380,44 @@ const Index = () => {
     }
   };
 
+  // Handler for Excel import (Base)
+  const handleExcelImport = async (result: ExcelImportResult) => {
+    const oldDia = atingidoDia;
+
+    setAtingidoMes(result.borderoMonth);
+    setAtingidoDia(result.borderoDay);
+
+    const newClientes: ClienteBordero[] = result.clientsDay.map((c, i) => ({
+      id: `cli_${Date.now()}_${i}`,
+      cliente: c.cliente,
+      comercial: c.comercial ?? "",
+      valor: c.valor,
+      horario: "",
+      observacao: "",
+    }));
+    setClientes(newClientes);
+
+    if (isSupabaseConfigured) {
+      try {
+        await remoteSettings.updateAsync({ atingidoMes: result.borderoMonth, atingidoDia: result.borderoDay });
+      } catch (e: any) {
+        console.error(e);
+        toast.error(e?.message ?? "Falha ao salvar Borderô no Supabase");
+      }
+
+      try {
+        await remoteExtras.updateAsync({ clientes: newClientes as any });
+      } catch {
+        // ignore: efeito de debounce também tenta salvar
+      }
+
+      const diff = result.borderoDay - oldDia;
+      if (diff !== 0) {
+        await insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "bulk", deltaBorderoDia: diff });
+      }
+    }
+  };
+
   // Handler for detailed acionamento updates from AcionamentosView
   const handleDetailedUpdate = (entries: DetailedEntry[]) => {
     setAcionamentoDetalhado(prev => {
@@ -578,11 +618,14 @@ const Index = () => {
 
         {/* Bulk paste area - hidden in TV mode */}
         {!tvMode && (
-          <BulkPasteUpdater
-            title="Atualizar Dashboard e Borderô"
-            subtitle="Cole os dados de borderô (mês/dia) e tabela de clientes"
-            onApply={handleBulkDashboardPaste}
-          />
+          <div className="space-y-4">
+            <ExcelBorderoImporter tvMode={tvMode} onImported={handleExcelImport} />
+            <BulkPasteUpdater
+              title="Atualizar Dashboard e Borderô"
+              subtitle="Cole os dados de borderô (mês/dia) e tabela de clientes"
+              onApply={handleBulkDashboardPaste}
+            />
+          </div>
         )}
 
         <div className={cn(tvMode ? "p-2 md:p-3" : "")}>
