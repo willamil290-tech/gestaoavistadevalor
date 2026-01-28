@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Settings2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -22,6 +22,8 @@ import { DEFAULT_SETTINGS, getLastActivityIso, insertDailyEvent, listTeamMembers
 import { formatDateTimeBR, getBusinessDate } from "@/lib/businessDate";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
@@ -39,6 +41,10 @@ function pad2(n: number) {
 }
 
 type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
+
+const TV_TABS_STORAGE_KEY = "tvTabs";
+const DEFAULT_TV_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+const DEFAULT_ROTATE_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -90,6 +96,13 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [autoRotate, setAutoRotate] = useState(false);
   const [rotateInterval, setRotateInterval] = useState(1);
+
+  // Quais abas entram no ciclo do modo TV
+  const [tvTabs, setTvTabs] = useState<TabType[]>(() => loadJson<TabType[]>(TV_TABS_STORAGE_KEY, DEFAULT_TV_TABS));
+
+  useEffect(() => {
+    saveJson(TV_TABS_STORAGE_KEY, tvTabs);
+  }, [tvTabs]);
 
   // Auto-scroll global (modo TV): desce ate o fim, pausa e volta ao topo.
   // Quando a aba muda (auto-rotate), reseta o scroll para o topo.
@@ -221,13 +234,15 @@ const Index = () => {
   useEffect(() => {
     localStorage.setItem("tvMode", tvMode ? "1" : "0");
     if (tvMode) {
+      const tabs = tvTabs.length ? tvTabs : DEFAULT_TV_TABS;
+      setActiveTab((cur) => (tabs.includes(cur) ? cur : tabs[0]));
       setAutoRotate(true);
       setRotateInterval(0.5);
       try { document.documentElement.requestFullscreen?.(); } catch {}
     } else {
       try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch {}
     }
-  }, [tvMode]);
+  }, [tvMode, tvTabs]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && tvMode) setTvMode(false); };
@@ -237,7 +252,8 @@ const Index = () => {
 
   useEffect(() => {
     if (!autoRotate) return;
-    const tabs: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+    const tabs: TabType[] = (tvMode ? tvTabs : DEFAULT_ROTATE_TABS).filter((t) => t);
+    if (tabs.length === 0) return;
     const interval = setInterval(() => {
       setActiveTab((current) => {
         const idx = tabs.indexOf(current);
@@ -245,7 +261,7 @@ const Index = () => {
       });
     }, rotateInterval * 60 * 1000);
     return () => clearInterval(interval);
-  }, [autoRotate, rotateInterval]);
+  }, [autoRotate, rotateInterval, tvMode, tvTabs]);
 
   const lastActivity = useQuery({
     queryKey: ["last-activity"],
@@ -542,6 +558,17 @@ const Index = () => {
 
   const readOnly = tvMode;
 
+  const setTvPresetDefault = () => setTvTabs(DEFAULT_TV_TABS);
+  const setTvPresetDashboardBordero = () => setTvTabs(["dashboard", "bordero-diario"]);
+
+  const toggleTvTab = (id: TabType, nextChecked: boolean) => {
+    setTvTabs((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      const next = nextChecked ? Array.from(new Set([...current, id])) : current.filter((t) => t !== id);
+      return next.length ? next : [id];
+    });
+  };
+
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, color: "bg-primary" },
         { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
@@ -580,6 +607,46 @@ const Index = () => {
               <Button variant="outline" className="rounded-xl" onClick={() => setTvMode(true)} title="Modo TV">
                 <Tv2 className="w-4 h-4 mr-2" />TV
               </Button>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="rounded-xl" title="Abas exibidas no modo TV">
+                    <Settings2 className="w-4 h-4 mr-2" />Abas TV
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Abas do modo TV</DialogTitle>
+                    <DialogDescription>
+                      Escolha quais abas entram no ciclo automático do modo TV (rotaciona a cada intervalo).
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {tabs.map((tab) => (
+                      <label key={tab.id} className="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-3 cursor-pointer">
+                        <Checkbox
+                          checked={tvTabs.includes(tab.id)}
+                          onCheckedChange={(v) => toggleTvTab(tab.id, v === true)}
+                        />
+                        <div className="flex items-center gap-2">
+                          <tab.icon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{tab.label}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={setTvPresetDashboardBordero}>
+                      Só Dashboard + Borderô
+                    </Button>
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={setTvPresetDefault}>
+                      Padrão
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {isSupabaseConfigured && (
                 <AlertDialog>
@@ -666,7 +733,51 @@ const Index = () => {
         <footer className={cn("mt-4 text-xs text-muted-foreground", tvMode ? "p-2" : "")}>
           <div className="flex items-center justify-between gap-3">
             <div>Última atualização: <span className="font-medium text-foreground">{lastActivity.data ? formatDateTimeBR(lastActivity.data) : "—"}</span></div>
-            {tvMode && <button onClick={() => setTvMode(false)} className="px-3 py-1 rounded-full bg-muted hover:bg-muted/80 text-foreground transition">Sair do modo TV</button>}
+            {tvMode && (
+              <div className="flex items-center gap-2">
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="px-3 py-1 rounded-full bg-muted hover:bg-muted/80 text-foreground transition" title="Abas do modo TV">
+                      <Settings2 className="w-4 h-4 inline-block mr-1" />Abas
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Abas do modo TV</DialogTitle>
+                      <DialogDescription>
+                        Escolha quais abas entram no ciclo automático do modo TV.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {tabs.map((tab) => (
+                        <label key={tab.id} className="flex items-center gap-2 rounded-lg border border-border bg-card/50 p-3 cursor-pointer">
+                          <Checkbox
+                            checked={tvTabs.includes(tab.id)}
+                            onCheckedChange={(v) => toggleTvTab(tab.id, v === true)}
+                          />
+                          <div className="flex items-center gap-2">
+                            <tab.icon className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{tab.label}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <DialogFooter>
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={setTvPresetDashboardBordero}>
+                        Só Dashboard + Borderô
+                      </Button>
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={setTvPresetDefault}>
+                        Padrão
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <button onClick={() => setTvMode(false)} className="px-3 py-1 rounded-full bg-muted hover:bg-muted/80 text-foreground transition">Sair do modo TV</button>
+              </div>
+            )}
           </div>
         </footer>
       </div>
