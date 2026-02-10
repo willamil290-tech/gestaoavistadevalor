@@ -132,11 +132,12 @@ export const DashboardView = ({
             <EditableValue
               value={atingidoMesLiquido}
               onChange={() => {}}
-              label="Vl. Borderô (mês) (corrigido)"
+              // Keep TV mode clean: show the corrected value without extra labels.
+              label={tvMode ? "Vl. Borderô (mês)" : "Vl. Borderô (mês)"}
               readOnly
             />
 
-            {!readOnly && (
+            {!readOnly && !tvMode && (
               <EditableValue
                 value={atingidoMes}
                 onChange={onAtingidoMesChange}
@@ -162,7 +163,9 @@ export const DashboardView = ({
             )}
             <div className="w-full pt-4 border-t border-border space-y-3">
               <EditableValue value={metaMes} onChange={onMetaMesChange} label="Meta do Mês" size="sm" readOnly={readOnly} />
-              <EditableValue value={ajusteMes} onChange={onAjusteMesChange} label="Ajuste do mês (-)" size="sm" readOnly={readOnly} />
+              {!tvMode && (
+                <EditableValue value={ajusteMes} onChange={onAjusteMesChange} label="Ajuste do mês (-)" size="sm" readOnly={readOnly} />
+              )}
             </div>
           </div>
         </div>
@@ -173,11 +176,12 @@ export const DashboardView = ({
             <EditableValue
               value={atingidoDiaLiquido}
               onChange={() => {}}
-              label="Vl. Borderô (dia) (corrigido)"
+              // Keep TV mode clean: show the corrected value without extra labels.
+              label={tvMode ? "Vl. Borderô (dia)" : "Vl. Borderô (dia)"}
               readOnly
             />
 
-            {!readOnly && (
+            {!readOnly && !tvMode && (
               <EditableValue
                 value={atingidoDia}
                 onChange={onAtingidoDiaChange}
@@ -203,7 +207,9 @@ export const DashboardView = ({
             )}
             <div className="w-full pt-4 border-t border-border space-y-3">
               <EditableValue value={metaDia} onChange={onMetaDiaChange} label="Meta do Dia" size="sm" readOnly={readOnly} />
-              <EditableValue value={ajusteDia} onChange={onAjusteDiaChange} label="Ajuste do dia (-)" size="sm" readOnly={readOnly} />
+              {!tvMode && (
+                <EditableValue value={ajusteDia} onChange={onAjusteDiaChange} label="Ajuste do dia (-)" size="sm" readOnly={readOnly} />
+              )}
             </div>
           </div>
         </div>
