@@ -9,11 +9,15 @@ import { Volume2 } from "lucide-react";
 
 interface DashboardViewProps {
   metaMes: number;
+  ajusteMes: number;
   metaDia: number;
+  ajusteDia: number;
   atingidoMes: number;
   atingidoDia: number;
   onMetaMesChange: (value: number) => void;
+  onAjusteMesChange: (value: number) => void;
   onMetaDiaChange: (value: number) => void;
+  onAjusteDiaChange: (value: number) => void;
   onAtingidoMesChange: (value: number) => void;
   onAtingidoDiaChange: (value: number) => void;
   tvMode?: boolean;
@@ -22,11 +26,15 @@ interface DashboardViewProps {
 
 export const DashboardView = ({
   metaMes,
+  ajusteMes,
   metaDia,
+  ajusteDia,
   atingidoMes,
   atingidoDia,
   onMetaMesChange,
+  onAjusteMesChange,
   onMetaDiaChange,
+  onAjusteDiaChange,
   onAtingidoMesChange,
   onAtingidoDiaChange,
   tvMode = false,
@@ -73,8 +81,11 @@ export const DashboardView = ({
     } catch {}
   };
 
-  const percentualMes = metaMes > 0 ? (atingidoMes / metaMes) * 100 : 0;
-  const percentualDia = metaDia > 0 ? (atingidoDia / metaDia) * 100 : 0;
+  const atingidoMesLiquido = Math.max(0, atingidoMes - (ajusteMes || 0));
+  const atingidoDiaLiquido = Math.max(0, atingidoDia - (ajusteDia || 0));
+
+  const percentualMes = metaMes > 0 ? (atingidoMesLiquido / metaMes) * 100 : 0;
+  const percentualDia = metaDia > 0 ? (atingidoDiaLiquido / metaDia) * 100 : 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -118,7 +129,23 @@ export const DashboardView = ({
         {/* Month Section */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
           <div className="flex flex-col items-center gap-4">
-            <EditableValue value={atingidoMes} onChange={onAtingidoMesChange} label="Vl. Borderô (mês)" readOnly={readOnly} />
+            <EditableValue
+              value={atingidoMesLiquido}
+              onChange={() => {}}
+              label="Vl. Borderô (mês) (corrigido)"
+              readOnly
+            />
+
+            {!readOnly && (
+              <EditableValue
+                value={atingidoMes}
+                onChange={onAtingidoMesChange}
+                label="Vl. Borderô (mês) (bruto)"
+                size="sm"
+                readOnly={readOnly}
+              />
+            )}
+
             <CircularProgress percentage={percentualMes} label="Meta (mês)" variant="primary" size={circleSize} />
             {percentualMes >= 100 && (
               <Button
@@ -133,8 +160,9 @@ export const DashboardView = ({
                 Tocar tema
               </Button>
             )}
-            <div className="w-full pt-4 border-t border-border">
+            <div className="w-full pt-4 border-t border-border space-y-3">
               <EditableValue value={metaMes} onChange={onMetaMesChange} label="Meta do Mês" size="sm" readOnly={readOnly} />
+              <EditableValue value={ajusteMes} onChange={onAjusteMesChange} label="Ajuste do mês (-)" size="sm" readOnly={readOnly} />
             </div>
           </div>
         </div>
@@ -142,7 +170,23 @@ export const DashboardView = ({
         {/* Day Section */}
         <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
           <div className="flex flex-col items-center gap-4">
-            <EditableValue value={atingidoDia} onChange={onAtingidoDiaChange} label="Vl. Borderô (dia)" readOnly={readOnly} />
+            <EditableValue
+              value={atingidoDiaLiquido}
+              onChange={() => {}}
+              label="Vl. Borderô (dia) (corrigido)"
+              readOnly
+            />
+
+            {!readOnly && (
+              <EditableValue
+                value={atingidoDia}
+                onChange={onAtingidoDiaChange}
+                label="Vl. Borderô (dia) (bruto)"
+                size="sm"
+                readOnly={readOnly}
+              />
+            )}
+
             <CircularProgress percentage={percentualDia} label="Meta (dia)" variant="secondary" size={circleSize} />
             {percentualDia >= 100 && (
               <Button
@@ -157,8 +201,9 @@ export const DashboardView = ({
                 Tocar tema
               </Button>
             )}
-            <div className="w-full pt-4 border-t border-border">
+            <div className="w-full pt-4 border-t border-border space-y-3">
               <EditableValue value={metaDia} onChange={onMetaDiaChange} label="Meta do Dia" size="sm" readOnly={readOnly} />
+              <EditableValue value={ajusteDia} onChange={onAjusteDiaChange} label="Ajuste do dia (-)" size="sm" readOnly={readOnly} />
             </div>
           </div>
         </div>
@@ -176,11 +221,11 @@ export const DashboardView = ({
         </div>
         <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Mês)</p>
-          <p className="text-xl md:text-2xl font-bold text-foreground">{fmtBRL(Math.max(0, metaMes - atingidoMes))}</p>
+          <p className="text-xl md:text-2xl font-bold text-foreground">{fmtBRL(Math.max(0, metaMes - atingidoMesLiquido))}</p>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border text-center">
           <p className="text-sm md:text-base text-muted-foreground mb-2">Falta (Dia)</p>
-          <p className="text-xl md:text-2xl font-bold text-foreground">{fmtBRL(Math.max(0, metaDia - atingidoDia))}</p>
+          <p className="text-xl md:text-2xl font-bold text-foreground">{fmtBRL(Math.max(0, metaDia - atingidoDiaLiquido))}</p>
         </div>
       </div>
     </div>

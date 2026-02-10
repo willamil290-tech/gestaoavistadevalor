@@ -118,7 +118,9 @@ const Index = () => {
   const remoteSettings = useDashboardSettings();
   const remoteExtras = useDashboardExtras();
   const [metaMes, setMetaMes] = useState(DEFAULT_SETTINGS.metaMes);
+  const [ajusteMes, setAjusteMes] = useState(DEFAULT_SETTINGS.ajusteMes);
   const [metaDia, setMetaDia] = useState(DEFAULT_SETTINGS.metaDia);
+  const [ajusteDia, setAjusteDia] = useState(DEFAULT_SETTINGS.ajusteDia);
   const [atingidoMes, setAtingidoMes] = useState(DEFAULT_SETTINGS.atingidoMes);
   const [atingidoDia, setAtingidoDia] = useState(DEFAULT_SETTINGS.atingidoDia);
   const [commercials, setCommercials] = useState<Commercial[]>(initialCommercials);
@@ -226,10 +228,12 @@ const Index = () => {
   useEffect(() => {
     if (!isSupabaseConfigured || !remoteSettings.data) return;
     setMetaMes(remoteSettings.data.metaMes);
+    setAjusteMes(remoteSettings.data.ajusteMes ?? 0);
     setMetaDia(remoteSettings.data.metaDia);
+    setAjusteDia(remoteSettings.data.ajusteDia ?? 0);
     setAtingidoMes(remoteSettings.data.atingidoMes);
     setAtingidoDia(remoteSettings.data.atingidoDia);
-  }, [remoteSettings.data]);
+  }, [isSupabaseConfigured, remoteSettings.data]);
 
   useEffect(() => {
     localStorage.setItem("tvMode", tvMode ? "1" : "0");
@@ -699,13 +703,17 @@ const Index = () => {
           {activeTab === "dashboard" && (
             <DashboardView 
               metaMes={metaMes} 
+              ajusteMes={ajusteMes}
               metaDia={metaDia} 
+              ajusteDia={ajusteDia}
               atingidoMes={atingidoMes} 
               atingidoDia={atingidoDia} 
               tvMode={tvMode} 
               readOnly={readOnly}
               onMetaMesChange={(v) => { setMetaMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaMes: v }); }}
+              onAjusteMesChange={(v) => { setAjusteMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ ajusteMes: v }); }}
               onMetaDiaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }}
+              onAjusteDiaChange={(v) => { setAjusteDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ ajusteDia: v }); }}
               onAtingidoMesChange={(v) => { setAtingidoMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoMes: v }); }}
               onAtingidoDiaChange={(v) => { const old = atingidoDia; setAtingidoDia(v); if (isSupabaseConfigured) { remoteSettings.updateAsync({ atingidoDia: v }); if (v - old !== 0) insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "single", deltaBorderoDia: v - old }); } }}
             />

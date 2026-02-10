@@ -20,7 +20,9 @@ export const isDashboardExtrasEnabled = () => !dashboardExtrasDisabled;
 
 export type DashboardSettings = {
   metaMes: number;
+  ajusteMes: number;
   metaDia: number;
+  ajusteDia: number;
   atingidoMes: number;
   atingidoDia: number;
 };
@@ -95,7 +97,9 @@ export type TeamMember = {
 // Defaults atuais do app (para primeiro uso / seed)
 export const DEFAULT_SETTINGS: DashboardSettings = {
   metaMes: 15800000,
+  ajusteMes: 0,
   metaDia: 1053333.33,
+  ajusteDia: 0,
   atingidoMes: 5556931.1,
   atingidoDia: 292434.31,
 };
@@ -138,13 +142,36 @@ function assertConfigured() {
 export async function getDashboardSettings(): Promise<DashboardSettings> {
   assertConfigured();
 
-  const { data, error } = await supabase!
-    .from("dashboard_settings")
-    .select("meta_mes, meta_dia, atingido_mes, atingido_dia")
-    .eq("key", SETTINGS_KEY)
-    .maybeSingle();
+  // Tenta buscar já com as colunas de ajuste. Se o Supabase ainda não tiver
+  // essas colunas, faz fallback para o formato antigo (ajustes = 0).
+  const selectWithAdjust = "meta_mes, ajuste_mes, meta_dia, ajuste_dia, atingido_mes, atingido_dia";
+  const selectLegacy = "meta_mes, meta_dia, atingido_mes, atingido_dia";
 
-  if (error) throw error;
+  let data: any = null;
+
+  {
+    const res = await supabase!
+      .from("dashboard_settings")
+      .select(selectWithAdjust)
+      .eq("key", SETTINGS_KEY)
+      .maybeSingle();
+
+    if (res.error) {
+      if (isMissingDashboardExtrasError(res.error.message)) {
+        const legacy = await supabase!
+          .from("dashboard_settings")
+          .select(selectLegacy)
+          .eq("key", SETTINGS_KEY)
+          .maybeSingle();
+        if (legacy.error) throw legacy.error;
+        data = legacy.data;
+      } else {
+        throw res.error;
+      }
+    } else {
+      data = res.data;
+    }
+  }
 
   // Se ainda não existir, cria com default
   if (!data) {
@@ -153,18 +180,39 @@ export async function getDashboardSettings(): Promise<DashboardSettings> {
       .insert({
         key: SETTINGS_KEY,
         meta_mes: DEFAULT_SETTINGS.metaMes,
+        ajuste_mes: DEFAULT_SETTINGS.ajusteMes,
         meta_dia: DEFAULT_SETTINGS.metaDia,
+        ajuste_dia: DEFAULT_SETTINGS.ajusteDia,
         atingido_mes: DEFAULT_SETTINGS.atingidoMes,
         atingido_dia: DEFAULT_SETTINGS.atingidoDia,
         updated_at: new Date().toISOString(),
       });
+
+    // Se o banco ainda não tiver as colunas de ajuste, tenta inserir no formato antigo.
+    if (insertError && isMissingDashboardExtrasError(insertError.message)) {
+      const { error: legacyInsertError } = await supabase!
+        .from("dashboard_settings")
+        .insert({
+          key: SETTINGS_KEY,
+          meta_mes: DEFAULT_SETTINGS.metaMes,
+          meta_dia: DEFAULT_SETTINGS.metaDia,
+          atingido_mes: DEFAULT_SETTINGS.atingidoMes,
+          atingido_dia: DEFAULT_SETTINGS.atingidoDia,
+          updated_at: new Date().toISOString(),
+        });
+      if (legacyInsertError) throw legacyInsertError;
+      return { ...DEFAULT_SETTINGS, ajusteMes: 0, ajusteDia: 0 };
+    }
+
     if (insertError) throw insertError;
     return DEFAULT_SETTINGS;
   }
 
   return {
     metaMes: Number(data.meta_mes ?? 0),
+    ajusteMes: Number(data.ajuste_mes ?? 0),
     metaDia: Number(data.meta_dia ?? 0),
+    ajusteDia: Number(data.ajuste_dia ?? 0),
     atingidoMes: Number(data.atingido_mes ?? 0),
     atingidoDia: Number(data.atingido_dia ?? 0),
   };
@@ -176,7 +224,9 @@ export async function updateDashboardSettings(patch: Partial<DashboardSettings>)
   const payload: Record<string, any> = {};
   payload.updated_at = new Date().toISOString();
   if (typeof patch.metaMes === "number") payload.meta_mes = patch.metaMes;
+  if (typeof patch.ajusteMes === "number") payload.ajuste_mes = patch.ajusteMes;
   if (typeof patch.metaDia === "number") payload.meta_dia = patch.metaDia;
+  if (typeof patch.ajusteDia === "number") payload.ajuste_dia = patch.ajusteDia;
   if (typeof patch.atingidoMes === "number") payload.atingido_mes = patch.atingidoMes;
   if (typeof patch.atingidoDia === "number") payload.atingido_dia = patch.atingidoDia;
 
@@ -184,7 +234,12 @@ export async function updateDashboardSettings(patch: Partial<DashboardSettings>)
     .from("dashboard_settings")
     .update(payload)
     .eq("key", SETTINGS_KEY);
-  if (error) throw error;
+  if (error) {
+    if (isMissingDashboardExtrasError(error.message)) {
+      throw new Error("Colunas de ajuste ainda não existem no Supabase. Rode o SQL para adicionar ajuste_mes/ajuste_dia na tabela dashboard_settings.");
+    }
+    throw error;
+  }
 }
 
 /**
