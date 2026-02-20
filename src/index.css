@@ -129,3 +129,118 @@
 .animate-fade-in-up {
   animation: fade-in-up 0.5s ease-out forwards;
 }
+
+/* ===== >200% Pulse Gradient (primary = burgundy) ===== */
+@keyframes pulse-gradient-primary {
+  0%   { stop-color: hsl(0, 76%, 30%); }
+  50%  { stop-color: hsl(0, 80%, 50%); }
+  100% { stop-color: hsl(0, 76%, 30%); }
+}
+@keyframes pulse-gradient-primary2 {
+  0%   { stop-color: hsl(0, 60%, 50%); }
+  50%  { stop-color: hsl(0, 76%, 30%); }
+  100% { stop-color: hsl(0, 60%, 50%); }
+}
+
+.anim-pulse-stop1-primary {
+  animation: pulse-gradient-primary 2s ease-in-out infinite;
+}
+.anim-pulse-stop2-primary {
+  animation: pulse-gradient-primary2 2s ease-in-out infinite;
+}
+
+/* ===== >200% Pulse Gradient (secondary = teal) ===== */
+@keyframes pulse-gradient-secondary {
+  0%   { stop-color: hsl(195, 53%, 35%); }
+  50%  { stop-color: hsl(195, 70%, 60%); }
+  100% { stop-color: hsl(195, 53%, 35%); }
+}
+@keyframes pulse-gradient-secondary2 {
+  0%   { stop-color: hsl(195, 70%, 60%); }
+  50%  { stop-color: hsl(195, 53%, 35%); }
+  100% { stop-color: hsl(195, 70%, 60%); }
+}
+
+.anim-pulse-stop1-secondary {
+  animation: pulse-gradient-secondary 2s ease-in-out infinite;
+}
+.anim-pulse-stop2-secondary {
+  animation: pulse-gradient-secondary2 2s ease-in-out infinite;
+}
+
+/* >200% text pulse */
+@keyframes pulse-text-glow {
+  0%, 100% { color: hsl(0, 0%, 100%); text-shadow: 0 0 8px rgba(255,255,255,0.3); }
+  50%  { color: hsl(0, 0%, 90%); text-shadow: 0 0 20px rgba(255,255,255,0.7); }
+}
+.anim-pulse-text {
+  animation: pulse-text-glow 2s ease-in-out infinite;
+}
+
+/* ===== >300% Rainbow Gradient ===== */
+@keyframes rainbow-stop1 {
+  0%   { stop-color: #ff0000; }
+  16%  { stop-color: #ff8800; }
+  33%  { stop-color: #ffff00; }
+  50%  { stop-color: #00ff00; }
+  66%  { stop-color: #0088ff; }
+  83%  { stop-color: #8800ff; }
+  100% { stop-color: #ff0000; }
+}
+@keyframes rainbow-stop2 {
+  0%   { stop-color: #ff8800; }
+  16%  { stop-color: #ffff00; }
+  33%  { stop-color: #00ff00; }
+  50%  { stop-color: #0088ff; }
+  66%  { stop-color: #8800ff; }
+  83%  { stop-color: #ff0000; }
+  100% { stop-color: #ff8800; }
+}
+@keyframes rainbow-stop3 {
+  0%   { stop-color: #ffff00; }
+  16%  { stop-color: #00ff00; }
+  33%  { stop-color: #0088ff; }
+  50%  { stop-color: #8800ff; }
+  66%  { stop-color: #ff0000; }
+  83%  { stop-color: #ff8800; }
+  100% { stop-color: #ffff00; }
+}
+@keyframes rainbow-stop4 {
+  0%   { stop-color: #00ff00; }
+  16%  { stop-color: #0088ff; }
+  33%  { stop-color: #8800ff; }
+  50%  { stop-color: #ff0000; }
+  66%  { stop-color: #ff8800; }
+  83%  { stop-color: #ffff00; }
+  100% { stop-color: #00ff00; }
+}
+@keyframes rainbow-stop5 {
+  0%   { stop-color: #0088ff; }
+  16%  { stop-color: #8800ff; }
+  33%  { stop-color: #ff0000; }
+  50%  { stop-color: #ff8800; }
+  66%  { stop-color: #ffff00; }
+  83%  { stop-color: #00ff00; }
+  100% { stop-color: #0088ff; }
+}
+
+.anim-rainbow-stop1 { animation: rainbow-stop1 3s linear infinite; }
+.anim-rainbow-stop2 { animation: rainbow-stop2 3s linear infinite; }
+.anim-rainbow-stop3 { animation: rainbow-stop3 3s linear infinite; }
+.anim-rainbow-stop4 { animation: rainbow-stop4 3s linear infinite; }
+.anim-rainbow-stop5 { animation: rainbow-stop5 3s linear infinite; }
+
+/* >300% Rainbow text */
+@keyframes rainbow-text {
+  0%   { color: #ff0000; text-shadow: 0 0 12px #ff000066; }
+  16%  { color: #ff8800; text-shadow: 0 0 12px #ff880066; }
+  33%  { color: #ffff00; text-shadow: 0 0 12px #ffff0066; }
+  50%  { color: #00ff88; text-shadow: 0 0 12px #00ff8866; }
+  66%  { color: #0088ff; text-shadow: 0 0 12px #0088ff66; }
+  83%  { color: #8800ff; text-shadow: 0 0 12px #8800ff66; }
+  100% { color: #ff0000; text-shadow: 0 0 12px #ff000066; }
+}
+
+.anim-rainbow-text {
+  animation: rainbow-text 3s linear infinite;
+}
