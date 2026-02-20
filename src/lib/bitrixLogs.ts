@@ -105,6 +105,62 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
   }
 
+  // X horas atrás
+  const hrm = line.match(/\b(\d+)\s*(hora|horas|hr|hrs)\s*atr[aá]s\b/i);
+  if (hrm) {
+    const x = Number(hrm[1]);
+    if (!Number.isFinite(x)) return { ok: false };
+    const age = x * 3600;
+    const sec = wrapSeconds(currentSeconds - age);
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+  }
+
+  // ontem, HH:MM
+  const ontem = line.match(/\bontem\b\s*,?\s*(\d{1,2}:\d{2})/i);
+  if (ontem) {
+    const t = ontem[1];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    // age = time since yesterday at that hour
+    const age = DAY_SECONDS + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+  }
+
+  // DD.MM.YYYY HH:MM  or  DD/MM/YYYY HH:MM  or  DD.MM.YYYY, HH:MM (absolute date)
+  const absDate = line.match(/\b(\d{1,2})[./](\d{1,2})[./](\d{4})\s*,?\s*(\d{1,2}:\d{2})/);
+  if (absDate) {
+    const t = absDate[4];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    // We don't compute real age across days, just put a large ageSeconds based on date diff estimate
+    const age = DAY_SECONDS * 2 + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+  }
+
+  // DD de mês, HH:MM  or  DD de mês HH:MM  (e.g. "15 de fevereiro, 14:30")
+  const absBR = line.match(/\b(\d{1,2})\s+de\s+\w+\s*,?\s*(\d{1,2}:\d{2})/i);
+  if (absBR) {
+    const t = absBR[2];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    const age = DAY_SECONDS * 2 + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+  }
+
+  // DD/MM HH:MM  or  DD.MM, HH:MM (without year)
+  const absShort = line.match(/\b(\d{1,2})[./](\d{1,2})\s*,?\s*(\d{1,2}:\d{2})/);
+  if (absShort) {
+    const t = absShort[3];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    const age = DAY_SECONDS * 2 + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+  }
+
   return { ok: false };
 }
 
