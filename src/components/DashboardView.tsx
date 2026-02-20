@@ -120,18 +120,18 @@ export const DashboardView = ({
     }
   }, [percentualDia, percentualMes]);
 
-  const circleSize = tvMode ? 140 : 200;
+  const circleSize = tvMode ? 160 : 200;
   const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   const pctDiaClass = percentualDia >= 300 ? "anim-rainbow-text" : percentualDia >= 200 ? "anim-pulse-text" : "";
   const pctMesClass = percentualMes >= 300 ? "anim-rainbow-text" : percentualMes >= 200 ? "anim-pulse-text" : "";
 
   return (
-    <div className={cn(tvMode ? "space-y-2" : "space-y-6")}>
-      <div className={cn("grid grid-cols-1 lg:grid-cols-2", tvMode ? "gap-2" : "gap-4 md:gap-6")}>
+    <div className={cn(tvMode ? "space-y-3" : "space-y-6")}>
+      <div className={cn("grid grid-cols-1 lg:grid-cols-2", tvMode ? "gap-3" : "gap-4 md:gap-6")}>
         {/* Month Section */}
-        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-2" : "p-4 md:p-6")}>
-          <div className={cn("flex flex-col items-center", tvMode ? "gap-2" : "gap-4")}>
+        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-3" : "p-4 md:p-6")}>
+          <div className={cn("flex flex-col items-center", tvMode ? "gap-3" : "gap-4")}>
             <EditableValue
               value={atingidoMesLiquido}
               onChange={() => {}}
@@ -174,8 +174,8 @@ export const DashboardView = ({
         </div>
 
         {/* Day Section */}
-        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-2" : "p-4 md:p-6")}>
-          <div className={cn("flex flex-col items-center", tvMode ? "gap-2" : "gap-4")}>
+        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-3" : "p-4 md:p-6")}>
+          <div className={cn("flex flex-col items-center", tvMode ? "gap-3" : "gap-4")}>
             <EditableValue
               value={atingidoDiaLiquido}
               onChange={() => {}}
@@ -219,22 +219,22 @@ export const DashboardView = ({
       </div>
 
       {/* Summary Cards */}
-      <div className={cn("grid grid-cols-2 md:grid-cols-4", tvMode ? "gap-2" : "gap-3 md:gap-4")}>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-2" : "p-4")}>
-          <p className={cn("text-muted-foreground", tvMode ? "text-xs mb-1" : "text-sm md:text-base mb-2")}>% Mês</p>
-          <p className={cn("font-bold text-primary", tvMode ? "text-xl" : "text-2xl md:text-3xl", pctMesClass)}>{percentualMes.toFixed(1)}%</p>
+      <div className={cn("grid grid-cols-2 md:grid-cols-4", tvMode ? "gap-3" : "gap-3 md:gap-4")}>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+          <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>% Mês</p>
+          <p className={cn("font-bold text-primary", tvMode ? "text-2xl" : "text-2xl md:text-3xl", pctMesClass)}>{percentualMes.toFixed(1)}%</p>
         </div>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-2" : "p-4")}>
-          <p className={cn("text-muted-foreground", tvMode ? "text-xs mb-1" : "text-sm md:text-base mb-2")}>% Dia</p>
-          <p className={cn("font-bold text-secondary", tvMode ? "text-xl" : "text-2xl md:text-3xl", pctDiaClass)}>{percentualDia.toFixed(1)}%</p>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+          <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>% Dia</p>
+          <p className={cn("font-bold text-secondary", tvMode ? "text-2xl" : "text-2xl md:text-3xl", pctDiaClass)}>{percentualDia.toFixed(1)}%</p>
         </div>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-2" : "p-4")}>
-          <p className={cn("text-muted-foreground", tvMode ? "text-xs mb-1" : "text-sm md:text-base mb-2")}>Falta (Mês)</p>
-          <p className={cn("font-bold text-foreground", tvMode ? "text-lg" : "text-xl md:text-2xl")}>{fmtBRL(Math.max(0, metaMes - atingidoMesLiquido))}</p>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+          <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>Falta (Mês)</p>
+          <p className={cn("font-bold text-foreground", tvMode ? "text-xl" : "text-xl md:text-2xl")}>{fmtBRL(Math.max(0, metaMes - atingidoMesLiquido))}</p>
         </div>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-2" : "p-4")}>
-          <p className={cn("text-muted-foreground", tvMode ? "text-xs mb-1" : "text-sm md:text-base mb-2")}>Falta (Dia)</p>
-          <p className={cn("font-bold text-foreground", tvMode ? "text-lg" : "text-xl md:text-2xl")}>{fmtBRL(Math.max(0, metaDia - atingidoDiaLiquido))}</p>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+          <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>Falta (Dia)</p>
+          <p className={cn("font-bold text-foreground", tvMode ? "text-xl" : "text-xl md:text-2xl")}>{fmtBRL(Math.max(0, metaDia - atingidoDiaLiquido))}</p>
         </div>
       </div>
     </div>
