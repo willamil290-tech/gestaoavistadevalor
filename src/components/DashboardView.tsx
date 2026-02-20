@@ -41,7 +41,7 @@ export const DashboardView = ({
   readOnly = false,
 }: DashboardViewProps) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playedRef = useRef({ day: false, month: false });
+  const playedRef = useRef({ day100: false, day200: false, day300: false, month100: false, month200: false, month300: false });
   const playedKeyRef = useRef({ dayKey: "", monthKey: "" });
 
   useEffect(() => {
@@ -60,8 +60,12 @@ export const DashboardView = ({
     const monthKey = dayKey.slice(0, 7);
     playedKeyRef.current.dayKey = dayKey;
     playedKeyRef.current.monthKey = monthKey;
-    playedRef.current.day = localStorage.getItem(`themePlayed:day:${dayKey}`) === "1";
-    playedRef.current.month = localStorage.getItem(`themePlayed:month:${monthKey}`) === "1";
+    playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
+    playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
+    playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
+    playedRef.current.month100 = localStorage.getItem(`themePlayed:month:100:${monthKey}`) === "1";
+    playedRef.current.month200 = localStorage.getItem(`themePlayed:month:200:${monthKey}`) === "1";
+    playedRef.current.month300 = localStorage.getItem(`themePlayed:month:300:${monthKey}`) === "1";
   }, []);
 
 
@@ -96,26 +100,44 @@ export const DashboardView = ({
     // If the business date/month changed while the page is open, refresh the in-memory flags.
     if (playedKeyRef.current.dayKey !== dayKey) {
       playedKeyRef.current.dayKey = dayKey;
-      playedRef.current.day = localStorage.getItem(`themePlayed:day:${dayKey}`) === "1";
+      playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
+      playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
+      playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
     }
     if (playedKeyRef.current.monthKey !== monthKey) {
       playedKeyRef.current.monthKey = monthKey;
-      playedRef.current.month = localStorage.getItem(`themePlayed:month:${monthKey}`) === "1";
+      playedRef.current.month100 = localStorage.getItem(`themePlayed:month:100:${monthKey}`) === "1";
+      playedRef.current.month200 = localStorage.getItem(`themePlayed:month:200:${monthKey}`) === "1";
+      playedRef.current.month300 = localStorage.getItem(`themePlayed:month:300:${monthKey}`) === "1";
     }
 
-    if (percentualDia >= 100 && !playedRef.current.day) {
-      playedRef.current.day = true;
-      try {
-        localStorage.setItem(`themePlayed:day:${dayKey}`, "1");
-      } catch {}
+    // Day milestones: 300% > 200% > 100% (play highest unplayed)
+    if (percentualDia >= 300 && !playedRef.current.day300) {
+      playedRef.current.day300 = true;
+      try { localStorage.setItem(`themePlayed:day:300:${dayKey}`, "1"); } catch {}
+      playTheme("dia");
+    } else if (percentualDia >= 200 && !playedRef.current.day200) {
+      playedRef.current.day200 = true;
+      try { localStorage.setItem(`themePlayed:day:200:${dayKey}`, "1"); } catch {}
+      playTheme("dia");
+    } else if (percentualDia >= 100 && !playedRef.current.day100) {
+      playedRef.current.day100 = true;
+      try { localStorage.setItem(`themePlayed:day:100:${dayKey}`, "1"); } catch {}
       playTheme("dia");
     }
 
-    if (percentualMes >= 100 && !playedRef.current.month) {
-      playedRef.current.month = true;
-      try {
-        localStorage.setItem(`themePlayed:month:${monthKey}`, "1");
-      } catch {}
+    // Month milestones: 300% > 200% > 100%
+    if (percentualMes >= 300 && !playedRef.current.month300) {
+      playedRef.current.month300 = true;
+      try { localStorage.setItem(`themePlayed:month:300:${monthKey}`, "1"); } catch {}
+      playTheme("mes");
+    } else if (percentualMes >= 200 && !playedRef.current.month200) {
+      playedRef.current.month200 = true;
+      try { localStorage.setItem(`themePlayed:month:200:${monthKey}`, "1"); } catch {}
+      playTheme("mes");
+    } else if (percentualMes >= 100 && !playedRef.current.month100) {
+      playedRef.current.month100 = true;
+      try { localStorage.setItem(`themePlayed:month:100:${monthKey}`, "1"); } catch {}
       playTheme("mes");
     }
   }, [percentualDia, percentualMes]);
