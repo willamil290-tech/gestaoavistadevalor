@@ -109,7 +109,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
           <div>
             <div className="text-lg font-semibold">Análise de Logs (Bitrix)</div>
             <div className="text-sm text-muted-foreground">
-              Cole os logs em texto corrido. O sistema só gera o relatório após receber as 2 levas.
+              Cole os logs em texto corrido (hoje, ontem ou vários dias). O sistema só gera o relatório após receber as 2 levas.
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -151,6 +151,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
       <div className={cn("rounded-2xl border border-border bg-card p-4 md:p-6", step < 2 ? "opacity-50" : "")}>
         <div className="text-sm font-medium mb-2">ETAPA 2</div>
         <div className="text-base font-semibold mb-3">Envie agora a 1ª leva: LOGS DE NEGÓCIOS.</div>
+        <p className="text-xs text-muted-foreground mb-2">Aceita logs de hoje, ontem ou datas anteriores. Todos serão combinados no relatório.</p>
 
         <textarea
           value={negociosText}
@@ -171,6 +172,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
       <div className={cn("rounded-2xl border border-border bg-card p-4 md:p-6", step < 3 ? "opacity-50" : "")}>
         <div className="text-sm font-medium mb-2">ETAPA 3</div>
         <div className="text-base font-semibold mb-3">Recebido. Envie agora a 2ª leva: LOGS DE LEADS.</div>
+        <p className="text-xs text-muted-foreground mb-2">Aceita logs de hoje, ontem ou datas anteriores. Todos serão combinados no relatório.</p>
 
         <textarea
           value={leadsText}
