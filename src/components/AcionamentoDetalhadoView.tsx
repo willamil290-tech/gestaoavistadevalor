@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Trash2, Pencil, Check, X, Phone, Activity, Clock, Timer, Search } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Phone, Activity, Clock, Timer, Search, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
-import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
+import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
+import { loadJson, saveJson } from "@/lib/localStore";
+import { getBusinessDate } from "@/lib/businessDate";
 import type { PersonEventDetail } from "@/lib/bitrixLogs";
 
 export interface AcionamentoCategoria {
@@ -35,6 +37,24 @@ interface AcionamentoDetalhadoViewProps {
 }
 
 export const defaultCategorias = ["ETAPA_ALTERADA", "ATIVIDADE_CRIADA", "STATUS_ATIVIDADE_ALTERADA", "CHAMADA_TELEFONICA", "OUTROS"];
+
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+
+const MONTH_NAMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
+  "SDRs": "bg-blue-600 text-white",
+  "Closers": "bg-purple-600 text-white",
+  "CS": "bg-green-600 text-white",
+  "Grandes Contas": "bg-amber-600 text-white",
+  "Executivos": "bg-slate-600 text-white",
+};
+
+type DetDayPerson = { name: string; total: number; categorias: { tipo: string; quantidade: number }[] };
+type DetMonthData = Record<string, DetDayPerson[]>;
 
 export const AcionamentoDetalhadoView = ({
   colaboradores,
@@ -173,143 +193,262 @@ export const AcionamentoDetalhadoView = ({
     );
   };
 
+  // -- Monthly table state --
+  const todayDate = new Date();
+  const businessDate = getBusinessDate();
+  const [detYear, setDetYear] = useState(todayDate.getFullYear());
+  const [detMonth, setDetMonth] = useState(todayDate.getMonth() + 1);
+  const [detMonthData, setDetMonthData] = useState<DetMonthData>({});
+
+  useEffect(() => {
+    const key = `acionDet:${detYear}-${pad2(detMonth)}`;
+    setDetMonthData(loadJson<DetMonthData>(key, {}));
+  }, [detYear, detMonth]);
+
+  useEffect(() => {
+    if (sortedColaboradores.length === 0) return;
+    const hasNonZero = sortedColaboradores.some(c => c.total > 0);
+    if (!hasNonZero) return;
+    const [y, m] = businessDate.split("-");
+    const key = `acionDet:${y}-${m}`;
+    const stored = loadJson<DetMonthData>(key, {});
+    stored[businessDate] = sortedColaboradores.map(c => ({
+      name: c.name,
+      total: c.total,
+      categorias: c.categorias.map(cat => ({ tipo: cat.tipo, quantidade: cat.quantidade })),
+    }));
+    saveJson(key, stored);
+    if (parseInt(y) === detYear && parseInt(m) === detMonth) {
+      setDetMonthData(prev => ({ ...prev, [businessDate]: stored[businessDate] }));
+    }
+  }, [sortedColaboradores, businessDate]);
+
+  const prevDetMonth = () => {
+    if (detMonth === 1) { setDetMonth(12); setDetYear(y => y - 1); }
+    else setDetMonth(m => m - 1);
+  };
+  const nextDetMonth = () => {
+    if (detMonth === 12) { setDetMonth(1); setDetYear(y => y + 1); }
+    else setDetMonth(m => m + 1);
+  };
+
+  const detDaysWithData = useMemo(() => Object.keys(detMonthData).sort(), [detMonthData]);
+
+  const detAllPeople = useMemo(() => {
+    const nameSet = new Set<string>();
+    for (const dayData of Object.values(detMonthData)) {
+      for (const person of dayData) {
+        if (!isIgnoredCommercial(person.name)) nameSet.add(person.name);
+      }
+    }
+    const names = Array.from(nameSet);
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    names.sort((a, b) => {
+      const ga = groupOrder.indexOf(getTeamGroup(a));
+      const gb = groupOrder.indexOf(getTeamGroup(b));
+      if (ga !== gb) return ga - gb;
+      return a.localeCompare(b);
+    });
+    return names;
+  }, [detMonthData]);
+
+  const detPeopleByTeam = useMemo(() => {
+    const groups: { group: TeamGroup; names: string[] }[] = [];
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    const map = new Map<TeamGroup, string[]>();
+    for (const name of detAllPeople) {
+      const g = getTeamGroup(name);
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(name);
+    }
+    for (const g of groupOrder) {
+      if (map.has(g)) groups.push({ group: g, names: map.get(g)! });
+    }
+    return groups;
+  }, [detAllPeople]);
+
+  const detDataLookup = useMemo(() => {
+    const lookup = new Map<string, Map<string, DetDayPerson>>();
+    for (const [date, dayData] of Object.entries(detMonthData)) {
+      const personMap = new Map<string, DetDayPerson>();
+      for (const person of dayData) {
+        if (!isIgnoredCommercial(person.name)) {
+          personMap.set(person.name, person);
+        }
+      }
+      lookup.set(date, personMap);
+    }
+    return lookup;
+  }, [detMonthData]);
+
+  const detDayTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const day of detDaysWithData) {
+      const dayMap = detDataLookup.get(day);
+      if (!dayMap) continue;
+      let total = 0;
+      for (const v of dayMap.values()) total += v.total;
+      totals.set(day, total);
+    }
+    return totals;
+  }, [detDaysWithData, detDataLookup]);
+
+  const detPersonTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const dayData of Object.values(detMonthData)) {
+      for (const person of dayData) {
+        if (isIgnoredCommercial(person.name)) continue;
+        totals.set(person.name, (totals.get(person.name) ?? 0) + person.total);
+      }
+    }
+    return totals;
+  }, [detMonthData]);
+
+  const detFirstName = (name: string) => name.split(" ")[0];
+
+  const [cellDetail, setCellDetail] = useState<{
+    open: boolean;
+    name: string;
+    day: string;
+    total: number;
+    categorias: { tipo: string; quantidade: number }[];
+  }>({ open: false, name: "", day: "", total: 0, categorias: [] });
+
+  const openCellDetail = (name: string, day: string) => {
+    const dayMap = detDataLookup.get(day);
+    const data = dayMap?.get(name);
+    if (!data) return;
+    setCellDetail({ open: true, name, day, total: data.total, categorias: data.categorias });
+  };
+
   return (
     <div className="animate-fade-in-up">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-secondary" />
-          <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-            Acionamento Detalhado
-          </h2>
-        </div>
-
-        {!readOnly && (
-          <Button onClick={onAdd} className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-xl">
-            <Plus className="w-5 h-5 mr-2" />
-            <span className="hidden md:inline">Adicionar</span>
-          </Button>
-        )}
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-3 h-3 rounded-full bg-secondary" />
+        <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+          Acionamento Detalhado
+        </h2>
       </div>
 
-      {/* Summary metrics bar */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-card rounded-xl p-3 border border-border text-center">
-          <div className="flex items-center justify-center gap-1.5 mb-1">
-            <Phone className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-xs text-muted-foreground">Total Ligações</span>
-          </div>
-          <p className={cn("font-bold text-blue-500", tvMode ? "text-2xl" : "text-xl")}>{summary.ligacoes}</p>
+      {/* Month picker */}
+      <div className="flex items-center justify-center gap-4 mb-6">
+        <Button variant="ghost" size="icon" onClick={prevDetMonth}><ChevronLeft className="w-5 h-5" /></Button>
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-muted-foreground" />
+          <span className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>
+            {MONTH_NAMES[detMonth - 1]} {detYear}
+          </span>
         </div>
-        <div className="bg-card rounded-xl p-3 border border-border text-center">
-          <div className="flex items-center justify-center gap-1.5 mb-1">
-            <Activity className="w-3.5 h-3.5 text-secondary" />
-            <span className="text-xs text-muted-foreground">Total Atividades</span>
-          </div>
-          <p className={cn("font-bold text-secondary", tvMode ? "text-2xl" : "text-xl")}>{summary.atividades}</p>
-        </div>
+        <Button variant="ghost" size="icon" onClick={nextDetMonth}><ChevronRight className="w-5 h-5" /></Button>
       </div>
 
-      {/* Grouped cards — acionamento detalhado per person */}
-      {grouped.map(({ group, items }) => (
-        <div key={group} className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className={cn("text-xs font-semibold px-3 py-1 rounded-full border", TEAM_GROUP_BADGE_COLORS[group])}>
-              {group}
-            </span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {items.map((c) => {
-          const isEditing = editingId === c.id;
-
-          return (
-            <div
-              key={c.id}
-              className="bg-card rounded-2xl p-4 border border-border hover:border-secondary/50 transition-colors"
-            >
-              {isEditing && editValues ? (
-                <div className="space-y-3">
-                  <Input
-                    value={editValues.name}
-                    onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
-                    placeholder="Nome do colaborador"
-                    className="font-semibold"
-                  />
-
-                  <div className="space-y-2">
-                    {editValues.categorias.map((cat) => (
-                      <div key={cat.tipo} className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-muted-foreground">{formatCategoryLabel(cat.tipo)}</span>
-                        <Input
-                          type="number"
-                          value={cat.quantidade}
-                          onChange={(e) => updateCategoria(cat.tipo, Number(e.target.value))}
-                          className="w-20 text-center"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                    <Button size="sm" onClick={saveEdit}>
-                      <Check className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>{c.name}</span>
-                    {!readOnly && (
-                      <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(c)}>
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => onDelete(c.id)}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="text-center mb-3">
-                    <p className="text-xs text-muted-foreground">Total</p>
-                    <div className="flex justify-center">
-                      <ClickableNumber value={c.total} name={c.name} tvMode={tvMode} className={cn("!text-3xl text-secondary", tvMode && "!text-4xl")} />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {c.categorias.map((cat) => (
-                      <div key={cat.tipo} className="p-2 bg-muted/30 rounded-lg text-center">
-                        <p className="text-xs text-muted-foreground truncate">{formatCategoryLabel(cat.tipo)}</p>
-                        <ClickableNumber value={cat.quantidade} name={c.name} category={cat.tipo} tvMode={tvMode} />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-
-        {colaboradores.length === 0 && (
-          <div className="col-span-full text-center text-muted-foreground py-8">
-            Nenhum colaborador cadastrado
-          </div>
-        )}
+      {/* Monthly table — acionamento detalhado per person */}
+      {detDaysWithData.length === 0 ? (
+        <div className="text-center text-muted-foreground py-16">
+          <Activity className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg">Nenhum dado de acionamento detalhado para este mês.</p>
+          <p className="text-sm mt-2">Cole dados do Bitrix ou atualize os acionamentos.</p>
+        </div>
+      ) : (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse min-w-[600px]">
+              <thead>
+                <tr>
+                  <th rowSpan={2} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-r border-border sticky left-0 z-10 bg-card min-w-[50px]">
+                    Dia
+                  </th>
+                  {detPeopleByTeam.map(({ group, names }) => (
+                    <th key={group} colSpan={names.length} className={cn("text-center px-2 py-1.5 font-semibold border-b border-r border-border/50 text-xs", TEAM_HEADER_COLORS[group])}>
+                      {group}
+                    </th>
+                  ))}
+                  <th rowSpan={2} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-border min-w-[60px]">
+                    Total
+                  </th>
+                </tr>
+                <tr className="bg-muted/30">
+                  {detAllPeople.map(name => (
+                    <th key={name} className="text-center px-2 py-1.5 font-medium text-foreground border-b border-r border-border/50 whitespace-nowrap min-w-[55px]">
+                      {detFirstName(name)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {detDaysWithData.map((day, rowIdx) => {
+                  const [, , d] = day.split("-");
+                  const dayMap = detDataLookup.get(day);
+                  const dayTotal = detDayTotals.get(day) ?? 0;
+                  return (
+                    <tr key={day} className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
+                      <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
+                        {parseInt(d)}
+                      </td>
+                      {detAllPeople.map(name => {
+                        const m = dayMap?.get(name);
+                        if (!m) return (
+                          <td key={name} className="text-center px-2 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
+                        );
+                        return (
+                          <td key={name} className="text-center border-r border-border/30 p-0">
+                            <button
+                              onClick={() => openCellDetail(name, day)}
+                              className="w-full px-2 py-2 hover:bg-secondary/10 transition-colors cursor-pointer font-semibold text-secondary tabular-nums"
+                              title={`${name} — Dia ${parseInt(d)}: ${m.total} acionamentos`}
+                            >
+                              {m.total}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-muted/30 font-semibold border-t-2 border-border">
+                  <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">Total</td>
+                  {detAllPeople.map(name => {
+                    const pt = detPersonTotals.get(name) ?? 0;
+                    return (
+                      <td key={name} className="text-center px-2 py-2 font-bold text-secondary tabular-nums border-r border-border/30">
+                        {pt}
+                      </td>
+                    );
+                  })}
+                  <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                    {Array.from(detPersonTotals.values()).reduce((s, v) => s + v, 0)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      ))}
+      )}
+
+      {/* Cell detail dialog */}
+      <Dialog open={cellDetail.open} onOpenChange={(open) => setCellDetail(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{cellDetail.name}</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                if (!cellDetail.day) return "";
+                const [y, m, d] = cellDetail.day.split("-");
+                return `${d}/${m}/${y} — ${cellDetail.total} acionamentos`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {cellDetail.categorias.map((cat) => (
+              <div key={cat.tipo} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/30 text-sm">
+                <span className="font-medium">{formatCategoryLabel(cat.tipo)}</span>
+                <span className="font-semibold text-secondary tabular-nums">{cat.quantidade}</span>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Separate TMO / Tempo Ocioso section — table format */}
       {sortedColaboradores.some((c) => c.tmoSegundos != null || c.tempoOciosoTotal != null) && (

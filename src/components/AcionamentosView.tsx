@@ -14,9 +14,28 @@ import { BulkPasteUpdater } from "./BulkPasteUpdater";
 import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type BulkEntry, type HourlyTrend, type DetailedEntry } from "@/lib/bulkParse";
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { loadJson } from "@/lib/localStore";
-import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
-import { ChevronDown, ChevronUp, Building2, Users } from "lucide-react";
+import { loadJson, saveJson } from "@/lib/localStore";
+import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+
+const MONTH_NAMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
+  "SDRs": "bg-blue-600 text-white",
+  "Closers": "bg-purple-600 text-white",
+  "CS": "bg-green-600 text-white",
+  "Grandes Contas": "bg-amber-600 text-white",
+  "Executivos": "bg-slate-600 text-white",
+};
+
+interface GeralDayPerson { name: string; empresas: number; leads: number; }
+type GeralMonthData = Record<string, GeralDayPerson[]>;
 
 interface AcionamentosViewProps {
   tvMode?: boolean;
@@ -78,6 +97,12 @@ export const AcionamentosView = ({
   const leadsRemote = useTeamMembers("leads");
   const [expandedGeral, setExpandedGeral] = useState<Set<string>>(new Set());
 
+  // -- Monthly table state --
+  const todayDate = new Date();
+  const [geralYear, setGeralYear] = useState(todayDate.getFullYear());
+  const [geralMonth, setGeralMonth] = useState(todayDate.getMonth() + 1);
+  const [geralMonthData, setGeralMonthData] = useState<GeralMonthData>({});
+
   const geralData = useMemo(() => {
     type PersonGeral = { name: string; empresas: number; leads: number; total: number };
     let empresas: { name: string; morning: number; afternoon: number }[] = [];
@@ -118,6 +143,115 @@ export const AcionamentosView = ({
   }, [empresasRemote.data, leadsRemote.data, businessDate]);
 
   const geralGrouped = useMemo(() => groupByTeam(geralData), [geralData]);
+
+  // Load monthly data on month change
+  useEffect(() => {
+    const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
+    setGeralMonthData(loadJson<GeralMonthData>(key, {}));
+  }, [geralYear, geralMonth]);
+
+  // Auto-save today's geral data to monthly storage
+  useEffect(() => {
+    if (geralData.length === 0) return;
+    const hasNonZero = geralData.some(g => g.total > 0);
+    if (!hasNonZero) return;
+    const [y, m] = businessDate.split("-");
+    const key = `acionGeral:${y}-${m}`;
+    const stored = loadJson<GeralMonthData>(key, {});
+    stored[businessDate] = geralData.map(g => ({ name: g.name, empresas: g.empresas, leads: g.leads }));
+    saveJson(key, stored);
+    if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
+      setGeralMonthData(prev => ({ ...prev, [businessDate]: stored[businessDate] }));
+    }
+  }, [geralData, businessDate]);
+
+  const prevGeralMonth = () => {
+    if (geralMonth === 1) { setGeralMonth(12); setGeralYear(y => y - 1); }
+    else setGeralMonth(m => m - 1);
+  };
+  const nextGeralMonth = () => {
+    if (geralMonth === 12) { setGeralMonth(1); setGeralYear(y => y + 1); }
+    else setGeralMonth(m => m + 1);
+  };
+
+  // -- Table data from monthly storage --
+  const geralDaysWithData = useMemo(() => Object.keys(geralMonthData).sort(), [geralMonthData]);
+
+  const geralAllPeople = useMemo(() => {
+    const nameSet = new Set<string>();
+    for (const dayData of Object.values(geralMonthData)) {
+      for (const person of dayData) {
+        if (!isIgnoredCommercial(person.name)) nameSet.add(person.name);
+      }
+    }
+    const names = Array.from(nameSet);
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    names.sort((a, b) => {
+      const ga = groupOrder.indexOf(getTeamGroup(a));
+      const gb = groupOrder.indexOf(getTeamGroup(b));
+      if (ga !== gb) return ga - gb;
+      return a.localeCompare(b);
+    });
+    return names;
+  }, [geralMonthData]);
+
+  const geralPeopleByTeam = useMemo(() => {
+    const groups: { group: TeamGroup; names: string[] }[] = [];
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    const map = new Map<TeamGroup, string[]>();
+    for (const name of geralAllPeople) {
+      const g = getTeamGroup(name);
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(name);
+    }
+    for (const g of groupOrder) {
+      if (map.has(g)) groups.push({ group: g, names: map.get(g)! });
+    }
+    return groups;
+  }, [geralAllPeople]);
+
+  const geralDataLookup = useMemo(() => {
+    const lookup = new Map<string, Map<string, { empresas: number; leads: number }>>();
+    for (const [date, dayData] of Object.entries(geralMonthData)) {
+      const personMap = new Map<string, { empresas: number; leads: number }>();
+      for (const person of dayData) {
+        if (!isIgnoredCommercial(person.name)) {
+          personMap.set(person.name, { empresas: person.empresas, leads: person.leads });
+        }
+      }
+      lookup.set(date, personMap);
+    }
+    return lookup;
+  }, [geralMonthData]);
+
+  const geralDayTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const day of geralDaysWithData) {
+      const dayMap = geralDataLookup.get(day);
+      if (!dayMap) continue;
+      let total = 0;
+      for (const v of dayMap.values()) total += v.empresas + v.leads;
+      totals.set(day, total);
+    }
+    return totals;
+  }, [geralDaysWithData, geralDataLookup]);
+
+  const geralPersonTotals = useMemo(() => {
+    const totals = new Map<string, { empresas: number; leads: number }>();
+    for (const dayData of Object.values(geralMonthData)) {
+      for (const person of dayData) {
+        if (isIgnoredCommercial(person.name)) continue;
+        const prev = totals.get(person.name) ?? { empresas: 0, leads: 0 };
+        totals.set(person.name, {
+          empresas: prev.empresas + person.empresas,
+          leads: prev.leads + person.leads,
+        });
+      }
+    }
+    return totals;
+  }, [geralMonthData]);
+
+  const geralFirstName = (name: string) => name.split(" ")[0];
 
   const toggleExpand = (name: string) => {
     setExpandedGeral((prev) => {
@@ -250,69 +384,115 @@ export const AcionamentosView = ({
 
         <TabsContent value="geral">
           <div className="animate-fade-in-up">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-3 h-3 rounded-full bg-primary" />
-              <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
-                Visão Geral
-              </h2>
-              <span className="text-sm text-muted-foreground ml-2">
-                {geralData.length} pessoas · {geralData.reduce((s, g) => s + g.total, 0)} acionamentos
-              </span>
+            {/* Month picker */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <Button variant="ghost" size="icon" onClick={prevGeralMonth}><ChevronLeft className="w-5 h-5" /></Button>
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-muted-foreground" />
+                <span className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>
+                  {MONTH_NAMES[geralMonth - 1]} {geralYear}
+                </span>
+              </div>
+              <Button variant="ghost" size="icon" onClick={nextGeralMonth}><ChevronRight className="w-5 h-5" /></Button>
             </div>
 
-            {geralGrouped.map(({ group, items }) => (
-              <div key={group} className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className={cn("text-xs font-semibold px-3 py-1 rounded-full border", TEAM_GROUP_BADGE_COLORS[group])}>
-                    {group}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {items.reduce((s, g) => s + g.total, 0)} acionamentos
-                  </span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-                  {items.map((person) => {
-                    const isExpanded = expandedGeral.has(person.name);
-                    return (
-                      <div
-                        key={person.name}
-                        className="bg-card rounded-2xl p-4 border border-border hover:border-primary/40 transition-colors cursor-pointer"
-                        onClick={() => toggleExpand(person.name)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>{person.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className={cn("font-bold text-primary", tvMode ? "text-3xl" : "text-2xl")}>{person.total}</span>
-                            {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                          </div>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-2 gap-2">
-                            <div className="flex items-center gap-2 p-2 bg-secondary/10 rounded-lg">
-                              <Building2 className="w-4 h-4 text-secondary" />
-                              <div>
-                                <p className="text-xs text-muted-foreground">Empresas</p>
-                                <p className="font-semibold text-secondary">{person.empresas}</p>
-                              </div>
+            {geralDaysWithData.length === 0 ? (
+              <div className="text-center text-muted-foreground py-16">
+                <Building2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                <p className="text-lg">Nenhum dado de acionamento para este mês.</p>
+                <p className="text-sm mt-2">Cole dados do Bitrix ou use o <strong>Importar</strong> acima.</p>
+              </div>
+            ) : (
+              <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse min-w-[600px]">
+                    <thead>
+                      {/* Tier 1: Team headers */}
+                      <tr>
+                        <th rowSpan={3} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-r border-border sticky left-0 z-10 bg-card min-w-[50px]">
+                          Dia
+                        </th>
+                        {geralPeopleByTeam.map(({ group, names }) => (
+                          <th key={group} colSpan={names.length * 2} className={cn("text-center px-2 py-1.5 font-semibold border-b border-r border-border/50 text-xs", TEAM_HEADER_COLORS[group])}>
+                            {group}
+                          </th>
+                        ))}
+                        <th rowSpan={3} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-border min-w-[60px]">
+                          Total
+                        </th>
+                      </tr>
+                      {/* Tier 2: Person names */}
+                      <tr className="bg-muted/30">
+                        {geralAllPeople.map(name => (
+                          <th key={name} colSpan={2} className="text-center px-1 py-1.5 font-medium text-foreground border-b border-r border-border/50 whitespace-nowrap">
+                            {geralFirstName(name)}
+                          </th>
+                        ))}
+                      </tr>
+                      {/* Tier 3: Emp / Lead */}
+                      <tr className="bg-muted/20">
+                        {geralAllPeople.map(name => (
+                          <th key={`${name}-sub`} colSpan={2} className="border-b border-r border-border/30 p-0">
+                            <div className="grid grid-cols-2 divide-x divide-border/30">
+                              <span className="px-1 py-1 text-center text-[10px] text-secondary font-medium" title="Empresas">Emp</span>
+                              <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="Leads">Lead</span>
                             </div>
-                            <div className="flex items-center gap-2 p-2 bg-gold/10 rounded-lg">
-                              <Users className="w-4 h-4 text-gold" />
-                              <div>
-                                <p className="text-xs text-muted-foreground">Leads</p>
-                                <p className="font-semibold text-gold">{person.leads}</p>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {geralDaysWithData.map((day, rowIdx) => {
+                        const [, , d] = day.split("-");
+                        const dayMap = geralDataLookup.get(day);
+                        const dayTotal = geralDayTotals.get(day) ?? 0;
+                        return (
+                          <tr key={day} className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
+                            <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
+                              {parseInt(d)}
+                            </td>
+                            {geralAllPeople.map(name => {
+                              const m = dayMap?.get(name);
+                              if (!m) return (
+                                <td key={name} colSpan={2} className="text-center px-1 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
+                              );
+                              return (
+                                <td key={name} colSpan={2} className="border-r border-border/30 p-0">
+                                  <div className="grid grid-cols-2 divide-x divide-border/20">
+                                    <span className="px-1 py-2 text-center font-semibold text-secondary tabular-nums">{m.empresas}</span>
+                                    <span className="px-1 py-2 text-center font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{m.leads}</span>
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* Total row */}
+                      <tr className="bg-muted/30 font-semibold border-t-2 border-border">
+                        <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">Total</td>
+                        {geralAllPeople.map(name => {
+                          const pt = geralPersonTotals.get(name);
+                          if (!pt) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                          return (
+                            <td key={name} colSpan={2} className="border-r border-border/30 p-0">
+                              <div className="grid grid-cols-2 divide-x divide-border/20">
+                                <span className="px-1 py-2 text-center font-bold text-secondary tabular-nums">{pt.empresas}</span>
+                                <span className="px-1 py-2 text-center font-bold text-amber-600 dark:text-amber-400 tabular-nums">{pt.leads}</span>
                               </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                            </td>
+                          );
+                        })}
+                        <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                          {Array.from(geralPersonTotals.values()).reduce((s, v) => s + v.empresas + v.leads, 0)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </TabsContent>
 
