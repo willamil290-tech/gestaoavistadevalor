@@ -233,8 +233,18 @@ export type PersonCallMetrics = {
   comercial: string;
   totalLigacoes: number;
   totalAtividades: number;
-  tmoSegundos: number | null;
-  tempoTotalSegundos: number | null;
+  tmoSegundos: number | null;      // tempo médio ocioso entre ligações (exclui duração estimada da chamada)
+  tempoOciosoTotal: number | null;  // tempo total ocioso no expediente (exclui almoço e ligações)
+};
+
+/** Detailed events per person, for drill-down */
+export type PersonEventDetail = {
+  comercial: string;
+  events: BitrixEvent[];
+  /** empresas únicas por tipo */
+  uniqueEmpresas: { empresa: string; entityType: BitrixEntityType; timeHHMM: string }[];
+  /** leads únicos por tipo */
+  uniqueLeads: { empresa: string; entityType: BitrixEntityType; timeHHMM: string }[];
 };
 
 export type BitrixReport = {
@@ -250,6 +260,7 @@ export type BitrixReport = {
     counts: Record<BitrixActionCategory, number>;
   }>;
   personCallMetrics: PersonCallMetrics[];
+  personEventDetails: PersonEventDetail[];
 };
 
 function compareCommercial(a: string, b: string) {
@@ -352,19 +363,26 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
 
   const actionResumo = Array.from(actionMap.values()).sort((a, b) => compareCommercial(a.comercial, b.comercial));
 
-  // Per-person call metrics (TMO, total time, etc.)
-  const callMetricsMap = new Map<string, { comercial: string; callAges: number[]; totalAtividades: number }>();
+  // Per-person call metrics (TMO, total idle time, etc.)
+  // Duração estimada de cada chamada (em segundos) — excluir do TMO
+  const ESTIMATED_CALL_DURATION_SEC = 3 * 60; // 3 minutos
+  // Jornada: 08:00-12:00 (4h) + 13:00-18:00 (5h) = 9h = 32400s
+  const WORK_SECONDS_TOTAL = 9 * 3600;
+
+  const callMetricsMap = new Map<string, { comercial: string; callAges: number[]; allAges: number[]; totalAtividades: number }>();
   for (const e of filteredEvents) {
     const key = normalizeForCompare(e.comercial);
     if (!callMetricsMap.has(key)) {
       callMetricsMap.set(key, {
         comercial: commercialDisplayByKey.get(key) ?? e.comercial,
         callAges: [],
+        allAges: [],
         totalAtividades: 0,
       });
     }
     const m = callMetricsMap.get(key)!;
     m.totalAtividades += 1;
+    m.allAges.push(e.ageSeconds);
     if (e.actionCategory === "CHAMADA_TELEFONICA") {
       m.callAges.push(e.ageSeconds);
     }
@@ -372,17 +390,28 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
 
   const personCallMetrics: PersonCallMetrics[] = [];
   for (const [, m] of callMetricsMap) {
-    const sortedAges = [...m.callAges].sort((a, b) => b - a); // desc = chronological
+    const sortedCallAges = [...m.callAges].sort((a, b) => b - a); // desc = oldest first (chronological)
     let tmoSegundos: number | null = null;
-    let tempoTotalSegundos: number | null = null;
+    let tempoOciosoTotal: number | null = null;
 
-    if (sortedAges.length >= 2) {
+    if (sortedCallAges.length >= 2) {
+      // Gaps entre ligações, descontando a duração estimada da chamada
       const gaps: number[] = [];
-      for (let i = 0; i < sortedAges.length - 1; i++) {
-        gaps.push(sortedAges[i] - sortedAges[i + 1]);
+      for (let i = 0; i < sortedCallAges.length - 1; i++) {
+        const rawGap = sortedCallAges[i] - sortedCallAges[i + 1];
+        const idle = Math.max(0, rawGap - ESTIMATED_CALL_DURATION_SEC);
+        gaps.push(idle);
       }
       tmoSegundos = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-      tempoTotalSegundos = sortedAges[0] - sortedAges[sortedAges.length - 1];
+    }
+
+    // Tempo ocioso total = jornada decorrida - tempo em ligações
+    if (sortedCallAges.length >= 1) {
+      const totalCallTime = sortedCallAges.length * ESTIMATED_CALL_DURATION_SEC;
+      // O tempo "trabalhado" desde a primeira atividade do dia até agora
+      const allSorted = [...m.allAges].sort((a, b) => b - a);
+      const firstToLast = allSorted[0] - allSorted[allSorted.length - 1];
+      tempoOciosoTotal = Math.max(0, firstToLast - totalCallTime);
     }
 
     personCallMetrics.push({
@@ -390,11 +419,57 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
       totalLigacoes: m.callAges.length,
       totalAtividades: m.totalAtividades,
       tmoSegundos,
-      tempoTotalSegundos,
+      tempoOciosoTotal,
     });
   }
 
-  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics };
+  // Per-person event details (for drill-down)
+  const personEventsMap = new Map<string, { comercial: string; events: BitrixEvent[] }>();
+  for (const e of filteredEvents) {
+    const key = normalizeForCompare(e.comercial);
+    if (!personEventsMap.has(key)) {
+      personEventsMap.set(key, {
+        comercial: commercialDisplayByKey.get(key) ?? e.comercial,
+        events: [],
+      });
+    }
+    personEventsMap.get(key)!.events.push(e);
+  }
+
+  const personEventDetails: PersonEventDetail[] = [];
+  for (const [, p] of personEventsMap) {
+    // Unique empresas (negócios) and leads
+    const seenEmpresas = new Set<string>();
+    const seenLeads = new Set<string>();
+    const uniqueEmpresas: PersonEventDetail["uniqueEmpresas"] = [];
+    const uniqueLeads: PersonEventDetail["uniqueLeads"] = [];
+
+    // Sort events chronologically (oldest first = highest ageSeconds)
+    const sorted = [...p.events].sort((a, b) => b.ageSeconds - a.ageSeconds);
+    for (const ev of sorted) {
+      const empKey = normalizeEmpresaForDedupe(ev.empresa);
+      if (ev.entityType === "NEGÓCIO") {
+        if (!seenEmpresas.has(empKey)) {
+          seenEmpresas.add(empKey);
+          uniqueEmpresas.push({ empresa: ev.empresa, entityType: ev.entityType, timeHHMM: ev.timeHHMM });
+        }
+      } else {
+        if (!seenLeads.has(empKey)) {
+          seenLeads.add(empKey);
+          uniqueLeads.push({ empresa: ev.empresa, entityType: ev.entityType, timeHHMM: ev.timeHHMM });
+        }
+      }
+    }
+
+    personEventDetails.push({
+      comercial: p.comercial,
+      events: sorted,
+      uniqueEmpresas,
+      uniqueLeads,
+    });
+  }
+
+  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics, personEventDetails };
 }
 
 export function formatBitrixReport(report: BitrixReport): string {

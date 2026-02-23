@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
-import { type BitrixReport } from "@/lib/bitrixLogs";
+import { type BitrixReport, type PersonEventDetail } from "@/lib/bitrixLogs";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import type { ExcelImportResult } from "@/lib/excelImport";
 
@@ -127,6 +127,7 @@ const Index = () => {
 
   // New views state
   const [acionamentoDetalhado, setAcionamentoDetalhado] = useState(initialAcionamentoDetalhado);
+  const [personEventDetails, setPersonEventDetails] = useState<PersonEventDetail[]>([]);
   const [faixas, setFaixas] = useState(initialFaixas);
   const [clientes, setClientes] = useState<ClienteBordero[]>([]);
   
@@ -560,10 +561,11 @@ const Index = () => {
         ligacoes: metrics?.totalLigacoes ?? 0,
         totalAtividades: metrics?.totalAtividades ?? total,
         tmoSegundos: metrics?.tmoSegundos ?? null,
-        tempoTotalSegundos: metrics?.tempoTotalSegundos ?? null,
+        tempoOciosoTotal: metrics?.tempoOciosoTotal ?? null,
       } as ColaboradorAcionamento;
     });
     setAcionamentoDetalhado(detailed);
+    setPersonEventDetails(bitrix.personEventDetails ?? []);
     try {
       if (isSupabaseConfigured) await remoteExtras.updateAsync({ acionamentoDetalhado: detailed as any });
     } catch {}
@@ -729,7 +731,7 @@ const Index = () => {
           )}
                     {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
           {activeTab === "acionamento-detalhado" && (
-            <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} />
+            <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} personEventDetails={personEventDetails} />
           )}
           {activeTab === "tendencia" && (
             <TendenciaDiaView 
