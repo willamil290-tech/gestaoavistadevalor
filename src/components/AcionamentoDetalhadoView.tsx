@@ -337,13 +337,13 @@ export const AcionamentoDetalhadoView = ({
                     </div>
                   </th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1" title="Tempo médio entre cada ligação, desconsiderando o tempo em que estava em ligação">
                       <Timer className="w-3.5 h-3.5" /> TMO
                     </div>
                   </th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">
-                    <div className="flex items-center justify-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> Tempo Ocioso
+                    <div className="flex items-center justify-center gap-1" title="Tempo total em que a pessoa não estava ligando">
+                      <Clock className="w-3.5 h-3.5" /> S/L
                     </div>
                   </th>
                 </tr>
