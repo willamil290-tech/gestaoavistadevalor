@@ -13,6 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BulkPasteUpdater } from "./BulkPasteUpdater";
 import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type BulkEntry, type HourlyTrend, type DetailedEntry } from "@/lib/bulkParse";
 import { toast } from "sonner";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { loadJson } from "@/lib/localStore";
+import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
+import { ChevronDown, ChevronUp, Building2, Users } from "lucide-react";
 
 interface AcionamentosViewProps {
   tvMode?: boolean;
