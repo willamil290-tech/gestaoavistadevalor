@@ -423,7 +423,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
               {/* Tier 1: Team group header */}
               <thead>
                 <tr>
-                  <th rowSpan={2} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-r border-border sticky left-0 z-10 bg-card min-w-[50px]">
+                  <th rowSpan={3} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-r border-border sticky left-0 z-10 bg-card min-w-[50px]">
                     Dia
                   </th>
                   {peopleByTeam.map(({ group, names }) => (
@@ -435,7 +435,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                       {group}
                     </th>
                   ))}
-                  <th rowSpan={2} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-border min-w-[60px]">
+                  <th rowSpan={3} className="text-center px-2 py-2 font-semibold text-muted-foreground bg-muted/40 border-b border-border min-w-[60px]">
                     Total
                   </th>
                 </tr>

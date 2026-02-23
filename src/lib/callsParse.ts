@@ -262,6 +262,20 @@ export interface PersonDayCallMetrics {
 }
 
 /**
+ * Retorna o total de segundos úteis de trabalho para um dado dia da semana.
+ * Seg-Qui: 08:00-12:00 + 13:00-18:00 = 9 h = 32 400 s
+ * Sexta:   08:00-12:00 + 13:00-17:00 = 8 h = 28 800 s
+ * Sáb/Dom: 0 (sem expediente)
+ */
+function workDaySeconds(dateISO: string): number {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay(); // 0=Dom, 5=Sex, 6=Sáb
+  if (dow === 0 || dow === 6) return 0;
+  if (dow === 5) return 8 * 3600; // sexta
+  return 9 * 3600; // seg-qui
+}
+
+/**
  * Calcula as métricas de chamadas por pessoa e por dia.
  *
  * TMO = tempo médio entre o fim de uma ligação e o início da próxima.
@@ -269,8 +283,8 @@ export interface PersonDayCallMetrics {
  *        gap = (início da próxima) - (fim da anterior, que é início + duração)
  *        TMO = média dos gaps positivos
  *
- * S/L = tempo total sem ligar = (última chamada + sua duração - primeira chamada) - soma das durações
- *       Ou seja: janela total de atividade menos o tempo realmente ligando.
+ * S/L = total de horas úteis do expediente menos o tempo gasto em ligações.
+ *       Seg-Qui 9 h, Sex 8 h (descontado almoço).
  */
 export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] {
   // Agrupar por pessoa + dia
@@ -302,8 +316,14 @@ export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] 
     let tmoSeconds: number | null = null;
     let slSeconds: number | null = null;
 
+    // S/L = expediente do dia − tempo em ligação
+    const wds = workDaySeconds(date);
+    if (wds > 0) {
+      slSeconds = Math.max(0, wds - totalDurationSeconds);
+    }
+
     if (sorted.length >= 2) {
-      // Calcular gaps entre ligações
+      // Calcular gaps entre ligações (TMO)
       const gaps: number[] = [];
       for (let i = 0; i < sorted.length - 1; i++) {
         const endCurrent = sorted[i].dateTime.getTime() / 1000 + sorted[i].durationSeconds;
@@ -316,16 +336,8 @@ export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] 
       if (gaps.length > 0) {
         tmoSeconds = gaps.reduce((a, b) => a + b, 0) / gaps.length;
       }
-
-      // S/L = janela total - tempo em ligação
-      const windowStart = sorted[0].dateTime.getTime() / 1000;
-      const lastCall = sorted[sorted.length - 1];
-      const windowEnd = lastCall.dateTime.getTime() / 1000 + lastCall.durationSeconds;
-      const totalWindow = windowEnd - windowStart;
-      slSeconds = Math.max(0, totalWindow - totalDurationSeconds);
     } else if (sorted.length === 1) {
       tmoSeconds = null;
-      slSeconds = null;
     }
 
     metrics.push({
