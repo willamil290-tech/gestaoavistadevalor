@@ -539,7 +539,11 @@ const Index = () => {
       }
     }
 
-    // 3) Acionamento detalhado
+    // 3) Acionamento detalhado (com métricas de chamadas)
+    const callMetricsMap = new Map(
+      (bitrix.personCallMetrics ?? []).map((m) => [normalizeNameKeyLoose(m.comercial), m])
+    );
+
     const detailed = bitrix.actionResumo
       .filter((r) => !isIgnoredCommercial(r.comercial))
       .map((r) => {
@@ -547,11 +551,16 @@ const Index = () => {
       const match = acionamentoDetalhado.find(
         (x) => normalizeName(x.name) === normalizeName(r.comercial) || normalizeName(x.name) === normalizeName(r.comercial.split(" ")[0])
       );
+      const metrics = callMetricsMap.get(normalizeNameKeyLoose(r.comercial));
       return {
         id: match?.id ?? `ad_${normalizeNameKeyLoose(r.comercial).replace(/[^a-z0-9]+/g, "_")}`,
         name: r.comercial,
         total,
         categorias: defaultCategorias.map((k) => ({ tipo: k, quantidade: Number((r.counts as any)[k] ?? 0) })),
+        ligacoes: metrics?.totalLigacoes ?? 0,
+        totalAtividades: metrics?.totalAtividades ?? total,
+        tmoSegundos: metrics?.tmoSegundos ?? null,
+        tempoTotalSegundos: metrics?.tempoTotalSegundos ?? null,
       } as ColaboradorAcionamento;
     });
     setAcionamentoDetalhado(detailed);

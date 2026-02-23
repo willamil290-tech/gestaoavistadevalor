@@ -31,7 +31,7 @@ export const AcionamentosView = ({
   onBulkUpdate,
   onDetailedUpdate,
 }: AcionamentosViewProps) => {
-  const [activeSubTab, setActiveSubTab] = useState<"empresas" | "leads">("empresas");
+  const [activeSubTab, setActiveSubTab] = useState<"geral" | "empresas" | "leads">("geral");
   const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [manualTrendData, setManualTrendData] = useState<HourlyTrend[]>([]);
 
@@ -67,6 +67,62 @@ export const AcionamentosView = ({
     refetchInterval: pollInterval,
     staleTime: 0,
   });
+
+  // Geral tab data: combine empresas + leads
+  const businessDate = getBusinessDate();
+  const empresasRemote = useTeamMembers("empresas");
+  const leadsRemote = useTeamMembers("leads");
+  const [expandedGeral, setExpandedGeral] = useState<Set<string>>(new Set());
+
+  const geralData = useMemo(() => {
+    type PersonGeral = { name: string; empresas: number; leads: number; total: number };
+    let empresas: { name: string; morning: number; afternoon: number }[] = [];
+    let leads: { name: string; morning: number; afternoon: number }[] = [];
+
+    if (isSupabaseConfigured) {
+      empresas = (empresasRemote.data ?? []) as any[];
+      leads = (leadsRemote.data ?? []) as any[];
+    } else {
+      empresas = (loadJson(`teamMembers:${businessDate}:empresas`, []) as any[]) ?? [];
+      leads = (loadJson(`teamMembers:${businessDate}:leads`, []) as any[]) ?? [];
+    }
+
+    const normalize = (n: string) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const map = new Map<string, PersonGeral>();
+
+    for (const e of empresas) {
+      if (isIgnoredCommercial(e.name)) continue;
+      const key = normalize(e.name);
+      const empTotal = (e.morning ?? 0) + (e.afternoon ?? 0);
+      map.set(key, { name: e.name, empresas: empTotal, leads: 0, total: empTotal });
+    }
+
+    for (const l of leads) {
+      if (isIgnoredCommercial(l.name)) continue;
+      const key = normalize(l.name);
+      const leadTotal = (l.morning ?? 0) + (l.afternoon ?? 0);
+      const existing = map.get(key);
+      if (existing) {
+        existing.leads = leadTotal;
+        existing.total = existing.empresas + leadTotal;
+      } else {
+        map.set(key, { name: l.name, empresas: 0, leads: leadTotal, total: leadTotal });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [empresasRemote.data, leadsRemote.data, businessDate]);
+
+  const geralGrouped = useMemo(() => groupByTeam(geralData), [geralData]);
+
+  const toggleExpand = (name: string) => {
+    setExpandedGeral((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const computed = useMemo(() => {
     const now = new Date();
@@ -113,7 +169,11 @@ export const AcionamentosView = ({
     }
 
     tabIntervalRef.current = setInterval(() => {
-      setActiveSubTab((prev) => (prev === "empresas" ? "leads" : "empresas"));
+      setActiveSubTab((prev) => {
+        if (prev === "geral") return "empresas";
+        if (prev === "empresas") return "leads";
+        return "geral";
+      });
     }, 15000); // Switch every 15 seconds
 
     return () => {
@@ -176,12 +236,81 @@ export const AcionamentosView = ({
         />
       )}
 
-      {/* Abas Empresas / Leads */}
-      <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "empresas" | "leads")} className="space-y-4">
-        <TabsList className="grid w-full max-w-[300px] grid-cols-2">
+      {/* Abas Geral / Empresas / Leads */}
+      <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "geral" | "empresas" | "leads")} className="space-y-4">
+        <TabsList className="grid w-full max-w-[400px] grid-cols-3">
+          <TabsTrigger value="geral">Geral</TabsTrigger>
           <TabsTrigger value="empresas">Empresas</TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="geral">
+          <div className="animate-fade-in-up">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-3 h-3 rounded-full bg-primary" />
+              <h2 className={cn("font-semibold text-foreground", tvMode ? "text-3xl" : "text-2xl md:text-3xl")}>
+                Visão Geral
+              </h2>
+              <span className="text-sm text-muted-foreground ml-2">
+                {geralData.length} pessoas · {geralData.reduce((s, g) => s + g.total, 0)} acionamentos
+              </span>
+            </div>
+
+            {geralGrouped.map(({ group, items }) => (
+              <div key={group} className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={cn("text-xs font-semibold px-3 py-1 rounded-full border", TEAM_GROUP_BADGE_COLORS[group])}>
+                    {group}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {items.reduce((s, g) => s + g.total, 0)} acionamentos
+                  </span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+                  {items.map((person) => {
+                    const isExpanded = expandedGeral.has(person.name);
+                    return (
+                      <div
+                        key={person.name}
+                        className="bg-card rounded-2xl p-4 border border-border hover:border-primary/40 transition-colors cursor-pointer"
+                        onClick={() => toggleExpand(person.name)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>{person.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={cn("font-bold text-primary", tvMode ? "text-3xl" : "text-2xl")}>{person.total}</span>
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-2 p-2 bg-secondary/10 rounded-lg">
+                              <Building2 className="w-4 h-4 text-secondary" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Empresas</p>
+                                <p className="font-semibold text-secondary">{person.empresas}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 p-2 bg-gold/10 rounded-lg">
+                              <Users className="w-4 h-4 text-gold" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Leads</p>
+                                <p className="font-semibold text-gold">{person.leads}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
 
         <TabsContent value="empresas">
           <EmpresasView tvMode={tvMode} />

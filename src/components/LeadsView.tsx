@@ -17,6 +17,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
+import { cn } from "@/lib/utils";
 
 type BulkMode = "replace" | "sum";
 
@@ -94,6 +96,8 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
       return a.name.localeCompare(b.name);
     });
   }, [leadsData]);
+
+  const groupedLeadsData = useMemo(() => groupByTeam(sortedLeadsData), [sortedLeadsData]);
 
   const scale = useMemo(() => {
     const n = sortedLeadsData.length;
@@ -301,16 +305,29 @@ export const LeadsView = ({ tvMode = false }: { tvMode?: boolean }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {sortedLeadsData.map((member) => (
-          <TeamMemberCard
-            key={member.id}
-            member={member}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-            scale={scale}
-            readOnly={tvMode}
-          />
+      <div className="space-y-6">
+        {groupedLeadsData.map(({ group, items }) => (
+          <div key={group}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={cn("text-xs font-semibold px-3 py-1 rounded-full border", TEAM_GROUP_BADGE_COLORS[group])}>
+                {group}
+              </span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+              {items.map((member) => (
+                <TeamMemberCard
+                  key={member.id}
+                  member={member}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                  scale={scale}
+                  readOnly={tvMode}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
