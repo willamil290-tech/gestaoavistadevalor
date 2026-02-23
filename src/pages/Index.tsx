@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Settings2 } from "lucide-react";
+import { LayoutDashboard, Phone, PhoneCall, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Settings2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -11,6 +11,7 @@ import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/Agendad
 import { TendenciaDiaView } from "@/components/TendenciaDiaView";
 import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
 import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
+import { ChamadasView } from "@/components/ChamadasView";
 import { ExcelBorderoImporter } from "@/components/ExcelBorderoImporter";
 import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,7 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix";
+type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix" | "chamadas";
 
 const TV_TABS_STORAGE_KEY = "tvTabs";
 const DEFAULT_TV_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
@@ -589,6 +590,7 @@ const Index = () => {
         { id: "acionamentos" as const, label: "Acionamentos", icon: Phone, color: "bg-secondary" },
     { id: "acionamento-detalhado" as const, label: "Detalhado", icon: List, color: "bg-secondary" },
     { id: "tendencia" as const, label: "Tendência", icon: TrendingUp, color: "bg-accent" },
+    { id: "chamadas" as const, label: "Chamadas", icon: PhoneCall, color: "bg-blue-500" },
     { id: "bitrix" as const, label: "Bitrix", icon: BarChart3, color: "bg-primary" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
   ];
@@ -740,6 +742,9 @@ const Index = () => {
               onTrendUpdate={setTrendData}
               onDetailedUpdate={handleDetailedUpdate}
             />
+          )}
+          {activeTab === "chamadas" && (
+            <ChamadasView tvMode={tvMode} />
           )}
           {activeTab === "bitrix" && (
             <BitrixLogsAnalyzerView tvMode={tvMode} onApplyToDashboard={applyBitrixReportToSite} />
