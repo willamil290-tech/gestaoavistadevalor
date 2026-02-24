@@ -429,7 +429,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   {peopleByTeam.map(({ group, names }) => (
                     <th
                       key={group}
-                      colSpan={names.length * 3}
+                      colSpan={names.length * 4}
                       className={cn("text-center px-2 py-1.5 font-semibold border-b border-r border-border/50 text-xs", TEAM_HEADER_COLORS[group])}
                     >
                       {group}
@@ -442,19 +442,20 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                 {/* Tier 2: Person names with sub-columns */}
                 <tr className="bg-muted/30">
                   {allPeople.map((name) => (
-                    <th key={name} colSpan={3} className="text-center px-1 py-1.5 font-medium text-foreground border-b border-r border-border/50 whitespace-nowrap">
+                    <th key={name} colSpan={4} className="text-center px-1 py-1.5 font-medium text-foreground border-b border-r border-border/50 whitespace-nowrap">
                       {firstName(name)}
                     </th>
                   ))}
                 </tr>
-                {/* Tier 3: Sub-column labels (📞 TMO S/L) */}
+                {/* Tier 3: Sub-column labels (📞 ✅ ❌ TMO) */}
                 <tr className="bg-muted/20">
                   {allPeople.map((name) => (
-                    <th key={`${name}-sub`} colSpan={3} className="border-b border-r border-border/30 p-0">
-                      <div className="grid grid-cols-3 divide-x divide-border/30">
-                        <span className="px-1 py-1 text-center text-[10px] text-blue-500 font-medium" title="Ligações">📞</span>
+                    <th key={`${name}-sub`} colSpan={4} className="border-b border-r border-border/30 p-0">
+                      <div className="grid grid-cols-4 divide-x divide-border/30">
+                        <span className="px-1 py-1 text-center text-[10px] text-blue-500 font-medium" title="Total de ligações">📞</span>
+                        <span className="px-1 py-1 text-center text-[10px] text-green-500 font-medium" title="Bem sucedidas">✅</span>
+                        <span className="px-1 py-1 text-center text-[10px] text-red-500 font-medium" title="Não atendidas">❌</span>
                         <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="TMO — Tempo médio entre ligações">TMO</span>
-                        <span className="px-1 py-1 text-center text-[10px] text-red-500 font-medium" title="S/L — Tempo sem ligar">S/L</span>
                       </div>
                     </th>
                   ))}
@@ -491,26 +492,29 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                         const m = dayMap?.get(name);
                         if (!m) {
                           return (
-                            <td key={name} colSpan={3} className="text-center px-1 py-2 text-muted-foreground/30 border-r border-border/30">
+                            <td key={name} colSpan={4} className="text-center px-1 py-2 text-muted-foreground/30 border-r border-border/30">
                               —
                             </td>
                           );
                         }
                         return (
-                          <td key={name} colSpan={3} className="border-r border-border/30 p-0">
+                          <td key={name} colSpan={4} className="border-r border-border/30 p-0">
                             <button
                               onClick={() => openDrill(name, day)}
-                              className="w-full grid grid-cols-3 divide-x divide-border/20 hover:bg-blue-500/10 transition-colors cursor-pointer"
-                              title={`${name} — Dia ${parseInt(d)}: ${m.totalCalls} lig, TMO ${formatTime(m.tmoSeconds)}, S/L ${formatTime(m.slSeconds)}`}
+                              className="w-full grid grid-cols-4 divide-x divide-border/20 hover:bg-blue-500/10 transition-colors cursor-pointer"
+                              title={`${name} — Dia ${parseInt(d)}: ${m.totalCalls} lig, ${m.answeredCalls} bem sucedidas, ${m.canceledCalls} não atendidas, TMO ${formatTime(m.tmoSeconds)}`}
                             >
                               <span className="px-1 py-2 text-center font-semibold text-blue-600 dark:text-blue-400 tabular-nums">
                                 {m.totalCalls}
                               </span>
+                              <span className="px-1 py-2 text-center tabular-nums font-medium text-green-600 dark:text-green-400">
+                                {m.answeredCalls}
+                              </span>
+                              <span className="px-1 py-2 text-center tabular-nums font-medium text-red-600 dark:text-red-400">
+                                {m.canceledCalls}
+                              </span>
                               <span className={cn("px-1 py-2 text-center tabular-nums font-medium", tmoColor(m.tmoSeconds))}>
                                 {formatTimeShort(m.tmoSeconds)}
-                              </span>
-                              <span className={cn("px-1 py-2 text-center tabular-nums font-medium", slColor(m.slSeconds))}>
-                                {formatTimeShort(m.slSeconds)}
                               </span>
                             </button>
                           </td>
@@ -533,19 +537,22 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   {allPeople.map((name) => {
                     const pm = monthMetrics.find((m) => m.name === name);
                     if (!pm) {
-                      return <td key={name} colSpan={3} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                      return <td key={name} colSpan={4} className="text-center px-1 py-2 border-r border-border/30">—</td>;
                     }
                     return (
-                      <td key={name} colSpan={3} className="border-r border-border/30 p-0">
-                        <div className="grid grid-cols-3 divide-x divide-border/20">
+                      <td key={name} colSpan={4} className="border-r border-border/30 p-0">
+                        <div className="grid grid-cols-4 divide-x divide-border/20">
                           <span className="px-1 py-2 text-center font-bold text-blue-600 dark:text-blue-400 tabular-nums">
                             {pm.totalCalls}
                           </span>
-                          <span className={cn("px-1 py-2 text-center tabular-nums", tmoColor(pm.avgTmoSeconds))}>
-                            {formatTimeShort(pm.avgTmoSeconds)}
+                          <span className="px-1 py-2 text-center tabular-nums font-bold text-green-600 dark:text-green-400">
+                            {pm.answeredCalls}
                           </span>
-                          <span className={cn("px-1 py-2 text-center tabular-nums", slColor(pm.totalSlSeconds))}>
-                            {formatTimeShort(pm.totalSlSeconds)}
+                          <span className="px-1 py-2 text-center tabular-nums font-bold text-red-600 dark:text-red-400">
+                            {pm.canceledCalls}
+                          </span>
+                          <span className={cn("px-1 py-2 text-center tabular-nums font-bold", tmoColor(pm.avgTmoSeconds))}>
+                            {formatTimeShort(pm.avgTmoSeconds)}
                           </span>
                         </div>
                       </td>
@@ -607,11 +614,6 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                       <Timer className="w-3.5 h-3.5" /> TMO
                     </div>
                   </th>
-                  <th className="text-center px-3 py-3 font-medium text-muted-foreground">
-                    <div className="flex items-center justify-center gap-1" title="Tempo total em que a pessoa não estava ligando">
-                      <Clock className="w-3.5 h-3.5" /> S/L
-                    </div>
-                  </th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">1ª Lig.</th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">Última</th>
                 </tr>
@@ -641,7 +643,6 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                       <td className="px-3 py-3 text-center"><span className="font-semibold text-red-500">{m.canceledCalls}</span></td>
                       <td className="px-3 py-3 text-center"><span className="font-semibold">{formatTime(m.totalDurationSeconds)}</span></td>
                       <td className="px-3 py-3 text-center"><span className={cn("font-semibold", tmoColor(m.tmoSeconds))}>{formatTime(m.tmoSeconds)}</span></td>
-                      <td className="px-3 py-3 text-center"><span className={cn("font-semibold", slColor(m.slSeconds))}>{formatTime(m.slSeconds)}</span></td>
                       <td className="px-3 py-3 text-center text-xs text-muted-foreground">{m.firstCallTime}</td>
                       <td className="px-3 py-3 text-center text-xs text-muted-foreground">{m.lastCallTime}</td>
                     </tr>
@@ -697,9 +698,9 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   {" · "}
                   <span className="text-green-500 font-medium">{drillDialog.metrics.answeredCalls} atend</span>
                   {" · "}
-                  TMO: <span className={cn("font-medium", tmoColor(drillDialog.metrics.tmoSeconds))}>{formatTime(drillDialog.metrics.tmoSeconds)}</span>
+                  <span className="text-red-500 font-medium">{drillDialog.metrics.canceledCalls} não atend</span>
                   {" · "}
-                  S/L: <span className={cn("font-medium", slColor(drillDialog.metrics.slSeconds))}>{formatTime(drillDialog.metrics.slSeconds)}</span>
+                  TMO: <span className={cn("font-medium", tmoColor(drillDialog.metrics.tmoSeconds))}>{formatTime(drillDialog.metrics.tmoSeconds)}</span>
                 </>
               )}
             </DialogDescription>
