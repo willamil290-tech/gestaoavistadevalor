@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { isDailyEventsEnabled, listDailyEvents, listTeamMembers } from "@/lib/persistence";
-import { getBusinessDate } from "@/lib/businessDate";
+import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import { ChartContainer } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,8 @@ interface AcionamentosViewProps {
   onTrendUpdate?: (data: HourlyTrend[]) => void;
   onBulkUpdate?: (entries: BulkEntry[]) => void;
   onDetailedUpdate?: (entries: DetailedEntry[]) => void;
+  saveDate?: string;
+  onSaveDateChange?: (date: string) => void;
 }
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
@@ -53,6 +55,8 @@ export const AcionamentosView = ({
   onTrendUpdate,
   onBulkUpdate,
   onDetailedUpdate,
+  saveDate: saveDateProp,
+  onSaveDateChange,
 }: AcionamentosViewProps) => {
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "empresas" | "leads">("geral");
   const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -93,6 +97,7 @@ export const AcionamentosView = ({
 
   // Geral tab data: combine empresas + leads
   const businessDate = getBusinessDate();
+  const effectiveSaveDate = saveDateProp ?? businessDate;
   const empresasRemote = useTeamMembers("empresas");
   const leadsRemote = useTeamMembers("leads");
   const [expandedGeral, setExpandedGeral] = useState<Set<string>>(new Set());
@@ -150,20 +155,20 @@ export const AcionamentosView = ({
     setGeralMonthData(loadJson<GeralMonthData>(key, {}));
   }, [geralYear, geralMonth]);
 
-  // Auto-save today's geral data to monthly storage
+  // Auto-save geral data to monthly storage using the selected reference date
   useEffect(() => {
     if (geralData.length === 0) return;
     const hasNonZero = geralData.some(g => g.total > 0);
     if (!hasNonZero) return;
-    const [y, m] = businessDate.split("-");
+    const [y, m] = effectiveSaveDate.split("-");
     const key = `acionGeral:${y}-${m}`;
     const stored = loadJson<GeralMonthData>(key, {});
-    stored[businessDate] = geralData.map(g => ({ name: g.name, empresas: g.empresas, leads: g.leads }));
+    stored[effectiveSaveDate] = geralData.map(g => ({ name: g.name, empresas: g.empresas, leads: g.leads }));
     saveJson(key, stored);
     if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
-      setGeralMonthData(prev => ({ ...prev, [businessDate]: stored[businessDate] }));
+      setGeralMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
     }
-  }, [geralData, businessDate]);
+  }, [geralData, effectiveSaveDate]);
 
   const prevGeralMonth = () => {
     if (geralMonth === 1) { setGeralMonth(12); setGeralYear(y => y - 1); }
@@ -364,6 +369,33 @@ export const AcionamentosView = ({
           Acionamentos
         </h2>
       </div>
+
+      {/* Date picker for reference date */}
+      {!tvMode && (
+        <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-border bg-card mb-4">
+          <CalendarDays className="w-5 h-5 text-muted-foreground" />
+          <label className="text-sm font-medium text-muted-foreground whitespace-nowrap">Data de referência:</label>
+          <input
+            type="date"
+            value={effectiveSaveDate}
+            onChange={(e) => onSaveDateChange?.(e.target.value)}
+            className="bg-muted text-foreground text-sm rounded-lg px-3 py-2 border border-border focus:ring-2 focus:ring-secondary outline-none"
+          />
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" onClick={() => onSaveDateChange?.(getYesterdayBusinessDate())}>
+              Ontem
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onSaveDateChange?.(businessDate)}>
+              Hoje
+            </Button>
+          </div>
+          {effectiveSaveDate !== businessDate && (
+            <span className="text-xs text-amber-500 font-medium">
+              ⚠ Dados serão salvos para {effectiveSaveDate.split("-").reverse().join("/")}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Bulk paste for updating */}
       {!tvMode && (

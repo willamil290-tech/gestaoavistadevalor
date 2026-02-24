@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { getBusinessDate } from "@/lib/businessDate";
+import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
 import type { PersonEventDetail } from "@/lib/bitrixLogs";
 
 export interface AcionamentoCategoria {
@@ -34,6 +34,8 @@ interface AcionamentoDetalhadoViewProps {
   readOnly?: boolean;
   tvMode?: boolean;
   personEventDetails?: PersonEventDetail[];
+  saveDate?: string;
+  onSaveDateChange?: (date: string) => void;
 }
 
 export const defaultCategorias = ["ETAPA_ALTERADA", "ATIVIDADE_CRIADA", "STATUS_ATIVIDADE_ALTERADA", "CHAMADA_TELEFONICA", "OUTROS"];
@@ -64,6 +66,8 @@ export const AcionamentoDetalhadoView = ({
   readOnly = false,
   tvMode = false,
   personEventDetails = [],
+  saveDate: saveDateProp,
+  onSaveDateChange,
 }: AcionamentoDetalhadoViewProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<ColaboradorAcionamento | null>(null);
@@ -196,6 +200,7 @@ export const AcionamentoDetalhadoView = ({
   // -- Monthly table state --
   const todayDate = new Date();
   const businessDate = getBusinessDate();
+  const effectiveSaveDate = saveDateProp ?? businessDate;
   const [detYear, setDetYear] = useState(todayDate.getFullYear());
   const [detMonth, setDetMonth] = useState(todayDate.getMonth() + 1);
   const [detMonthData, setDetMonthData] = useState<DetMonthData>({});
@@ -209,19 +214,19 @@ export const AcionamentoDetalhadoView = ({
     if (sortedColaboradores.length === 0) return;
     const hasNonZero = sortedColaboradores.some(c => c.total > 0);
     if (!hasNonZero) return;
-    const [y, m] = businessDate.split("-");
+    const [y, m] = effectiveSaveDate.split("-");
     const key = `acionDet:${y}-${m}`;
     const stored = loadJson<DetMonthData>(key, {});
-    stored[businessDate] = sortedColaboradores.map(c => ({
+    stored[effectiveSaveDate] = sortedColaboradores.map(c => ({
       name: c.name,
       total: c.total,
       categorias: c.categorias.map(cat => ({ tipo: cat.tipo, quantidade: cat.quantidade })),
     }));
     saveJson(key, stored);
     if (parseInt(y) === detYear && parseInt(m) === detMonth) {
-      setDetMonthData(prev => ({ ...prev, [businessDate]: stored[businessDate] }));
+      setDetMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
     }
-  }, [sortedColaboradores, businessDate]);
+  }, [sortedColaboradores, effectiveSaveDate]);
 
   const prevDetMonth = () => {
     if (detMonth === 1) { setDetMonth(12); setDetYear(y => y - 1); }
@@ -329,6 +334,33 @@ export const AcionamentoDetalhadoView = ({
           Acionamento Detalhado
         </h2>
       </div>
+
+      {/* Date picker for reference date */}
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-border bg-card mb-4">
+          <CalendarDays className="w-5 h-5 text-muted-foreground" />
+          <label className="text-sm font-medium text-muted-foreground whitespace-nowrap">Data de referência:</label>
+          <input
+            type="date"
+            value={effectiveSaveDate}
+            onChange={(e) => onSaveDateChange?.(e.target.value)}
+            className="bg-muted text-foreground text-sm rounded-lg px-3 py-2 border border-border focus:ring-2 focus:ring-secondary outline-none"
+          />
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" onClick={() => onSaveDateChange?.(getYesterdayBusinessDate())}>
+              Ontem
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onSaveDateChange?.(businessDate)}>
+              Hoje
+            </Button>
+          </div>
+          {effectiveSaveDate !== businessDate && (
+            <span className="text-xs text-amber-500 font-medium">
+              ⚠ Dados serão salvos para {effectiveSaveDate.split("-").reverse().join("/")}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Month picker */}
       <div className="flex items-center justify-center gap-4 mb-6">

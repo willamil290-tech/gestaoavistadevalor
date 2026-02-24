@@ -132,6 +132,33 @@ const Index = () => {
   const [faixas, setFaixas] = useState(initialFaixas);
   const [clientes, setClientes] = useState<ClienteBordero[]>([]);
   
+  // Data de referência para acionamentos (default = hoje)
+  const [acionSaveDate, setAcionSaveDate] = useState(getBusinessDate());
+
+  const handleAcionSaveDateChange = (newDate: string) => {
+    const oldDate = acionSaveDate;
+    if (oldDate === newDate) return;
+
+    // Move dados do localStorage: remove do dia antigo para não ficar duplicado
+    const [oy, om] = oldDate.split("-");
+    const geralKey = `acionGeral:${oy}-${om}`;
+    const geralStored = loadJson<Record<string, any>>(geralKey, {});
+    if (geralStored[oldDate]) {
+      delete geralStored[oldDate];
+      saveJson(geralKey, geralStored);
+    }
+
+    const detKey = `acionDet:${oy}-${om}`;
+    const detStored = loadJson<Record<string, any>>(detKey, {});
+    if (detStored[oldDate]) {
+      delete detStored[oldDate];
+      saveJson(detKey, detStored);
+    }
+
+    setAcionSaveDate(newDate);
+    toast.success(`Data de referência alterada para ${newDate.split("-").reverse().join("/")}`);
+  };
+
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
   const [trendStorageKey] = useState(() => `trendData:${getBusinessDate()}`);
@@ -731,9 +758,9 @@ const Index = () => {
               onAtingidoDiaChange={(v) => { const old = atingidoDia; setAtingidoDia(v); if (isSupabaseConfigured) { remoteSettings.updateAsync({ atingidoDia: v }); if (v - old !== 0) insertDailyEvent({ businessDate: getBusinessDate(), scope: "bordero", kind: "single", deltaBorderoDia: v - old }); } }}
             />
           )}
-                    {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} />}
+                    {activeTab === "acionamentos" && <AcionamentosView tvMode={tvMode} onDetailedUpdate={handleDetailedUpdate} saveDate={acionSaveDate} onSaveDateChange={handleAcionSaveDateChange} />}
           {activeTab === "acionamento-detalhado" && (
-            <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} personEventDetails={personEventDetails} />
+            <AcionamentoDetalhadoView colaboradores={acionamentoDetalhado} onUpdate={(c) => setAcionamentoDetalhado((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onAdd={() => setAcionamentoDetalhado((prev) => [...prev, { id: `ad_${Date.now()}`, name: "Novo", total: 0, categorias: defaultCategorias.map((t) => ({ tipo: t, quantidade: 0 })) }])} onDelete={(id) => setAcionamentoDetalhado((prev) => prev.filter((x) => x.id !== id))} readOnly={readOnly} tvMode={tvMode} personEventDetails={personEventDetails} saveDate={acionSaveDate} onSaveDateChange={handleAcionSaveDateChange} />
           )}
           {activeTab === "tendencia" && (
             <TendenciaDiaView 
