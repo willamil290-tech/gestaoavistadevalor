@@ -312,8 +312,8 @@ function workDaySeconds(dateISO: string): number {
  *
  * TMO (Tempo Morto / Ocioso):
  *   1) Soma o tempo total em ligação
- *   2) Calcula a janela de trabalho (da 1ª ligação até o fim da última)
- *   3) TMO = janela − tempo em ligação = tempo perdido
+ *   2) Expediente: Seg-Qui 9h (08-12 + 13-18), Sex 8h (08-12 + 13-17)
+ *   3) TMO = expediente − tempo em ligação = tempo perdido/ocioso
  *
  * Quanto menor o TMO, mais produtivo o colaborador.
  */
@@ -347,20 +347,17 @@ export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] 
     let tmoSeconds: number | null = null;
     let slSeconds: number | null = null;
 
-    // S/L = expediente do dia − tempo em ligação
+    // Expediente: Seg-Qui 9h, Sex 8h
     const wds = workDaySeconds(date);
+
+    // S/L = expediente do dia − tempo em ligação
     if (wds > 0) {
       slSeconds = Math.max(0, wds - totalDurationSeconds);
     }
 
-    if (sorted.length >= 2) {
-      // TMO = janela de trabalho (1ª ligação → fim da última) menos tempo em ligação
-      const firstStart = sorted[0].dateTime.getTime() / 1000;
-      const lastEnd = sorted[sorted.length - 1].dateTime.getTime() / 1000 + sorted[sorted.length - 1].durationSeconds;
-      const windowSeconds = lastEnd - firstStart;
-      tmoSeconds = Math.max(0, windowSeconds - totalDurationSeconds);
-    } else if (sorted.length === 1) {
-      tmoSeconds = null;
+    // TMO = expediente total − tempo em ligação = tempo ocioso
+    if (wds > 0) {
+      tmoSeconds = Math.max(0, wds - totalDurationSeconds);
     }
 
     metrics.push({
