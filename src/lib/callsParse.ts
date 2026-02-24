@@ -60,10 +60,15 @@ function isDurationLine(line: string): boolean {
 }
 
 /**
- * Verifica se uma linha parece ser uma data no formato DD/MM/AAAA HH:MM
+ * Verifica se uma linha parece ser uma data.
+ * Aceita: DD/MM/AAAA HH:MM | ontem, HH:MM | hoje, HH:MM | DD.MM.AAAA, HH:MM
  */
 function isDateLine(line: string): boolean {
-  return /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(line.trim());
+  const l = line.trim();
+  if (/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(l)) return true;
+  if (/^(ontem|hoje|anteontem),?\s*\d{2}:\d{2}$/i.test(l)) return true;
+  if (/^\d{2}\.\d{2}\.\d{4},?\s*\d{2}:\d{2}$/.test(l)) return true;
+  return false;
 }
 
 /**
@@ -93,10 +98,17 @@ function isStatusLine(line: string): boolean {
     l === "temporariamente indisponível" ||
     l === "sem resposta" ||
     l === "ocupado" ||
+    l === "número inválido" ||
+    l === "numero invalido" ||
     l.startsWith("bem sucedida") ||
     l.startsWith("cancelad") ||
     l.startsWith("sem resposta") ||
-    l.startsWith("ocupad")
+    l.startsWith("ocupad") ||
+    l.startsWith("número inválido") ||
+    l.startsWith("numero invalido") ||
+    l.startsWith("esta rota") ||
+    l.startsWith("rota indisponível") ||
+    l.startsWith("rota indisponivel")
   );
 }
 
@@ -109,18 +121,37 @@ function isContactLine(line: string): boolean {
 }
 
 /**
- * Faz o parse de uma data DD/MM/AAAA HH:MM
+ * Faz o parse de uma data DD/MM/AAAA HH:MM | ontem, HH:MM | hoje, HH:MM | DD.MM.AAAA, HH:MM
  */
-function parseDate(text: string): Date {
-  const m = text.trim().match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-  if (!m) return new Date();
-  return new Date(
-    parseInt(m[3]),
-    parseInt(m[2]) - 1,
-    parseInt(m[1]),
-    parseInt(m[4]),
-    parseInt(m[5])
-  );
+function parseDate(text: string, referenceDate?: Date): Date {
+  const t = text.trim();
+  const ref = referenceDate ?? new Date();
+
+  // DD/MM/AAAA HH:MM
+  const m1 = t.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if (m1) {
+    return new Date(parseInt(m1[3]), parseInt(m1[2]) - 1, parseInt(m1[1]), parseInt(m1[4]), parseInt(m1[5]));
+  }
+
+  // DD.MM.AAAA, HH:MM
+  const m2 = t.match(/(\d{2})\.(\d{2})\.(\d{4}),?\s*(\d{2}):(\d{2})/);
+  if (m2) {
+    return new Date(parseInt(m2[3]), parseInt(m2[2]) - 1, parseInt(m2[1]), parseInt(m2[4]), parseInt(m2[5]));
+  }
+
+  // ontem, HH:MM | hoje, HH:MM | anteontem, HH:MM
+  const mRel = t.match(/^(ontem|hoje|anteontem),?\s*(\d{2}):(\d{2})$/i);
+  if (mRel) {
+    const d = new Date(ref);
+    const keyword = mRel[1].toLowerCase();
+    if (keyword === "ontem") d.setDate(d.getDate() - 1);
+    else if (keyword === "anteontem") d.setDate(d.getDate() - 2);
+    // "hoje" = sem deslocamento
+    d.setHours(parseInt(mRel[2]), parseInt(mRel[3]), 0, 0);
+    return d;
+  }
+
+  return new Date();
 }
 
 function pad2(n: number) {
@@ -165,7 +196,8 @@ export function parseCallsText(text: string): ParsedCall[] {
       lines[i] === "-" ||
       lines[i].startsWith("Padrão") ||
       lines[i].startsWith("Aplicar") ||
-      lines[i].startsWith("Selecionar")
+      lines[i].startsWith("Selecionar") ||
+      /^Padr.o\s+Aplicar/i.test(lines[i])
     ) {
       i++;
       continue;
