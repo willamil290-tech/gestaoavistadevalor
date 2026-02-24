@@ -283,7 +283,7 @@ export interface PersonDayCallMetrics {
   answeredCalls: number;
   canceledCalls: number;
   totalDurationSeconds: number;
-  /** TMO: tempo médio entre ligações, descontando duração da ligação (em segundos) */
+  /** TMO: tempo ocioso total = janela de trabalho (1ª à última ligação) menos tempo em ligação (em segundos) */
   tmoSeconds: number | null;
   /** S/L: tempo total em que a pessoa NÃO estava ligando (em segundos) */
   slSeconds: number | null;
@@ -310,13 +310,12 @@ function workDaySeconds(dateISO: string): number {
 /**
  * Calcula as métricas de chamadas por pessoa e por dia.
  *
- * TMO = tempo médio entre o fim de uma ligação e o início da próxima.
- *        Para cada par consecutivo de chamadas (ordenadas cronologicamente):
- *        gap = (início da próxima) - (fim da anterior, que é início + duração)
- *        TMO = média dos gaps positivos
+ * TMO (Tempo Morto / Ocioso):
+ *   1) Soma o tempo total em ligação
+ *   2) Calcula a janela de trabalho (da 1ª ligação até o fim da última)
+ *   3) TMO = janela − tempo em ligação = tempo perdido
  *
- * S/L = total de horas úteis do expediente menos o tempo gasto em ligações.
- *       Seg-Qui 9 h, Sex 8 h (descontado almoço).
+ * Quanto menor o TMO, mais produtivo o colaborador.
  */
 export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] {
   // Agrupar por pessoa + dia
@@ -355,19 +354,11 @@ export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] 
     }
 
     if (sorted.length >= 2) {
-      // Calcular gaps entre ligações (TMO)
-      const gaps: number[] = [];
-      for (let i = 0; i < sorted.length - 1; i++) {
-        const endCurrent = sorted[i].dateTime.getTime() / 1000 + sorted[i].durationSeconds;
-        const startNext = sorted[i + 1].dateTime.getTime() / 1000;
-        const gap = startNext - endCurrent;
-        if (gap >= 0) {
-          gaps.push(gap);
-        }
-      }
-      if (gaps.length > 0) {
-        tmoSeconds = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-      }
+      // TMO = janela de trabalho (1ª ligação → fim da última) menos tempo em ligação
+      const firstStart = sorted[0].dateTime.getTime() / 1000;
+      const lastEnd = sorted[sorted.length - 1].dateTime.getTime() / 1000 + sorted[sorted.length - 1].durationSeconds;
+      const windowSeconds = lastEnd - firstStart;
+      tmoSeconds = Math.max(0, windowSeconds - totalDurationSeconds);
     } else if (sorted.length === 1) {
       tmoSeconds = null;
     }
@@ -405,7 +396,7 @@ export interface PersonMonthCallMetrics {
   answeredCalls: number;
   canceledCalls: number;
   totalDurationSeconds: number;
-  /** TMO médio ponderado dos dias (em segundos) */
+  /** TMO médio dos dias (em segundos) */
   avgTmoSeconds: number | null;
   /** S/L soma total de todos os dias */
   totalSlSeconds: number | null;
