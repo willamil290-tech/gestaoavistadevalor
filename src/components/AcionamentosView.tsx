@@ -184,9 +184,11 @@ export const AcionamentosView = ({
 
   const geralAllPeople = useMemo(() => {
     const nameSet = new Set<string>();
+    const excluded = ["Bianca", "Karina", "Nayad"];
     for (const dayData of Object.values(geralMonthData)) {
       for (const person of dayData) {
-        if (!isIgnoredCommercial(person.name)) nameSet.add(person.name);
+        const firstName = person.name.split(" ")[0];
+        if (!isIgnoredCommercial(person.name) && !excluded.includes(firstName)) nameSet.add(person.name);
       }
     }
     const names = Array.from(nameSet);
@@ -461,12 +463,12 @@ export const AcionamentosView = ({
                           </th>
                         ))}
                       </tr>
-                      {/* Tier 3: Emp / Lead */}
+                      {/* Tier 3: Negóc / Lead */}
                       <tr className="bg-muted/20">
                         {geralAllPeople.map(name => (
                           <th key={`${name}-sub`} colSpan={2} className="border-b border-r border-border/30 p-0">
                             <div className="grid grid-cols-2 divide-x divide-border/30">
-                              <span className="px-1 py-1 text-center text-[10px] text-secondary font-medium" title="Empresas">Emp</span>
+                              <span className="px-1 py-1 text-center text-[10px] text-secondary font-medium" title="Negócios">Negóc</span>
                               <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="Leads">Lead</span>
                             </div>
                           </th>
