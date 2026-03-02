@@ -455,7 +455,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                         <span className="px-1 py-1 text-center text-[10px] text-blue-500 font-medium" title="Total de ligações">📞</span>
                         <span className="px-1 py-1 text-center text-[10px] text-green-500 font-medium" title="Bem sucedidas">✅</span>
                         <span className="px-1 py-1 text-center text-[10px] text-red-500 font-medium" title="Não atendidas">❌</span>
-                        <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="TMO — Tempo médio entre ligações">TMO</span>
+                        <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="Tempo falado em ligações">Falado</span>
                       </div>
                     </th>
                   ))}
@@ -502,7 +502,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                             <button
                               onClick={() => openDrill(name, day)}
                               className="w-full grid grid-cols-4 divide-x divide-border/20 hover:bg-blue-500/10 transition-colors cursor-pointer"
-                              title={`${name} — Dia ${parseInt(d)}: ${m.totalCalls} lig, ${m.answeredCalls} bem sucedidas, ${m.canceledCalls} não atendidas, TMO ${formatTime(m.tmoSeconds)}`}
+                              title={`${name} — Dia ${parseInt(d)}: ${m.totalCalls} lig, ${m.answeredCalls} bem sucedidas, ${m.canceledCalls} não atendidas, Falado ${formatTime(m.totalDurationSeconds)}`}
                             >
                               <span className="px-1 py-2 text-center font-semibold text-blue-600 dark:text-blue-400 tabular-nums">
                                 {m.totalCalls}
@@ -513,8 +513,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                               <span className="px-1 py-2 text-center tabular-nums font-medium text-red-600 dark:text-red-400">
                                 {m.canceledCalls}
                               </span>
-                              <span className={cn("px-1 py-2 text-center tabular-nums font-medium", tmoColor(m.tmoSeconds))}>
-                                {formatTimeShort(m.tmoSeconds)}
+                              <span className="px-1 py-2 text-center tabular-nums font-medium text-amber-600 dark:text-amber-400">
+                                {formatTimeShort(m.totalDurationSeconds)}
                               </span>
                             </button>
                           </td>
@@ -551,8 +551,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                           <span className="px-1 py-2 text-center tabular-nums font-bold text-red-600 dark:text-red-400">
                             {pm.canceledCalls}
                           </span>
-                          <span className={cn("px-1 py-2 text-center tabular-nums font-bold", tmoColor(pm.avgTmoSeconds))}>
-                            {formatTimeShort(pm.avgTmoSeconds)}
+                          <span className="px-1 py-2 text-center tabular-nums font-bold text-amber-600 dark:text-amber-400">
+                            {formatTimeShort(pm.totalDurationSeconds)}
                           </span>
                         </div>
                       </td>
@@ -610,8 +610,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">Canc.</th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">Duração</th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">
-                    <div className="flex items-center justify-center gap-1" title="Tempo médio entre cada ligação, desconsiderando o tempo em que estava em ligação">
-                      <Timer className="w-3.5 h-3.5" /> TMO
+                    <div className="flex items-center justify-center gap-1" title="Tempo total falado em ligações">
+                      <Timer className="w-3.5 h-3.5" /> Falado
                     </div>
                   </th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">1ª Lig.</th>
@@ -642,7 +642,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                       <td className="px-3 py-3 text-center"><span className="font-semibold text-green-500">{m.answeredCalls}</span></td>
                       <td className="px-3 py-3 text-center"><span className="font-semibold text-red-500">{m.canceledCalls}</span></td>
                       <td className="px-3 py-3 text-center"><span className="font-semibold">{formatTime(m.totalDurationSeconds)}</span></td>
-                      <td className="px-3 py-3 text-center"><span className={cn("font-semibold", tmoColor(m.tmoSeconds))}>{formatTime(m.tmoSeconds)}</span></td>
+                      <td className="px-3 py-3 text-center"><span className="font-semibold text-amber-600 dark:text-amber-400">{formatTime(m.totalDurationSeconds)}</span></td>
                       <td className="px-3 py-3 text-center text-xs text-muted-foreground">{m.firstCallTime}</td>
                       <td className="px-3 py-3 text-center text-xs text-muted-foreground">{m.lastCallTime}</td>
                     </tr>
@@ -700,7 +700,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   {" · "}
                   <span className="text-red-500 font-medium">{drillDialog.metrics.canceledCalls} não atend</span>
                   {" · "}
-                  TMO: <span className={cn("font-medium", tmoColor(drillDialog.metrics.tmoSeconds))}>{formatTime(drillDialog.metrics.tmoSeconds)}</span>
+                  Falado: <span className="font-medium text-amber-600 dark:text-amber-400">{formatTime(drillDialog.metrics.totalDurationSeconds)}</span>
                 </>
               )}
             </DialogDescription>
