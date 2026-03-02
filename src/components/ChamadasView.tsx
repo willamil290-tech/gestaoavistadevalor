@@ -455,7 +455,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                         <span className="px-1 py-1 text-center text-[10px] text-blue-500 font-medium" title="Total de ligações">📞</span>
                         <span className="px-1 py-1 text-center text-[10px] text-green-500 font-medium" title="Bem sucedidas">✅</span>
                         <span className="px-1 py-1 text-center text-[10px] text-red-500 font-medium" title="Não atendidas">❌</span>
-                        <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="Tempo total em ligação">Temp. Lig.</span>
+                        <span className="px-1 py-1 text-center text-[10px] text-amber-500 font-medium" title="Tempo total em ligação">Ligando</span>
                       </div>
                     </th>
                   ))}
@@ -611,7 +611,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">Duração</th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">
                     <div className="flex items-center justify-center gap-1" title="Tempo total falado em ligações">
-                      <Timer className="w-3.5 h-3.5" /> Temp. Lig.
+                      <Timer className="w-3.5 h-3.5" /> Ligando
                     </div>
                   </th>
                   <th className="text-center px-3 py-3 font-medium text-muted-foreground">1ª Lig.</th>
@@ -700,7 +700,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   {" · "}
                   <span className="text-red-500 font-medium">{drillDialog.metrics.canceledCalls} não atend</span>
                   {" · "}
-                  Temp. Lig.: <span className="font-medium text-amber-600 dark:text-amber-400">{formatTime(drillDialog.metrics.totalDurationSeconds)}</span>
+                  Ligando: <span className="font-medium text-amber-600 dark:text-amber-400">{formatTime(drillDialog.metrics.totalDurationSeconds)}</span>
                 </>
               )}
             </DialogDescription>
