@@ -88,6 +88,29 @@ const Index = () => {
   const qc = useQueryClient();
   const showUndo = useUndoToast();
 
+  // ── One-time migration: copy acionamento data from 2026-03-04 to 2026-03-03 ──
+  useEffect(() => {
+    const migKey = "migration:copy-day4-to-day3-done";
+    if (localStorage.getItem(migKey)) return;
+
+    const geralKey = "acionGeral:2026-03";
+    const detKey = "acionDet:2026-03";
+
+    const geral = loadJson<Record<string, any>>(geralKey, {});
+    const det = loadJson<Record<string, any>>(detKey, {});
+
+    if (geral["2026-03-04"]) {
+      geral["2026-03-03"] = geral["2026-03-04"];
+      saveJson(geralKey, geral);
+    }
+    if (det["2026-03-04"]) {
+      det["2026-03-03"] = det["2026-03-04"];
+      saveJson(detKey, det);
+    }
+
+    localStorage.setItem(migKey, "1");
+  }, []);
+
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const tvFromUrl = params.get("tv") === "1";
   const [tvMode, setTvMode] = useState(() => tvFromUrl || localStorage.getItem("tvMode") === "1");
