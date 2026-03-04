@@ -36,9 +36,10 @@ function genId(prefix = "emp") {
   return u ? String(u) : `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
+export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMode?: boolean; saveDate?: string; onHistoricalSave?: () => void }) => {
   const remote = useTeamMembers("empresas");
   const businessDate = getBusinessDate();
+  const isHistorical = saveDate ? saveDate !== businessDate : false;
   const localKey = `teamMembers:${businessDate}:empresas`;
   const [teamData, setTeamData] = useState<TeamMember[]>(() => {
     if (isSupabaseConfigured) return initialTeamData;
@@ -173,6 +174,41 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       return;
     }
 
+    // Historical mode: save to localStorage monthly table instead of Supabase
+    if (isHistorical && saveDate) {
+      const [y, m] = saveDate.split("-");
+      const gKey = `acionGeral:${y}-${m}`;
+      const stored = loadJson<Record<string, { name: string; empresas: number; leads: number }[]>>(gKey, {});
+      const dayData = stored[saveDate] ?? [];
+      const existingMap = new Map<string, { name: string; empresas: number; leads: number }>();
+      for (const d of dayData) existingMap.set(normalizeNameKey(d.name), d);
+
+      for (const e of entries) {
+        const parsed = parseNameTag(e.name);
+        if (parsed.hasTag && parsed.category === null) continue;
+        if (parsed.category && parsed.category !== "empresas") continue;
+        const baseName = parsed.baseName;
+        if (isIgnoredCommercial(baseName)) continue;
+        const nk = normalizeNameKey(baseName);
+        const existing = existingMap.get(nk);
+        const total = e.morning + e.afternoon;
+        if (existing) {
+          existing.empresas = bulkMode === "sum" ? existing.empresas + total : total;
+        } else {
+          existingMap.set(nk, { name: baseName, empresas: total, leads: 0 });
+        }
+      }
+
+      stored[saveDate] = Array.from(existingMap.values());
+      saveJson(gKey, stored);
+
+      setBulkOpen(false);
+      setBulkText("");
+      toast.success(`Empresas atualizadas para ${saveDate.split("-").reverse().join("/")}!`);
+      onHistoricalSave?.();
+      return;
+    }
+
     // snapshot para desfazer
     const beforeLocal = teamData.map((m) => ({ ...m }));
     const beforeRemote = (remote.data ?? []).map((m) => ({ ...m }));
@@ -288,6 +324,12 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
 
   return (
     <div className="animate-fade-in-up">
+      {isHistorical && saveDate && (
+        <div className="p-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-sm mb-4 flex items-center gap-2">
+          <span>⚠</span>
+          <span>Modo histórico (<strong>{saveDate.split("-").reverse().join("/")}</strong>): use "Colar texto" para salvar dados no histórico mensal.</span>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-secondary" />
@@ -301,10 +343,12 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
               Colar texto
             </Button>
 
-            <Button onClick={handleAdd} className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-xl">
-              <Plus className="w-5 h-5 mr-2" />
-              <span className="hidden md:inline">Adicionar</span>
-            </Button>
+            {!isHistorical && (
+              <Button onClick={handleAdd} className="bg-secondary hover:bg-secondary/90 text-secondary-foreground rounded-xl">
+                <Plus className="w-5 h-5 mr-2" />
+                <span className="hidden md:inline">Adicionar</span>
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -327,7 +371,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
                   onUpdate={handleUpdate}
                   onDelete={handleDelete}
                   scale={scale}
-                  readOnly={tvMode}
+                  readOnly={tvMode || isHistorical}
                 />
               ))}
             </div>
@@ -338,7 +382,7 @@ export const EmpresasView = ({ tvMode = false }: { tvMode?: boolean }) => {
       <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Atualização rápida (Empresas)</DialogTitle>
+            <DialogTitle>Atualização rápida (Empresas){isHistorical && saveDate ? ` — ${saveDate.split("-").reverse().join("/")}` : ""}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">

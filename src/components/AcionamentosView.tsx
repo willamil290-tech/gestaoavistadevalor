@@ -155,9 +155,12 @@ export const AcionamentosView = ({
     setGeralMonthData(loadJson<GeralMonthData>(key, {}));
   }, [geralYear, geralMonth]);
 
-  // Auto-save geral data to monthly storage using the selected reference date
+  // Auto-save geral data to monthly storage — only when the reference date is
+  // today's business date so that viewing historical dates never overwrites past data
+  // with the current live values.
   useEffect(() => {
     if (geralData.length === 0) return;
+    if (effectiveSaveDate !== businessDate) return; // ← guard: historical dates are read-only for auto-save
     const hasNonZero = geralData.some(g => g.total > 0);
     if (!hasNonZero) return;
     const [y, m] = effectiveSaveDate.split("-");
@@ -168,7 +171,7 @@ export const AcionamentosView = ({
     if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
       setGeralMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
     }
-  }, [geralData, effectiveSaveDate]);
+  }, [geralData, effectiveSaveDate, businessDate]);
 
   const prevGeralMonth = () => {
     if (geralMonth === 1) { setGeralMonth(12); setGeralYear(y => y - 1); }
@@ -177,6 +180,45 @@ export const AcionamentosView = ({
   const nextGeralMonth = () => {
     if (geralMonth === 12) { setGeralMonth(1); setGeralYear(y => y + 1); }
     else setGeralMonth(m => m + 1);
+  };
+
+  const refreshGeralMonth = () => {
+    setGeralMonthData(loadJson<GeralMonthData>(`acionGeral:${geralYear}-${pad2(geralMonth)}`, {}));
+  };
+
+  // ── Helper: save parsed data for a single date into localStorage (merge) ──
+  const saveGeralForDate = (dateISO: string, entries: BulkEntry[]) => {
+    const [y, m] = dateISO.split("-");
+    const key = `acionGeral:${y}-${m}`;
+    const stored = loadJson<GeralMonthData>(key, {});
+    const dayData: GeralDayPerson[] = entries.map(e => ({
+      name: e.name, empresas: e.morning, leads: e.afternoon,
+    }));
+    const existingDay = stored[dateISO] ?? [];
+    const incoming = new Set(dayData.map(d => d.name.trim().toLowerCase()));
+    stored[dateISO] = [...dayData, ...existingDay.filter(p => !incoming.has(p.name.trim().toLowerCase()))];
+    saveJson(key, stored);
+    return { y, m, stored, dateISO };
+  };
+
+  const saveDetForDate = (dateISO: string, detailedEntries: DetailedEntry[]) => {
+    const [y, m] = dateISO.split("-");
+    const detKey = `acionDet:${y}-${m}`;
+    const detStored = loadJson<Record<string, any[]>>(detKey, {});
+    const detDayData = detailedEntries.map(e => ({
+      name: e.name, total: e.total,
+      categorias: [
+        { tipo: "ETAPA_ALTERADA", quantidade: e.etapaAlterada },
+        { tipo: "ATIVIDADE_CRIADA", quantidade: e.atividadeCriada },
+        { tipo: "STATUS_ATIVIDADE_ALTERADA", quantidade: e.statusAlterada },
+        { tipo: "CHAMADA_TELEFONICA", quantidade: e.chamadaTelefonica },
+        { tipo: "OUTROS", quantidade: e.outros },
+      ],
+    }));
+    const existingDet = detStored[dateISO] ?? [];
+    const incomingDet = new Set(detDayData.map(d => d.name.trim().toLowerCase()));
+    detStored[dateISO] = [...detDayData, ...existingDet.filter((p: any) => !incomingDet.has(p.name?.trim().toLowerCase()))];
+    saveJson(detKey, detStored);
   };
 
   // -- Table data from monthly storage --
@@ -327,25 +369,32 @@ export const AcionamentosView = ({
   }, [tvMode]);
 
   const handleBulkPaste = async (text: string) => {
-    // Parse all three types from the text
-    const sections = text.split(/\(\d+\)\s+RESUMO/i);
-    
-    // Hourly trend
-    const trendMatch = text.match(/Acionamentos por hora[^\n]*\n([\s\S]*?)(?=\(\d\)|$)/i);
-    if (trendMatch) {
-      const trendEntries = parseHourlyTrend(trendMatch[1]);
-      if (trendEntries.length > 0) {
-        setManualTrendData(trendEntries);
-        onTrendUpdate?.(trendEntries);
+    const isHistorical = effectiveSaveDate !== businessDate;
+
+    // Hourly trend (only relevant for today)
+    if (!isHistorical) {
+      const trendMatch = text.match(/Acionamentos por hora[^\n]*\n([\s\S]*?)(?=\(\d\)|$)/i);
+      if (trendMatch) {
+        const trendEntries = parseHourlyTrend(trendMatch[1]);
+        if (trendEntries.length > 0) {
+          setManualTrendData(trendEntries);
+          onTrendUpdate?.(trendEntries);
+        }
       }
     }
 
     // Basic entries (morning/afternoon)
     const basicMatch = text.match(/RESUMO NUMÉRICO[^\n]*\n([\s\S]*?)(?=\(\d\)\s+RESUMO|$)/i);
-    if (basicMatch) {
-      const entries = parseBulkTeamText(basicMatch[1]);
-      if (entries.length > 0) {
-        onBulkUpdate?.(entries);
+    const basicEntries = parseBulkTeamText(basicMatch ? basicMatch[1] : text);
+
+    if (basicEntries.length > 0) {
+      if (isHistorical) {
+        const { y, m, stored } = saveGeralForDate(effectiveSaveDate, basicEntries);
+        if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
+          setGeralMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
+        }
+      } else {
+        onBulkUpdate?.(basicEntries);
       }
     }
 
@@ -354,11 +403,27 @@ export const AcionamentosView = ({
     if (detailedMatch) {
       const detailedEntries = parseDetailedAcionamento(detailedMatch[1]);
       if (detailedEntries.length > 0) {
-        onDetailedUpdate?.(detailedEntries);
+        if (isHistorical) {
+          saveDetForDate(effectiveSaveDate, detailedEntries);
+        } else {
+          onDetailedUpdate?.(detailedEntries);
+        }
       }
     }
 
-    toast.success("Dados de acionamento atualizados!");
+    const savedBasic = basicEntries.length > 0;
+    const savedDetailed = detailedMatch ? parseDetailedAcionamento(detailedMatch[1]).length > 0 : false;
+
+    if (!savedBasic && !savedDetailed) {
+      toast.error("Nenhum dado encontrado no texto colado. Verifique o formato.");
+      return;
+    }
+
+    toast.success(
+      isHistorical
+        ? `Dados históricos salvos para ${effectiveSaveDate.split("-").reverse().join("/")}!`
+        : "Dados de acionamento atualizados!"
+    );
   };
 
   const showDailyEventsHint = isSupabaseConfigured && !isDailyEventsEnabled();
@@ -531,11 +596,11 @@ export const AcionamentosView = ({
         </TabsContent>
 
         <TabsContent value="empresas">
-          <EmpresasView tvMode={tvMode} />
+          <EmpresasView tvMode={tvMode} saveDate={effectiveSaveDate} onHistoricalSave={refreshGeralMonth} />
         </TabsContent>
 
         <TabsContent value="leads">
-          <LeadsView tvMode={tvMode} />
+          <LeadsView tvMode={tvMode} saveDate={effectiveSaveDate} onHistoricalSave={refreshGeralMonth} />
         </TabsContent>
       </Tabs>
     </div>
