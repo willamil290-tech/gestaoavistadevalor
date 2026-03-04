@@ -597,6 +597,45 @@ const Index = () => {
     try {
       if (isSupabaseConfigured) await remoteExtras.updateAsync({ acionamentoDetalhado: detailed as any });
     } catch {}
+
+    // 4) Salvar dados na tabela mensal de Acionamento Geral (acionGeral) e Detalhado (acionDet)
+    {
+      const [y, m] = businessDate.split("-");
+
+      // ── acionGeral: empresas + leads unificados por comercial ──
+      const geralKey = `acionGeral:${y}-${m}`;
+      const geralStored = loadJson<Record<string, { name: string; empresas: number; leads: number }[]>>(geralKey, {});
+      const geralMap = new Map<string, { name: string; empresas: number; leads: number }>();
+      // Preserve existing data for other people on this date
+      for (const d of geralStored[businessDate] ?? []) {
+        geralMap.set(normalizeNameKeyLoose(d.name), d);
+      }
+      for (const r of bitrix.uniqueResumo) {
+        if (isIgnoredCommercial(r.comercial)) continue;
+        const key = normalizeNameKeyLoose(r.comercial);
+        const existing = geralMap.get(key);
+        const empTotal = r.entityType === "NEGÓCIO" ? r.morning + r.afternoon : 0;
+        const leadTotal = r.entityType === "LEAD" ? r.morning + r.afternoon : 0;
+        if (existing) {
+          existing.empresas = existing.empresas + empTotal;
+          existing.leads = existing.leads + leadTotal;
+        } else {
+          geralMap.set(key, { name: r.comercial, empresas: empTotal, leads: leadTotal });
+        }
+      }
+      geralStored[businessDate] = Array.from(geralMap.values());
+      saveJson(geralKey, geralStored);
+
+      // ── acionDet: detalhado por comercial ──
+      const detKey = `acionDet:${y}-${m}`;
+      const detStored = loadJson<Record<string, any[]>>(detKey, {});
+      detStored[businessDate] = detailed.map((d) => ({
+        name: d.name,
+        total: d.total,
+        categorias: d.categorias.map((c) => ({ tipo: c.tipo, quantidade: c.quantidade })),
+      }));
+      saveJson(detKey, detStored);
+    }
   };
 
   const readOnly = tvMode;
