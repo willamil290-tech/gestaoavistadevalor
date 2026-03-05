@@ -16,8 +16,9 @@ import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 function pad2(n: number) { return String(n).padStart(2, "0"); }
 
@@ -302,6 +303,41 @@ export const AcionamentosView = ({
 
   const geralFirstName = (name: string) => name.split(" ")[0];
 
+  // -- Events drill-down dialog state --
+  const [eventsDialog, setEventsDialog] = useState<{
+    open: boolean;
+    title: string;
+    items: { empresa: string; tipo: string; hora: string }[];
+  }>({ open: false, title: "", items: [] });
+
+  const openGeralCellEvents = (name: string, day: string, filter?: "EMPRESA" | "LEAD") => {
+    const stored = loadJson<any[]>(`bitrixEvents:${day}`, []);
+    if (!stored || stored.length === 0) {
+      toast.info("Sem logs de eventos salvos para este dia.");
+      return;
+    }
+    const norm = name.toLowerCase().trim();
+    const detail = stored.find(
+      (d: any) => d.comercial?.toLowerCase().trim() === norm ||
+        d.comercial?.toLowerCase().split(" ")[0] === norm.split(" ")[0]
+    );
+    if (!detail) {
+      toast.info(`Nenhum evento encontrado para ${name} neste dia.`);
+      return;
+    }
+    let items: { empresa: string; tipo: string; hora: string }[];
+    if (filter === "EMPRESA") {
+      items = (detail.uniqueEmpresas ?? []).map((e: any) => ({ empresa: e.empresa, tipo: "Negócio", hora: e.timeHHMM }));
+    } else if (filter === "LEAD") {
+      items = (detail.uniqueLeads ?? []).map((e: any) => ({ empresa: e.empresa, tipo: "Lead", hora: e.timeHHMM }));
+    } else {
+      items = (detail.events ?? []).map((e: any) => ({ empresa: e.empresa, tipo: e.entityType, hora: e.timeHHMM }));
+    }
+    const [, m, d] = day.split("-");
+    const label = filter === "EMPRESA" ? "Negócios" : filter === "LEAD" ? "Leads" : "Todos";
+    setEventsDialog({ open: true, title: `${name} — ${d}/${m} — ${label}`, items });
+  };
+
   const toggleExpand = (name: string) => {
     setExpandedGeral((prev) => {
       const next = new Set(prev);
@@ -557,10 +593,16 @@ export const AcionamentosView = ({
                               );
                               return (
                                 <td key={name} colSpan={2} className="border-r border-border/30 p-0">
-                                  <div className="grid grid-cols-2 divide-x divide-border/20">
-                                    <span className="px-1 py-2 text-center font-semibold text-secondary tabular-nums">{m.empresas}</span>
-                                    <span className="px-1 py-2 text-center font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{m.leads}</span>
-                                  </div>
+                                  <button
+                                    onClick={() => openGeralCellEvents(name, day)}
+                                    className="w-full hover:bg-secondary/10 transition-colors cursor-pointer"
+                                    title={`${name} — Dia ${parseInt(d)}: clique para ver logs`}
+                                  >
+                                    <div className="grid grid-cols-2 divide-x divide-border/20">
+                                      <span className="px-1 py-2 text-center font-semibold text-secondary tabular-nums">{m.empresas}</span>
+                                      <span className="px-1 py-2 text-center font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{m.leads}</span>
+                                    </div>
+                                  </button>
                                 </td>
                               );
                             })}
@@ -603,6 +645,28 @@ export const AcionamentosView = ({
           <LeadsView tvMode={tvMode} saveDate={effectiveSaveDate} onHistoricalSave={refreshGeralMonth} />
         </TabsContent>
       </Tabs>
+
+      {/* Events drill-down dialog */}
+      <Dialog open={eventsDialog.open} onOpenChange={(open) => setEventsDialog((prev) => ({ ...prev, open }))}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{eventsDialog.title}</DialogTitle>
+            <DialogDescription>{eventsDialog.items.length} registro(s) encontrado(s)</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 mt-2">
+            {eventsDialog.items.length === 0 && (
+              <p className="text-muted-foreground text-sm text-center py-4">Nenhum registro encontrado.</p>
+            )}
+            {eventsDialog.items.map((item, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/30 text-sm">
+                <span className="truncate flex-1 font-medium">{item.empresa}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{item.tipo}</span>
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">{item.hora}</span>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -317,13 +317,27 @@ export const AcionamentoDetalhadoView = ({
     day: string;
     total: number;
     categorias: { tipo: string; quantidade: number }[];
-  }>({ open: false, name: "", day: "", total: 0, categorias: [] });
+    events: { empresa: string; tipo: string; hora: string; actionCategory: string }[];
+  }>({ open: false, name: "", day: "", total: 0, categorias: [], events: [] });
 
   const openCellDetail = (name: string, day: string) => {
     const dayMap = detDataLookup.get(day);
     const data = dayMap?.get(name);
     if (!data) return;
-    setCellDetail({ open: true, name, day, total: data.total, categorias: data.categorias });
+    // Carregar eventos do localStorage
+    const stored = loadJson<any[]>(`bitrixEvents:${day}`, []);
+    const norm = name.toLowerCase().trim();
+    const detail = stored?.find(
+      (d: any) => d.comercial?.toLowerCase().trim() === norm ||
+        d.comercial?.toLowerCase().split(" ")[0] === norm.split(" ")[0]
+    );
+    const events = detail?.events?.map((e: any) => ({
+      empresa: e.empresa,
+      tipo: e.entityType,
+      hora: e.timeHHMM,
+      actionCategory: e.actionCategory ?? "",
+    })) ?? [];
+    setCellDetail({ open: true, name, day, total: data.total, categorias: data.categorias, events });
   };
 
   return (
@@ -460,7 +474,7 @@ export const AcionamentoDetalhadoView = ({
 
       {/* Cell detail dialog */}
       <Dialog open={cellDetail.open} onOpenChange={(open) => setCellDetail(prev => ({ ...prev, open }))}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{cellDetail.name}</DialogTitle>
             <DialogDescription>
@@ -479,6 +493,23 @@ export const AcionamentoDetalhadoView = ({
               </div>
             ))}
           </div>
+          {cellDetail.events.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Eventos ({cellDetail.events.length})</p>
+              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                {cellDetail.events.map((ev, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-muted/20 text-xs">
+                    <span className="truncate flex-1 font-medium">{ev.empresa}</span>
+                    <span className="text-muted-foreground shrink-0">{formatCategoryLabel(ev.actionCategory)}</span>
+                    <span className="text-muted-foreground shrink-0 tabular-nums">{ev.hora}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {cellDetail.events.length === 0 && (
+            <p className="text-xs text-muted-foreground mt-3">Sem logs de eventos salvos para este dia.</p>
+          )}
         </DialogContent>
       </Dialog>
 

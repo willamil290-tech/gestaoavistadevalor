@@ -630,10 +630,7 @@ const Index = () => {
       const geralKey = `acionGeral:${y}-${m}`;
       const geralStored = loadJson<Record<string, { name: string; empresas: number; leads: number }[]>>(geralKey, {});
       const geralMap = new Map<string, { name: string; empresas: number; leads: number }>();
-      // Preserve existing data for other people on this date
-      for (const d of geralStored[businessDate] ?? []) {
-        geralMap.set(normalizeNameKeyLoose(d.name), d);
-      }
+      // Sobrescrever: NÃO carrega dados anteriores da mesma data — começa do zero
       for (const r of bitrix.uniqueResumo) {
         if (isIgnoredCommercial(r.comercial)) continue;
         const key = normalizeNameKeyLoose(r.comercial);
@@ -659,6 +656,25 @@ const Index = () => {
         categorias: d.categorias.map((c) => ({ tipo: c.tipo, quantidade: c.quantidade })),
       }));
       saveJson(detKey, detStored);
+    }
+
+    // 5) Salvar personEventDetails no localStorage por data (para drill-down posterior)
+    {
+      const eventsToSave = (bitrix.personEventDetails ?? []).map((p) => ({
+        comercial: p.comercial,
+        events: p.events.map((e) => ({
+          entityType: e.entityType,
+          empresa: e.empresa,
+          comercial: e.comercial,
+          actionLine: e.actionLine,
+          actionCategory: e.actionCategory,
+          timeHHMM: e.timeHHMM,
+          hour: e.hour,
+        })),
+        uniqueEmpresas: p.uniqueEmpresas,
+        uniqueLeads: p.uniqueLeads,
+      }));
+      saveJson(`bitrixEvents:${businessDate}`, eventsToSave);
     }
   };
 
