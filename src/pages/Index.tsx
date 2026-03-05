@@ -519,7 +519,8 @@ const Index = () => {
   };
 
   // Apply Bitrix Analyzer result directly into the site (tendência + acionamentos + detalhado)
-  const applyBitrixReportToSite = async (bitrix: BitrixReport) => {
+  const applyBitrixReportToSite = async (bitrix: BitrixReport, targetDate?: string) => {
+    const businessDate = targetDate ?? getBusinessDate();
     // 1) Tendência por hora
     const newTrend: HourlyTrend[] = Object.keys(bitrix.hourlyCounts)
       .map((h) => Number(h))
@@ -540,7 +541,7 @@ const Index = () => {
       byCategory[category].push({ name: r.comercial, morning: r.morning, afternoon: r.afternoon });
     }
 
-    const businessDate = getBusinessDate();
+    // businessDate já definido acima via targetDate
 
     // Local-only fallback (sem Supabase): salva para as views lerem quando abrir a aba
     if (!isSupabaseConfigured) {

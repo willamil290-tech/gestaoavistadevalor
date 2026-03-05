@@ -3,10 +3,13 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { parseAndBuildBitrixReport, type BitrixReport } from "@/lib/bitrixLogs";
 import { cn } from "@/lib/utils";
+import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
+
+type TargetDateOption = "hoje" | "ontem";
 
 type Props = {
   tvMode?: boolean;
-  onApplyToDashboard?: (report: BitrixReport) => Promise<void> | void;
+  onApplyToDashboard?: (report: BitrixReport, targetDate: string) => Promise<void> | void;
 };
 
 function normalizeHHMM(input: string) {
@@ -21,6 +24,7 @@ function normalizeHHMM(input: string) {
 export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
+  const [targetDateOption, setTargetDateOption] = useState<TargetDateOption>("hoje");
   const [currentTime, setCurrentTime] = useState("");
   const [negociosText, setNegociosText] = useState("");
   const [leadsText, setLeadsText] = useState("");
@@ -33,8 +37,11 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const canGoStep3 = useMemo(() => negociosText.trim().length > 0, [negociosText]);
   const canGenerate = useMemo(() => leadsText.trim().length > 0, [leadsText]);
 
+  const resolvedTargetDate = targetDateOption === "ontem" ? getYesterdayBusinessDate() : getBusinessDate();
+
   const resetAll = () => {
     setStep(1);
+    setTargetDateOption("hoje");
     setCurrentTime("");
     setNegociosText("");
     setLeadsText("");
@@ -83,9 +90,9 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     // Aplica automaticamente no dashboard, se estiver disponível
     if (onApplyToDashboard) {
       try {
-        await onApplyToDashboard(res.report);
+        await onApplyToDashboard(res.report, resolvedTargetDate);
         setApplied(true);
-        toast.success("Relatório aplicado no dashboard");
+        toast.success(`Relatório aplicado no dashboard (${targetDateOption === "ontem" ? "ontem" : "hoje"}: ${resolvedTargetDate})`);
       } catch (e: any) {
         toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
       }
@@ -128,7 +135,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
       {/* ETAPA 1 */}
       <div className="rounded-2xl border border-border bg-card p-4 md:p-6">
         <div className="text-sm font-medium mb-2">ETAPA 1</div>
-        <div className="text-base font-semibold mb-3">Me informe o horário atual para prosseguir com a análise.</div>
+        <div className="text-base font-semibold mb-3">Me informe o horário atual e a data de destino para prosseguir.</div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
           <div className="w-full sm:max-w-[220px]">
@@ -140,6 +147,40 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
               className="mt-1 w-full rounded-xl border border-border bg-muted/30 px-3 py-2 outline-none focus:ring-2 focus:ring-secondary"
               disabled={step !== 1}
             />
+          </div>
+          <div className="w-full sm:max-w-[220px]">
+            <label className="text-xs text-muted-foreground">Data de destino no dashboard</label>
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                  targetDateOption === "hoje"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/30 border-border hover:bg-muted/50"
+                )}
+                onClick={() => setTargetDateOption("hoje")}
+                disabled={step !== 1}
+              >
+                Hoje
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                  targetDateOption === "ontem"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/30 border-border hover:bg-muted/50"
+                )}
+                onClick={() => setTargetDateOption("ontem")}
+                disabled={step !== 1}
+              >
+                Ontem
+              </button>
+            </div>
+            <span className="text-xs text-muted-foreground mt-1 block">
+              Salvará em: {resolvedTargetDate}
+            </span>
           </div>
           <Button className="rounded-xl" onClick={confirmTime} disabled={step !== 1 || !canGoStep2}>
             Confirmar horário
@@ -213,9 +254,9 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
                       return;
                     }
                     try {
-                      await onApplyToDashboard(res2.report);
+                      await onApplyToDashboard(res2.report, resolvedTargetDate);
                       setApplied(true);
-                      toast.success("Relatório aplicado no dashboard");
+                      toast.success(`Relatório aplicado no dashboard (${targetDateOption === "ontem" ? "ontem" : "hoje"}: ${resolvedTargetDate})`);
                     } catch (e: any) {
                       toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
                     }
