@@ -5,7 +5,7 @@ import { parseAndBuildBitrixReport, type BitrixReport } from "@/lib/bitrixLogs";
 import { cn } from "@/lib/utils";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
 
-type TargetDateOption = "hoje" | "ontem";
+type TargetDateOption = "hoje" | "ontem" | "custom";
 
 type Props = {
   tvMode?: boolean;
@@ -25,6 +25,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [targetDateOption, setTargetDateOption] = useState<TargetDateOption>("hoje");
+  const [customDate, setCustomDate] = useState(getBusinessDate());
   const [currentTime, setCurrentTime] = useState("");
   const [negociosText, setNegociosText] = useState("");
   const [leadsText, setLeadsText] = useState("");
@@ -37,11 +38,16 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const canGoStep3 = useMemo(() => negociosText.trim().length > 0, [negociosText]);
   const canGenerate = useMemo(() => leadsText.trim().length > 0, [leadsText]);
 
-  const resolvedTargetDate = targetDateOption === "ontem" ? getYesterdayBusinessDate() : getBusinessDate();
+  const resolvedTargetDate = targetDateOption === "ontem"
+    ? getYesterdayBusinessDate()
+    : targetDateOption === "custom"
+      ? customDate
+      : getBusinessDate();
 
   const resetAll = () => {
     setStep(1);
     setTargetDateOption("hoje");
+    setCustomDate(getBusinessDate());
     setCurrentTime("");
     setNegociosText("");
     setLeadsText("");
@@ -92,7 +98,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
       try {
         await onApplyToDashboard(res.report, resolvedTargetDate);
         setApplied(true);
-        toast.success(`Relatório aplicado no dashboard (${targetDateOption === "ontem" ? "ontem" : "hoje"}: ${resolvedTargetDate})`);
+        toast.success(`Relatório aplicado no dashboard (${resolvedTargetDate})`);
       } catch (e: any) {
         toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
       }
@@ -148,9 +154,9 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
               disabled={step !== 1}
             />
           </div>
-          <div className="w-full sm:max-w-[220px]">
+          <div className="w-full sm:max-w-[340px]">
             <label className="text-xs text-muted-foreground">Data de destino no dashboard</label>
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 flex flex-wrap gap-2">
               <button
                 type="button"
                 className={cn(
@@ -177,7 +183,29 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
               >
                 Ontem
               </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
+                  targetDateOption === "custom"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/30 border-border hover:bg-muted/50"
+                )}
+                onClick={() => setTargetDateOption("custom")}
+                disabled={step !== 1}
+              >
+                Outra data
+              </button>
             </div>
+            {targetDateOption === "custom" && (
+              <input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-secondary"
+                disabled={step !== 1}
+              />
+            )}
             <span className="text-xs text-muted-foreground mt-1 block">
               Salvará em: {resolvedTargetDate}
             </span>
@@ -256,7 +284,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
                     try {
                       await onApplyToDashboard(res2.report, resolvedTargetDate);
                       setApplied(true);
-                      toast.success(`Relatório aplicado no dashboard (${targetDateOption === "ontem" ? "ontem" : "hoje"}: ${resolvedTargetDate})`);
+                      toast.success(`Relatório aplicado no dashboard (${resolvedTargetDate})`);
                     } catch (e: any) {
                       toast.error(e?.message ? String(e.message) : "Falha ao aplicar no dashboard");
                     }
