@@ -262,7 +262,6 @@ export function parseDashboardBulk(text: string): DashboardBulkData | null {
 
   // Commercial names patterns (flexible)
   const commercialPatterns = [
-    { rx: /Rodrigo\s+Mariani(?:\s+Ferreira)?\s+([\d.,]+)/i, name: "Rodrigo" },
     { rx: /Luciane\s+Mariani(?:\s+Ferreira)?\s+([\d.,]+)/i, name: "Luciane" },
     { rx: /Alessandra(?:\s+da\s+Cunha)?\s+Youssef\s+([\d.,]+)/i, name: "Alessandra" },
     { rx: /Raissa\s+Flor(?:\s+Chaves)?\s+([\d.,]+)/i, name: "Raissa" },

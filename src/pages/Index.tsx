@@ -55,7 +55,6 @@ const initialCommercials: Commercial[] = [
   { id: "c2", name: "Luciane", currentValue: 0, goal: 100000, group: "executivo" },
   { id: "c3", name: "Raissa", currentValue: 0, goal: 100000, group: "executivo" },
   { id: "c4", name: "Alessandra", currentValue: 0, goal: 100000, group: "executivo" },
-  { id: "c5", name: "Rodrigo", currentValue: 0, goal: 100000, group: "executivo" },
   { id: "c6", name: "Bruna", currentValue: 0, goal: 50000, group: "cs" },
 ];
 

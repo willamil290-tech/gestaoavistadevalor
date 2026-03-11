@@ -13,7 +13,6 @@ export function getTeamGroup(name: string): TeamGroup {
   if (["alana", "vanessa", "william"].includes(firstName)) return "SDRs";
   if (["samara", "gisele"].includes(firstName)) return "Closers";
   if (firstName === "bruna") return "CS";
-  if (firstName === "rodrigo") return "Grandes Contas";
   return "Executivos";
 }
 

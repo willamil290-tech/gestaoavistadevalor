@@ -118,7 +118,6 @@ export const DEFAULT_EMPRESAS: TeamMember[] = [
   { id: "1", category: "empresas", name: "Alessandra Youssef", morning: 29, afternoon: 0 },
   { id: "2", category: "empresas", name: "Luciane Mariani", morning: 23, afternoon: 0 },
   { id: "3", category: "empresas", name: "Samara de Ramos", morning: 9, afternoon: 0 },
-  { id: "4", category: "empresas", name: "Rodrigo Mariani", morning: 4, afternoon: 0 },
   { id: "5", category: "empresas", name: "Bruna Domingos", morning: 3, afternoon: 0 },
   { id: "6", category: "empresas", name: "Raissa Flor", morning: 1, afternoon: 0 },
 ];

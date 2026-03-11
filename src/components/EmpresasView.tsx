@@ -26,7 +26,6 @@ const initialTeamData: TeamMember[] = [
   { id: "1", name: "Alessandra Youssef", total: 29, morning: 29, afternoon: 0 },
   { id: "2", name: "Luciane Mariani", total: 23, morning: 23, afternoon: 0 },
   { id: "3", name: "Samara de Ramos", total: 9, morning: 9, afternoon: 0 },
-  { id: "4", name: "Rodrigo Mariani", total: 4, morning: 4, afternoon: 0 },
   { id: "5", name: "Bruna Domingos", total: 3, morning: 3, afternoon: 0 },
   { id: "6", name: "Raissa Flor", total: 1, morning: 1, afternoon: 0 },
 ];
