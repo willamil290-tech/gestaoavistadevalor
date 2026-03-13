@@ -10,7 +10,7 @@ export function getTeamGroup(name: string): TeamGroup {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  if (["alana", "vanessa", "william"].includes(firstName)) return "SDRs";
+  if (["alana", "vanessa", "william", "maria"].includes(firstName)) return "SDRs";
   if (["samara", "gisele"].includes(firstName)) return "Closers";
   if (firstName === "bruna") return "CS";
   return "Executivos";
