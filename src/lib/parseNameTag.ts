@@ -1,3 +1,5 @@
+import { canonicalizeCollaboratorName } from "./collaboratorNames";
+
 export type NameTagCategory = "empresas" | "leads" | null;
 
 export type ParsedNameTag = {
@@ -41,9 +43,9 @@ export function parseNameTag(input: string): ParsedNameTag {
   // Matches: <name> <sep> <tag>
   // Note: " - " requires spaces on both sides by using /\s-\s/.
   const m = raw.match(/^(.*?)\s*(?:—|–|--|\s-\s)\s*(.+)$/);
-  if (!m) return { baseName: raw, hasTag: false, category: null };
+  if (!m) return { baseName: canonicalizeCollaboratorName(raw), hasTag: false, category: null };
 
-  const baseName = (m[1] ?? "").trim() || raw;
+  const baseName = canonicalizeCollaboratorName((m[1] ?? "").trim() || raw);
   const tagRaw = (m[2] ?? "").trim();
   if (!tagRaw) return { baseName, hasTag: false, category: null };
 

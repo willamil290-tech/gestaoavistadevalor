@@ -21,6 +21,7 @@ import { useDashboardExtras } from "@/hooks/useDashboardExtras";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { DEFAULT_SETTINGS, getLastActivityIso, insertDailyEvent, listTeamMembers, resetDayCounters, updateDashboardSettings, upsertTeamMember } from "@/lib/persistence";
 import { formatDateTimeBR, getBusinessDate } from "@/lib/businessDate";
+import { canonicalizeCollaboratorName, collaboratorNameKey } from "@/lib/collaboratorNames";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,7 +35,7 @@ import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import type { ExcelImportResult } from "@/lib/excelImport";
 
 function normalizeNameKeyLoose(name: string) {
-  return name.toLowerCase().replace(/\s+/g, " ").trim();
+  return collaboratorNameKey(name);
 }
 
 function pad2(n: number) {
@@ -82,6 +83,25 @@ const initialAgendadasDia: AgendadaRealizada[] = [
   { label: "Manhã", agendadas: 0, realizadas: 0 },
   { label: "Tarde", agendadas: 0, realizadas: 0 },
 ];
+
+function normalizeCommercialsList(items: Commercial[]) {
+  return items.map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name) }));
+}
+
+function normalizeAcionamentoDetalhadoList(items: ColaboradorAcionamento[]) {
+  return items.map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name) }));
+}
+
+function normalizePersonEventDetailsList(items: PersonEventDetail[]) {
+  return items.map((item) => ({
+    ...item,
+    comercial: canonicalizeCollaboratorName(item.comercial),
+    events: item.events.map((event) => ({
+      ...event,
+      comercial: canonicalizeCollaboratorName(event.comercial),
+    })),
+  }));
+}
 
 const Index = () => {
   const qc = useQueryClient();
@@ -207,10 +227,10 @@ const Index = () => {
 
     const ex = remoteExtras.data;
 
-    if (Array.isArray(ex.commercials) && ex.commercials.length) setCommercials(ex.commercials as any);
+    if (Array.isArray(ex.commercials) && ex.commercials.length) setCommercials(normalizeCommercialsList(ex.commercials as any));
     if (Array.isArray(ex.faixas) && ex.faixas.length) setFaixas(ex.faixas as any);
     if (Array.isArray(ex.clientes) && ex.clientes.length) setClientes(ex.clientes as any);
-    if (Array.isArray(ex.acionamentoDetalhado) && ex.acionamentoDetalhado.length) setAcionamentoDetalhado(ex.acionamentoDetalhado as any);
+    if (Array.isArray(ex.acionamentoDetalhado) && ex.acionamentoDetalhado.length) setAcionamentoDetalhado(normalizeAcionamentoDetalhadoList(ex.acionamentoDetalhado as any));
     if (Array.isArray(ex.agendadasMes) && ex.agendadasMes.length) setAgendadasMes(ex.agendadasMes as any);
     if (Array.isArray(ex.agendadasDia) && ex.agendadasDia.length) setAgendadasDia(ex.agendadasDia as any);
     if (Array.isArray((ex as any).trendData) && (ex as any).trendData.length) setTrendData((ex as any).trendData as any);
@@ -537,7 +557,7 @@ const Index = () => {
     for (const r of bitrix.uniqueResumo) {
       if (isIgnoredCommercial(r.comercial)) continue;
       const category = r.entityType === "NEGÓCIO" ? "empresas" : "leads";
-      byCategory[category].push({ name: r.comercial, morning: r.morning, afternoon: r.afternoon });
+      byCategory[category].push({ name: canonicalizeCollaboratorName(r.comercial), morning: r.morning, afternoon: r.afternoon });
     }
 
     // businessDate já definido acima via targetDate
@@ -599,14 +619,15 @@ const Index = () => {
     const detailed = bitrix.actionResumo
       .filter((r) => !isIgnoredCommercial(r.comercial))
       .map((r) => {
+      const normalizedName = canonicalizeCollaboratorName(r.comercial);
       const total = defaultCategorias.reduce((sum, k) => sum + Number((r.counts as any)[k] ?? 0), 0);
       const match = acionamentoDetalhado.find(
-        (x) => normalizeName(x.name) === normalizeName(r.comercial) || normalizeName(x.name) === normalizeName(r.comercial.split(" ")[0])
+        (x) => normalizeName(x.name) === normalizeName(normalizedName) || normalizeName(x.name) === normalizeName(normalizedName.split(" ")[0])
       );
       const metrics = callMetricsMap.get(normalizeNameKeyLoose(r.comercial));
       return {
-        id: match?.id ?? `ad_${normalizeNameKeyLoose(r.comercial).replace(/[^a-z0-9]+/g, "_")}`,
-        name: r.comercial,
+        id: match?.id ?? `ad_${normalizeNameKeyLoose(normalizedName).replace(/[^a-z0-9]+/g, "_")}`,
+        name: normalizedName,
         total,
         categorias: defaultCategorias.map((k) => ({ tipo: k, quantidade: Number((r.counts as any)[k] ?? 0) })),
         ligacoes: metrics?.totalLigacoes ?? 0,
@@ -615,10 +636,11 @@ const Index = () => {
         tempoOciosoTotal: metrics?.tempoOciosoTotal ?? null,
       } as ColaboradorAcionamento;
     });
-    setAcionamentoDetalhado(detailed);
-    setPersonEventDetails(bitrix.personEventDetails ?? []);
+    const normalizedDetailed = normalizeAcionamentoDetalhadoList(detailed);
+    setAcionamentoDetalhado(normalizedDetailed);
+    setPersonEventDetails(normalizePersonEventDetailsList(bitrix.personEventDetails ?? []));
     try {
-      if (isSupabaseConfigured) await remoteExtras.updateAsync({ acionamentoDetalhado: detailed as any });
+      if (isSupabaseConfigured) await remoteExtras.updateAsync({ acionamentoDetalhado: normalizedDetailed as any });
     } catch {}
 
     // 4) Salvar dados na tabela mensal de Acionamento Geral (acionGeral) e Detalhado (acionDet)
@@ -640,7 +662,7 @@ const Index = () => {
           existing.empresas = existing.empresas + empTotal;
           existing.leads = existing.leads + leadTotal;
         } else {
-          geralMap.set(key, { name: r.comercial, empresas: empTotal, leads: leadTotal });
+          geralMap.set(key, { name: canonicalizeCollaboratorName(r.comercial), empresas: empTotal, leads: leadTotal });
         }
       }
       geralStored[businessDate] = Array.from(geralMap.values());
@@ -660,11 +682,11 @@ const Index = () => {
     // 5) Salvar personEventDetails no localStorage por data (para drill-down posterior)
     {
       const eventsToSave = (bitrix.personEventDetails ?? []).map((p) => ({
-        comercial: p.comercial,
+        comercial: canonicalizeCollaboratorName(p.comercial),
         events: p.events.map((e) => ({
           entityType: e.entityType,
           empresa: e.empresa,
-          comercial: e.comercial,
+          comercial: canonicalizeCollaboratorName(e.comercial),
           actionLine: e.actionLine,
           actionCategory: e.actionCategory,
           timeHHMM: e.timeHHMM,

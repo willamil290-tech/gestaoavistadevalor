@@ -1,9 +1,11 @@
+import { canonicalizeCollaboratorName } from "./collaboratorNames";
+
 export type TeamGroup = "SDRs" | "Closers" | "CS" | "Grandes Contas" | "Executivos";
 
 const TEAM_GROUP_ORDER: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
 
 export function getTeamGroup(name: string): TeamGroup {
-  const firstName = name
+  const firstName = canonicalizeCollaboratorName(name)
     .trim()
     .split(/\s+/)[0]
     .toLowerCase()

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Plus, Trash2, Pencil, Check, X, Phone, Activity, Clock, Timer, Search, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
+import { canonicalizeCollaboratorName, collaboratorNameKey } from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { loadJson, saveJson } from "@/lib/localStore";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
@@ -57,6 +58,50 @@ const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
 
 type DetDayPerson = { name: string; total: number; categorias: { tipo: string; quantidade: number }[] };
 type DetMonthData = Record<string, DetDayPerson[]>;
+
+function normalizeDetDayData(dayData: DetDayPerson[]) {
+  const map = new Map<string, DetDayPerson>();
+
+  for (const person of dayData ?? []) {
+    const name = canonicalizeCollaboratorName(person.name);
+    const key = collaboratorNameKey(name);
+    const current = map.get(key);
+
+    if (!current) {
+      map.set(key, {
+        name,
+        total: Number(person.total ?? 0),
+        categorias: (person.categorias ?? []).map((cat) => ({
+          tipo: cat.tipo,
+          quantidade: Number(cat.quantidade ?? 0),
+        })),
+      });
+      continue;
+    }
+
+    current.total += Number(person.total ?? 0);
+    for (const cat of person.categorias ?? []) {
+      const existingCategory = current.categorias.find((item) => item.tipo === cat.tipo);
+      if (existingCategory) {
+        existingCategory.quantidade += Number(cat.quantidade ?? 0);
+      } else {
+        current.categorias.push({ tipo: cat.tipo, quantidade: Number(cat.quantidade ?? 0) });
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function normalizeDetMonthData(data: DetMonthData) {
+  const normalized: DetMonthData = {};
+
+  for (const [date, dayData] of Object.entries(data ?? {})) {
+    normalized[date] = normalizeDetDayData(dayData);
+  }
+
+  return normalized;
+}
 
 export const AcionamentoDetalhadoView = ({
   colaboradores,
@@ -119,6 +164,7 @@ export const AcionamentoDetalhadoView = ({
   };
 
   const sortedColaboradores = [...colaboradores]
+    .map((c) => ({ ...c, name: canonicalizeCollaboratorName(c.name) }))
     .filter((c) => !isIgnoredCommercial(c.name))
     .sort((a, b) => b.total - a.total);
 
@@ -148,9 +194,9 @@ export const AcionamentoDetalhadoView = ({
 
   // Opens drill-down dialog with detailed events for a person + category
   const openDetail = (name: string, filterCategory?: string) => {
-    const norm = name.toLowerCase().trim();
+    const norm = collaboratorNameKey(name);
     const detail = personEventDetails.find(
-      (d) => d.comercial.toLowerCase().trim() === norm || d.comercial.toLowerCase().split(" ")[0] === norm.split(" ")[0]
+      (d) => collaboratorNameKey(d.comercial) === norm
     );
     if (!detail) return;
 
@@ -207,7 +253,7 @@ export const AcionamentoDetalhadoView = ({
 
   useEffect(() => {
     const key = `acionDet:${detYear}-${pad2(detMonth)}`;
-    setDetMonthData(loadJson<DetMonthData>(key, {}));
+    setDetMonthData(normalizeDetMonthData(loadJson<DetMonthData>(key, {})));
   }, [detYear, detMonth]);
 
   useEffect(() => {
@@ -217,11 +263,11 @@ export const AcionamentoDetalhadoView = ({
     const [y, m] = effectiveSaveDate.split("-");
     const key = `acionDet:${y}-${m}`;
     const stored = loadJson<DetMonthData>(key, {});
-    stored[effectiveSaveDate] = sortedColaboradores.map(c => ({
-      name: c.name,
+    stored[effectiveSaveDate] = normalizeDetDayData(sortedColaboradores.map(c => ({
+      name: canonicalizeCollaboratorName(c.name),
       total: c.total,
       categorias: c.categorias.map(cat => ({ tipo: cat.tipo, quantidade: cat.quantidade })),
-    }));
+    })));
     saveJson(key, stored);
     if (parseInt(y) === detYear && parseInt(m) === detMonth) {
       setDetMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
@@ -326,10 +372,9 @@ export const AcionamentoDetalhadoView = ({
     if (!data) return;
     // Carregar eventos do localStorage
     const stored = loadJson<any[]>(`bitrixEvents:${day}`, []);
-    const norm = name.toLowerCase().trim();
+    const norm = collaboratorNameKey(name);
     const detail = stored?.find(
-      (d: any) => d.comercial?.toLowerCase().trim() === norm ||
-        d.comercial?.toLowerCase().split(" ")[0] === norm.split(" ")[0]
+      (d: any) => collaboratorNameKey(d.comercial ?? "") === norm
     );
     const events = detail?.events?.map((e: any) => ({
       empresa: e.empresa,

@@ -1,3 +1,5 @@
+import { canonicalizeCollaboratorName, collaboratorNameKey } from "./collaboratorNames";
+
 /**
  * Parser para dados de chamadas colados do Bitrix (aba Chamadas).
  *
@@ -209,7 +211,7 @@ export function parseCallsText(text: string): ParsedCall[] {
       continue;
     }
 
-    const name = lines[i];
+    const name = canonicalizeCollaboratorName(lines[i]);
     i++;
 
     // Telefone
@@ -321,9 +323,11 @@ export function computeCallMetrics(calls: ParsedCall[]): PersonDayCallMetrics[] 
   // Agrupar por pessoa + dia
   const groups = new Map<string, ParsedCall[]>();
   for (const call of calls) {
-    const key = `${call.name}|||${call.dateISO}`;
+    const canonicalName = canonicalizeCollaboratorName(call.name);
+    const normalizedCall = canonicalName === call.name ? call : { ...call, name: canonicalName };
+    const key = `${collaboratorNameKey(canonicalName)}|||${call.dateISO}`;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(call);
+    groups.get(key)!.push(normalizedCall);
   }
 
   const metrics: PersonDayCallMetrics[] = [];

@@ -1,3 +1,5 @@
+import { canonicalizeCollaboratorName, collaboratorNameKey } from "./collaboratorNames";
+
 export type BulkEntry = {
   name: string;
   morning: number;
@@ -34,7 +36,7 @@ export type ClienteTableEntry = {
 };
 
 export function normalizeName(name: string) {
-  return name
+  return canonicalizeCollaboratorName(name)
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase()
@@ -62,7 +64,7 @@ export function parseBulkTeamText(text: string): BulkEntry[] {
     const name = current.name?.trim();
     if (!name) return;
     out.push({
-      name,
+      name: canonicalizeCollaboratorName(name),
       morning: Number(current.morning ?? 0),
       afternoon: Number(current.afternoon ?? 0),
     });
@@ -96,7 +98,7 @@ export function parseBulkTeamText(text: string): BulkEntry[] {
 
   // Remove duplicados (mesmo nome), mantendo o último bloco
   const map = new Map<string, BulkEntry>();
-  for (const e of out) map.set(normalizeName(e.name), e);
+  for (const e of out) map.set(collaboratorNameKey(e.name), e);
   return Array.from(map.values());
 }
 
@@ -152,7 +154,7 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
       (current.outros ?? 0)
     );
     out.push({
-      name: current.name,
+      name: canonicalizeCollaboratorName(current.name),
       etapaAlterada: current.etapaAlterada ?? 0,
       atividadeCriada: current.atividadeCriada ?? 0,
       statusAlterada: current.statusAlterada ?? 0,
@@ -206,7 +208,7 @@ export function parseDetailedAcionamento(text: string): DetailedEntry[] {
         if (current.name && current.etapaAlterada !== undefined) {
           pushCurrent();
         }
-        current.name = nameMatch[1].trim();
+        current.name = canonicalizeCollaboratorName(nameMatch[1].trim());
       }
     }
   }
@@ -288,7 +290,7 @@ export function parseDashboardBulk(text: string): DashboardBulkData | null {
   for (const pattern of commercialPatterns) {
     m = normalized.match(pattern.rx);
     if (m) {
-      result.commercials.push({ name: pattern.name, value: parseNum(m[1]) });
+      result.commercials.push({ name: canonicalizeCollaboratorName(pattern.name), value: parseNum(m[1]) });
     }
   }
 

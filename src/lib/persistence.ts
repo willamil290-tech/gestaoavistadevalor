@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { canonicalizeCollaboratorName } from "@/lib/collaboratorNames";
 
 let dailyEventsDisabled = false;
 let dashboardExtrasDisabled = false;
@@ -359,7 +360,7 @@ export async function listTeamMembers(category: TeamCategory): Promise<TeamMembe
   const rows = (data ?? []).map((r) => ({
     id: String(r.id),
     category: (r.category as TeamCategory) ?? category,
-    name: String(r.name ?? ""),
+    name: canonicalizeCollaboratorName(String(r.name ?? "")),
     morning: Number(r.morning ?? 0),
     afternoon: Number(r.afternoon ?? 0),
   }));
@@ -393,7 +394,7 @@ export async function upsertTeamMember(member: TeamMember) {
       {
         id: member.id,
         category: member.category,
-        name: member.name,
+        name: canonicalizeCollaboratorName(member.name),
         morning: member.morning,
         afternoon: member.afternoon,
         updated_at: new Date().toISOString(),

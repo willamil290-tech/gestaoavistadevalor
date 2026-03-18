@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { canonicalizeCollaboratorName } from "@/lib/collaboratorNames";
 import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,9 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
   const [teamData, setTeamData] = useState<TeamMember[]>(() => {
     if (isSupabaseConfigured) return initialTeamData;
     const base = loadJson(localKey, initialTeamData as any) as TeamMember[];
-    return (base ?? []).filter((m) => !isIgnoredCommercial(m.name));
+    return (base ?? [])
+      .map((m) => ({ ...m, name: canonicalizeCollaboratorName(m.name) }))
+      .filter((m) => !isIgnoredCommercial(m.name));
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -61,7 +64,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
       .filter((m) => !isIgnoredCommercial(m.name))
       .map((m) => ({
       id: m.id,
-      name: m.name,
+      name: canonicalizeCollaboratorName(m.name),
       morning: m.morning,
       afternoon: m.afternoon,
       total: m.morning + m.afternoon,
@@ -72,7 +75,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
   // Persist local state when Supabase is not configured
   useEffect(() => {
     if (isSupabaseConfigured) return;
-    saveJson(localKey, teamData as any);
+    saveJson(localKey, teamData.map((m) => ({ ...m, name: canonicalizeCollaboratorName(m.name) })) as any);
   }, [teamData, localKey]);
 
   // Atalho Ctrl+Shift+U / Cmd+Shift+U para abrir colar texto (quando não estiver em TV)

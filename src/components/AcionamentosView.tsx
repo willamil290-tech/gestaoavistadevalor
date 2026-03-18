@@ -15,6 +15,7 @@ import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type Bul
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { canonicalizeCollaboratorName, collaboratorNameKey } from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,39 @@ const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
 
 interface GeralDayPerson { name: string; empresas: number; leads: number; }
 type GeralMonthData = Record<string, GeralDayPerson[]>;
+
+function normalizeGeralDayData(dayData: GeralDayPerson[]) {
+  const map = new Map<string, GeralDayPerson>();
+
+  for (const person of dayData ?? []) {
+    const name = canonicalizeCollaboratorName(person.name);
+    const key = collaboratorNameKey(name);
+    const current = map.get(key);
+
+    if (current) {
+      current.empresas += Number(person.empresas ?? 0);
+      current.leads += Number(person.leads ?? 0);
+    } else {
+      map.set(key, {
+        name,
+        empresas: Number(person.empresas ?? 0),
+        leads: Number(person.leads ?? 0),
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function normalizeGeralMonthData(data: GeralMonthData) {
+  const normalized: GeralMonthData = {};
+
+  for (const [date, dayData] of Object.entries(data ?? {})) {
+    normalized[date] = normalizeGeralDayData(dayData);
+  }
+
+  return normalized;
+}
 
 interface AcionamentosViewProps {
   tvMode?: boolean;
@@ -118,30 +152,33 @@ export const AcionamentosView = ({
       empresas = (empresasRemote.data ?? []) as any[];
       leads = (leadsRemote.data ?? []) as any[];
     } else {
-      empresas = (loadJson(`teamMembers:${businessDate}:empresas`, []) as any[]) ?? [];
-      leads = (loadJson(`teamMembers:${businessDate}:leads`, []) as any[]) ?? [];
+      empresas = ((loadJson(`teamMembers:${businessDate}:empresas`, []) as any[]) ?? [])
+        .map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name ?? "") }));
+      leads = ((loadJson(`teamMembers:${businessDate}:leads`, []) as any[]) ?? [])
+        .map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name ?? "") }));
     }
 
-    const normalize = (n: string) => n.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const map = new Map<string, PersonGeral>();
 
     for (const e of empresas) {
       if (isIgnoredCommercial(e.name)) continue;
-      const key = normalize(e.name);
+      const name = canonicalizeCollaboratorName(e.name);
+      const key = collaboratorNameKey(name);
       const empTotal = (e.morning ?? 0) + (e.afternoon ?? 0);
-      map.set(key, { name: e.name, empresas: empTotal, leads: 0, total: empTotal });
+      map.set(key, { name, empresas: empTotal, leads: 0, total: empTotal });
     }
 
     for (const l of leads) {
       if (isIgnoredCommercial(l.name)) continue;
-      const key = normalize(l.name);
+      const name = canonicalizeCollaboratorName(l.name);
+      const key = collaboratorNameKey(name);
       const leadTotal = (l.morning ?? 0) + (l.afternoon ?? 0);
       const existing = map.get(key);
       if (existing) {
         existing.leads = leadTotal;
         existing.total = existing.empresas + leadTotal;
       } else {
-        map.set(key, { name: l.name, empresas: 0, leads: leadTotal, total: leadTotal });
+        map.set(key, { name, empresas: 0, leads: leadTotal, total: leadTotal });
       }
     }
 
@@ -153,7 +190,7 @@ export const AcionamentosView = ({
   // Load monthly data on month change
   useEffect(() => {
     const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
-    setGeralMonthData(loadJson<GeralMonthData>(key, {}));
+    setGeralMonthData(normalizeGeralMonthData(loadJson<GeralMonthData>(key, {})));
   }, [geralYear, geralMonth]);
 
   // Auto-save geral data to monthly storage — only when the reference date is
@@ -193,11 +230,14 @@ export const AcionamentosView = ({
     const key = `acionGeral:${y}-${m}`;
     const stored = loadJson<GeralMonthData>(key, {});
     const dayData: GeralDayPerson[] = entries.map(e => ({
-      name: e.name, empresas: e.morning, leads: e.afternoon,
+      name: canonicalizeCollaboratorName(e.name), empresas: e.morning, leads: e.afternoon,
     }));
-    const existingDay = stored[dateISO] ?? [];
-    const incoming = new Set(dayData.map(d => d.name.trim().toLowerCase()));
-    stored[dateISO] = [...dayData, ...existingDay.filter(p => !incoming.has(p.name.trim().toLowerCase()))];
+    const existingDay = normalizeGeralDayData(stored[dateISO] ?? []);
+    const incoming = new Set(dayData.map((d) => collaboratorNameKey(d.name)));
+    stored[dateISO] = normalizeGeralDayData([
+      ...dayData,
+      ...existingDay.filter((p) => !incoming.has(collaboratorNameKey(p.name))),
+    ]);
     saveJson(key, stored);
     return { y, m, stored, dateISO };
   };

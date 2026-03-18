@@ -1,3 +1,5 @@
+import { canonicalizeCollaboratorName } from "./collaboratorNames";
+
 export type BulkEntry = {
   name: string;
   morning: number;
@@ -35,7 +37,7 @@ export function parseBulkText(text: string): BulkEntry[] {
 
   const flush = () => {
     if (!name) return;
-    out.push({ name: name.trim(), morning: morning ?? 0, afternoon: afternoon ?? 0 });
+    out.push({ name: canonicalizeCollaboratorName(name.trim()), morning: morning ?? 0, afternoon: afternoon ?? 0 });
     name = null;
     morning = null;
     afternoon = null;
@@ -73,5 +75,5 @@ export function parseBulkText(text: string): BulkEntry[] {
 }
 
 export function normalizeNameKey(name: string) {
-  return norm(name).toLowerCase();
+  return canonicalizeCollaboratorName(norm(name)).toLowerCase();
 }
