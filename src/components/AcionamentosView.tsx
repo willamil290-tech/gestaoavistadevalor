@@ -15,7 +15,12 @@ import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type Bul
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorName, collaboratorNameKey } from "@/lib/collaboratorNames";
+import {
+  activeCollaboratorNameKey,
+  canonicalizeActiveCollaboratorName,
+  canonicalizeCollaboratorNameForDate,
+  collaboratorNameKey,
+} from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,12 +44,12 @@ const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
 interface GeralDayPerson { name: string; empresas: number; leads: number; }
 type GeralMonthData = Record<string, GeralDayPerson[]>;
 
-function normalizeGeralDayData(dayData: GeralDayPerson[]) {
+function normalizeGeralDayData(dayData: GeralDayPerson[], dateISO?: string) {
   const map = new Map<string, GeralDayPerson>();
 
   for (const person of dayData ?? []) {
-    const name = canonicalizeCollaboratorName(person.name);
-    const key = collaboratorNameKey(name);
+    const name = canonicalizeCollaboratorNameForDate(person.name, dateISO);
+    const key = collaboratorNameKey(name, dateISO);
     const current = map.get(key);
 
     if (current) {
@@ -66,7 +71,7 @@ function normalizeGeralMonthData(data: GeralMonthData) {
   const normalized: GeralMonthData = {};
 
   for (const [date, dayData] of Object.entries(data ?? {})) {
-    normalized[date] = normalizeGeralDayData(dayData);
+    normalized[date] = normalizeGeralDayData(dayData, date);
   }
 
   return normalized;
@@ -153,25 +158,25 @@ export const AcionamentosView = ({
       leads = (leadsRemote.data ?? []) as any[];
     } else {
       empresas = ((loadJson(`teamMembers:${businessDate}:empresas`, []) as any[]) ?? [])
-        .map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name ?? "") }));
+        .map((item) => ({ ...item, name: canonicalizeActiveCollaboratorName(item.name ?? "") }));
       leads = ((loadJson(`teamMembers:${businessDate}:leads`, []) as any[]) ?? [])
-        .map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name ?? "") }));
+        .map((item) => ({ ...item, name: canonicalizeActiveCollaboratorName(item.name ?? "") }));
     }
 
     const map = new Map<string, PersonGeral>();
 
     for (const e of empresas) {
       if (isIgnoredCommercial(e.name)) continue;
-      const name = canonicalizeCollaboratorName(e.name);
-      const key = collaboratorNameKey(name);
+      const name = canonicalizeActiveCollaboratorName(e.name);
+      const key = activeCollaboratorNameKey(name);
       const empTotal = (e.morning ?? 0) + (e.afternoon ?? 0);
       map.set(key, { name, empresas: empTotal, leads: 0, total: empTotal });
     }
 
     for (const l of leads) {
       if (isIgnoredCommercial(l.name)) continue;
-      const name = canonicalizeCollaboratorName(l.name);
-      const key = collaboratorNameKey(name);
+      const name = canonicalizeActiveCollaboratorName(l.name);
+      const key = activeCollaboratorNameKey(name);
       const leadTotal = (l.morning ?? 0) + (l.afternoon ?? 0);
       const existing = map.get(key);
       if (existing) {
@@ -230,14 +235,14 @@ export const AcionamentosView = ({
     const key = `acionGeral:${y}-${m}`;
     const stored = loadJson<GeralMonthData>(key, {});
     const dayData: GeralDayPerson[] = entries.map(e => ({
-      name: canonicalizeCollaboratorName(e.name), empresas: e.morning, leads: e.afternoon,
+      name: canonicalizeCollaboratorNameForDate(e.name, dateISO), empresas: e.morning, leads: e.afternoon,
     }));
-    const existingDay = normalizeGeralDayData(stored[dateISO] ?? []);
-    const incoming = new Set(dayData.map((d) => collaboratorNameKey(d.name)));
+    const existingDay = normalizeGeralDayData(stored[dateISO] ?? [], dateISO);
+    const incoming = new Set(dayData.map((d) => collaboratorNameKey(d.name, dateISO)));
     stored[dateISO] = normalizeGeralDayData([
       ...dayData,
-      ...existingDay.filter((p) => !incoming.has(collaboratorNameKey(p.name))),
-    ]);
+      ...existingDay.filter((p) => !incoming.has(collaboratorNameKey(p.name, dateISO))),
+    ], dateISO);
     saveJson(key, stored);
     return { y, m, stored, dateISO };
   };

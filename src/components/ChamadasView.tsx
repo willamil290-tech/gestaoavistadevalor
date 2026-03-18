@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorName } from "@/lib/collaboratorNames";
+import { canonicalizeCollaboratorNameForDate } from "@/lib/collaboratorNames";
 import { getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
@@ -110,7 +110,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     const raw = loadJson<any[]>(key, []);
     const calls: ParsedCall[] = raw.map((c: any) => ({
       ...c,
-      name: canonicalizeCollaboratorName(c.name ?? ""),
+      name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
       dateTime: new Date(c.dateTime),
     }));
     setStoredCalls(calls);
@@ -119,7 +119,10 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const saveToStorage = useCallback(
     (calls: ParsedCall[]) => {
       const key = storageKey(selectedYear, selectedMonth);
-      saveJson(key, calls.map((call) => ({ ...call, name: canonicalizeCollaboratorName(call.name) })));
+      saveJson(key, calls.map((call) => ({
+        ...call,
+        name: canonicalizeCollaboratorNameForDate(call.name, call.dateISO),
+      })));
     },
     [selectedYear, selectedMonth]
   );
@@ -168,7 +171,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     for (const [monthKey, calls] of otherGroups) {
       const existingOther = loadJson<any[]>(`calls:${monthKey}`, []).map((c: any) => ({
         ...c,
-        name: canonicalizeCollaboratorName(c.name ?? ""),
+        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
         dateTime: new Date(c.dateTime),
       }));
       const existingOtherKeys = new Set(

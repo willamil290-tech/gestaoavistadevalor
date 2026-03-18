@@ -17,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useUndoToast } from "@/hooks/useUndoToast";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorName } from "@/lib/collaboratorNames";
+import { canonicalizeActiveCollaboratorName } from "@/lib/collaboratorNames";
 import { groupByTeam, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +45,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
     if (isSupabaseConfigured) return initialTeamData;
     const base = loadJson(localKey, initialTeamData as any) as TeamMember[];
     return (base ?? [])
-      .map((m) => ({ ...m, name: canonicalizeCollaboratorName(m.name) }))
+      .map((m) => ({ ...m, name: canonicalizeActiveCollaboratorName(m.name) }))
       .filter((m) => !isIgnoredCommercial(m.name));
   });
 
@@ -64,7 +64,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
       .filter((m) => !isIgnoredCommercial(m.name))
       .map((m) => ({
       id: m.id,
-      name: canonicalizeCollaboratorName(m.name),
+      name: canonicalizeActiveCollaboratorName(m.name),
       morning: m.morning,
       afternoon: m.afternoon,
       total: m.morning + m.afternoon,
@@ -75,7 +75,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
   // Persist local state when Supabase is not configured
   useEffect(() => {
     if (isSupabaseConfigured) return;
-    saveJson(localKey, teamData.map((m) => ({ ...m, name: canonicalizeCollaboratorName(m.name) })) as any);
+    saveJson(localKey, teamData.map((m) => ({ ...m, name: canonicalizeActiveCollaboratorName(m.name) })) as any);
   }, [teamData, localKey]);
 
   // Atalho Ctrl+Shift+U / Cmd+Shift+U para abrir colar texto (quando não estiver em TV)
@@ -225,7 +225,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
           // Se veio TAG e NÃO é desta aba, ignora o bloco
           if (parsed.category && parsed.category !== "empresas") continue;
 
-          const baseName = parsed.baseName;
+          const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
           if (isIgnoredCommercial(baseName)) continue;
           const key = normalizeNameKey(baseName);
           const existing = map.get(key);
@@ -263,7 +263,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
       // Se veio TAG e NÃO é desta aba, ignora o bloco
       if (parsed.category && parsed.category !== "empresas") continue;
 
-      const baseName = parsed.baseName;
+      const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
       if (isIgnoredCommercial(baseName)) continue;
       const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);

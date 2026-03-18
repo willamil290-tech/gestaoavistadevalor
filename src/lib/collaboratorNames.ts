@@ -9,6 +9,13 @@ function normalizeLooseName(value: string) {
 
 export function canonicalizeCollaboratorName(name: string) {
   const cleaned = String(name ?? "").trim().replace(/\s+/g, " ");
+  return cleaned;
+}
+
+export const GABRIEL_TRANSITION_DATE = "2026-03-18";
+
+export function canonicalizeActiveCollaboratorName(name: string) {
+  const cleaned = canonicalizeCollaboratorName(name);
   if (!cleaned) return "";
 
   const parts = cleaned.split(" ");
@@ -18,10 +25,22 @@ export function canonicalizeCollaboratorName(name: string) {
   return parts.join(" ");
 }
 
-export function collaboratorNameKey(name: string) {
-  return normalizeLooseName(canonicalizeCollaboratorName(name));
+export function canonicalizeCollaboratorNameForDate(name: string, dateISO?: string | null) {
+  const cleaned = canonicalizeCollaboratorName(name);
+  if (!dateISO) return cleaned;
+  return dateISO >= GABRIEL_TRANSITION_DATE
+    ? canonicalizeActiveCollaboratorName(cleaned)
+    : cleaned;
 }
 
-export function sameCollaboratorName(a: string, b: string) {
-  return collaboratorNameKey(a) === collaboratorNameKey(b);
+export function collaboratorNameKey(name: string, dateISO?: string | null) {
+  return normalizeLooseName(canonicalizeCollaboratorNameForDate(name, dateISO));
+}
+
+export function activeCollaboratorNameKey(name: string) {
+  return normalizeLooseName(canonicalizeActiveCollaboratorName(name));
+}
+
+export function sameCollaboratorName(a: string, b: string, dateISO?: string | null) {
+  return collaboratorNameKey(a, dateISO) === collaboratorNameKey(b, dateISO);
 }

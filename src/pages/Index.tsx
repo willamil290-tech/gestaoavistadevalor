@@ -21,7 +21,11 @@ import { useDashboardExtras } from "@/hooks/useDashboardExtras";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { DEFAULT_SETTINGS, getLastActivityIso, insertDailyEvent, listTeamMembers, resetDayCounters, updateDashboardSettings, upsertTeamMember } from "@/lib/persistence";
 import { formatDateTimeBR, getBusinessDate } from "@/lib/businessDate";
-import { canonicalizeCollaboratorName, collaboratorNameKey } from "@/lib/collaboratorNames";
+import {
+  canonicalizeActiveCollaboratorName,
+  canonicalizeCollaboratorNameForDate,
+  collaboratorNameKey,
+} from "@/lib/collaboratorNames";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -85,20 +89,20 @@ const initialAgendadasDia: AgendadaRealizada[] = [
 ];
 
 function normalizeCommercialsList(items: Commercial[]) {
-  return items.map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name) }));
+  return items.map((item) => ({ ...item, name: canonicalizeActiveCollaboratorName(item.name) }));
 }
 
 function normalizeAcionamentoDetalhadoList(items: ColaboradorAcionamento[]) {
-  return items.map((item) => ({ ...item, name: canonicalizeCollaboratorName(item.name) }));
+  return items.map((item) => ({ ...item, name: canonicalizeActiveCollaboratorName(item.name) }));
 }
 
 function normalizePersonEventDetailsList(items: PersonEventDetail[]) {
   return items.map((item) => ({
     ...item,
-    comercial: canonicalizeCollaboratorName(item.comercial),
+    comercial: canonicalizeActiveCollaboratorName(item.comercial),
     events: item.events.map((event) => ({
       ...event,
-      comercial: canonicalizeCollaboratorName(event.comercial),
+      comercial: canonicalizeActiveCollaboratorName(event.comercial),
     })),
   }));
 }
@@ -557,7 +561,7 @@ const Index = () => {
     for (const r of bitrix.uniqueResumo) {
       if (isIgnoredCommercial(r.comercial)) continue;
       const category = r.entityType === "NEGÓCIO" ? "empresas" : "leads";
-      byCategory[category].push({ name: canonicalizeCollaboratorName(r.comercial), morning: r.morning, afternoon: r.afternoon });
+      byCategory[category].push({ name: canonicalizeCollaboratorNameForDate(r.comercial, businessDate), morning: r.morning, afternoon: r.afternoon });
     }
 
     // businessDate já definido acima via targetDate
@@ -619,7 +623,7 @@ const Index = () => {
     const detailed = bitrix.actionResumo
       .filter((r) => !isIgnoredCommercial(r.comercial))
       .map((r) => {
-      const normalizedName = canonicalizeCollaboratorName(r.comercial);
+      const normalizedName = canonicalizeCollaboratorNameForDate(r.comercial, businessDate);
       const total = defaultCategorias.reduce((sum, k) => sum + Number((r.counts as any)[k] ?? 0), 0);
       const match = acionamentoDetalhado.find(
         (x) => normalizeName(x.name) === normalizeName(normalizedName) || normalizeName(x.name) === normalizeName(normalizedName.split(" ")[0])
@@ -662,7 +666,7 @@ const Index = () => {
           existing.empresas = existing.empresas + empTotal;
           existing.leads = existing.leads + leadTotal;
         } else {
-          geralMap.set(key, { name: canonicalizeCollaboratorName(r.comercial), empresas: empTotal, leads: leadTotal });
+          geralMap.set(key, { name: canonicalizeCollaboratorNameForDate(r.comercial, businessDate), empresas: empTotal, leads: leadTotal });
         }
       }
       geralStored[businessDate] = Array.from(geralMap.values());
@@ -682,11 +686,11 @@ const Index = () => {
     // 5) Salvar personEventDetails no localStorage por data (para drill-down posterior)
     {
       const eventsToSave = (bitrix.personEventDetails ?? []).map((p) => ({
-        comercial: canonicalizeCollaboratorName(p.comercial),
+        comercial: canonicalizeCollaboratorNameForDate(p.comercial, businessDate),
         events: p.events.map((e) => ({
           entityType: e.entityType,
           empresa: e.empresa,
-          comercial: canonicalizeCollaboratorName(e.comercial),
+          comercial: canonicalizeCollaboratorNameForDate(e.comercial, businessDate),
           actionLine: e.actionLine,
           actionCategory: e.actionCategory,
           timeHHMM: e.timeHHMM,
