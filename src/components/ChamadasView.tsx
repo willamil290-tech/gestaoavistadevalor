@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorNameForDate } from "@/lib/collaboratorNames";
+import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
@@ -127,6 +127,9 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     [selectedYear, selectedMonth]
   );
 
+  const shouldHideCallName = (name: string) =>
+    isIgnoredCommercial(name) || isMariaCollaboratorName(name);
+
   // Process pasted text
   const handlePaste = () => {
     if (!pasteText.trim()) {
@@ -219,7 +222,11 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   };
 
   // Computed metrics
-  const dailyMetrics = useMemo(() => computeCallMetrics(storedCalls), [storedCalls]);
+  const visibleStoredCalls = useMemo(
+    () => storedCalls.filter((call) => !shouldHideCallName(call.name)),
+    [storedCalls]
+  );
+  const dailyMetrics = useMemo(() => computeCallMetrics(visibleStoredCalls), [visibleStoredCalls]);
   const monthMetrics = useMemo(() => aggregateMonthMetrics(dailyMetrics), [dailyMetrics]);
 
   // Unique days sorted
@@ -232,7 +239,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const allPeople = useMemo(() => {
     const nameSet = new Set<string>();
     for (const m of dailyMetrics) {
-      if (!isIgnoredCommercial(m.name)) nameSet.add(m.name);
+      if (!shouldHideCallName(m.name)) nameSet.add(m.name);
     }
     const names = Array.from(nameSet);
     // Sort by team group order, then alphabetically
@@ -266,7 +273,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const metricsLookup = useMemo(() => {
     const lookup = new Map<string, Map<string, PersonDayCallMetrics>>();
     for (const m of dailyMetrics) {
-      if (isIgnoredCommercial(m.name)) continue;
+      if (shouldHideCallName(m.name)) continue;
       if (!lookup.has(m.date)) lookup.set(m.date, new Map());
       lookup.get(m.date)!.set(m.name, m);
     }
@@ -291,7 +298,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     () =>
       selectedDay
         ? storedCalls
-            .filter((c) => c.dateISO === selectedDay && !isIgnoredCommercial(c.name))
+            .filter((c) => c.dateISO === selectedDay && !shouldHideCallName(c.name))
             .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
         : [],
     [storedCalls, selectedDay]
@@ -299,7 +306,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
 
   // Open drill-down dialog for a specific person + day
   const openDrill = (name: string, day: string) => {
-    const calls = storedCalls
+    const calls = visibleStoredCalls
       .filter((c) => c.name === name && c.dateISO === day)
       .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
     const metrics = metricsLookup.get(day)?.get(name) ?? null;
@@ -380,28 +387,28 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       </div>
 
       {/* Summary stats */}
-      {storedCalls.length > 0 && (
+      {visibleStoredCalls.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="bg-card rounded-xl p-3 border border-border text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <Phone className="w-3.5 h-3.5 text-blue-500" />
               <span className="text-xs text-muted-foreground">Total Chamadas</span>
             </div>
-            <p className={cn("font-bold text-blue-500", tvMode ? "text-2xl" : "text-xl")}>{storedCalls.length}</p>
+            <p className={cn("font-bold text-blue-500", tvMode ? "text-2xl" : "text-xl")}>{visibleStoredCalls.length}</p>
           </div>
           <div className="bg-card rounded-xl p-3 border border-border text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <PhoneIncoming className="w-3.5 h-3.5 text-green-500" />
               <span className="text-xs text-muted-foreground">Atendidas</span>
             </div>
-            <p className={cn("font-bold text-green-500", tvMode ? "text-2xl" : "text-xl")}>{storedCalls.filter((c) => c.answered).length}</p>
+            <p className={cn("font-bold text-green-500", tvMode ? "text-2xl" : "text-xl")}>{visibleStoredCalls.filter((c) => c.answered).length}</p>
           </div>
           <div className="bg-card rounded-xl p-3 border border-border text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <PhoneOff className="w-3.5 h-3.5 text-red-500" />
               <span className="text-xs text-muted-foreground">Canceladas</span>
             </div>
-            <p className={cn("font-bold text-red-500", tvMode ? "text-2xl" : "text-xl")}>{storedCalls.filter((c) => !c.answered).length}</p>
+            <p className={cn("font-bold text-red-500", tvMode ? "text-2xl" : "text-xl")}>{visibleStoredCalls.filter((c) => !c.answered).length}</p>
           </div>
           <div className="bg-card rounded-xl p-3 border border-border text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -413,7 +420,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
         </div>
       )}
 
-      {storedCalls.length === 0 && (
+      {visibleStoredCalls.length === 0 && (
         <div className="text-center text-muted-foreground py-16">
           <Phone className="w-12 h-12 mx-auto mb-4 opacity-30" />
           <p className="text-lg">Nenhuma chamada importada para este mês.</p>
@@ -422,7 +429,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       )}
 
       {/* ===== MAIN TABLE: Days × People (like the spreadsheet) ===== */}
-      {storedCalls.length > 0 && !selectedDay && (
+      {visibleStoredCalls.length > 0 && !selectedDay && (
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse min-w-[600px]">
@@ -565,7 +572,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                     );
                   })}
                   <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
-                    {storedCalls.filter((c) => !isIgnoredCommercial(c.name)).length}
+                    {visibleStoredCalls.length}
                   </td>
                 </tr>
               </tbody>
@@ -575,7 +582,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       )}
 
       {/* ===== DAILY DETAIL VIEW ===== */}
-      {storedCalls.length > 0 && selectedDay && (
+      {visibleStoredCalls.length > 0 && selectedDay && (
         <div>
           <div className="flex items-center gap-3 mb-4">
             <Button variant="ghost" size="sm" onClick={() => setSelectedDay(null)} className="rounded-xl">

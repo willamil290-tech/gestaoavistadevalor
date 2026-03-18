@@ -20,6 +20,7 @@ import {
   canonicalizeActiveCollaboratorName,
   canonicalizeCollaboratorNameForDate,
   collaboratorNameKey,
+  isMariaCollaboratorName,
 } from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays, Search } from "lucide-react";
@@ -77,6 +78,10 @@ function normalizeGeralMonthData(data: GeralMonthData) {
   return normalized;
 }
 
+function shouldHideAcionamentoName(name: string) {
+  return isIgnoredCommercial(name) || isMariaCollaboratorName(name);
+}
+
 interface AcionamentosViewProps {
   tvMode?: boolean;
   trendData?: HourlyTrend[];
@@ -127,7 +132,7 @@ export const AcionamentosView = ({
       ]);
       const ids = new Set<string>();
       for (const m of [...empresas, ...leads]) {
-        if (isIgnoredCommercial(m.name)) ids.add(String(m.id));
+        if (shouldHideAcionamentoName(m.name)) ids.add(String(m.id));
       }
       return Array.from(ids);
     },
@@ -166,7 +171,7 @@ export const AcionamentosView = ({
     const map = new Map<string, PersonGeral>();
 
     for (const e of empresas) {
-      if (isIgnoredCommercial(e.name)) continue;
+      if (shouldHideAcionamentoName(e.name)) continue;
       const name = canonicalizeActiveCollaboratorName(e.name);
       const key = activeCollaboratorNameKey(name);
       const empTotal = (e.morning ?? 0) + (e.afternoon ?? 0);
@@ -174,7 +179,7 @@ export const AcionamentosView = ({
     }
 
     for (const l of leads) {
-      if (isIgnoredCommercial(l.name)) continue;
+      if (shouldHideAcionamentoName(l.name)) continue;
       const name = canonicalizeActiveCollaboratorName(l.name);
       const key = activeCollaboratorNameKey(name);
       const leadTotal = (l.morning ?? 0) + (l.afternoon ?? 0);
@@ -226,7 +231,7 @@ export const AcionamentosView = ({
   };
 
   const refreshGeralMonth = () => {
-    setGeralMonthData(loadJson<GeralMonthData>(`acionGeral:${geralYear}-${pad2(geralMonth)}`, {}));
+    setGeralMonthData(normalizeGeralMonthData(loadJson<GeralMonthData>(`acionGeral:${geralYear}-${pad2(geralMonth)}`, {})));
   };
 
   // ── Helper: save parsed data for a single date into localStorage (merge) ──
@@ -252,7 +257,7 @@ export const AcionamentosView = ({
     const detKey = `acionDet:${y}-${m}`;
     const detStored = loadJson<Record<string, any[]>>(detKey, {});
     const detDayData = detailedEntries.map(e => ({
-      name: e.name, total: e.total,
+      name: canonicalizeCollaboratorNameForDate(e.name, dateISO), total: e.total,
       categorias: [
         { tipo: "ETAPA_ALTERADA", quantidade: e.etapaAlterada },
         { tipo: "ATIVIDADE_CRIADA", quantidade: e.atividadeCriada },
@@ -262,8 +267,11 @@ export const AcionamentosView = ({
       ],
     }));
     const existingDet = detStored[dateISO] ?? [];
-    const incomingDet = new Set(detDayData.map(d => d.name.trim().toLowerCase()));
-    detStored[dateISO] = [...detDayData, ...existingDet.filter((p: any) => !incomingDet.has(p.name?.trim().toLowerCase()))];
+    const incomingDet = new Set(detDayData.map((d) => collaboratorNameKey(d.name, dateISO)));
+    detStored[dateISO] = [
+      ...detDayData,
+      ...existingDet.filter((p: any) => !incomingDet.has(collaboratorNameKey(p.name ?? "", dateISO))),
+    ];
     saveJson(detKey, detStored);
   };
 
@@ -276,7 +284,7 @@ export const AcionamentosView = ({
     for (const dayData of Object.values(geralMonthData)) {
       for (const person of dayData) {
         const firstName = person.name.split(" ")[0];
-        if (!isIgnoredCommercial(person.name) && !excluded.includes(firstName)) nameSet.add(person.name);
+        if (!shouldHideAcionamentoName(person.name) && !excluded.includes(firstName)) nameSet.add(person.name);
       }
     }
     const names = Array.from(nameSet);
@@ -310,7 +318,7 @@ export const AcionamentosView = ({
     for (const [date, dayData] of Object.entries(geralMonthData)) {
       const personMap = new Map<string, { empresas: number; leads: number }>();
       for (const person of dayData) {
-        if (!isIgnoredCommercial(person.name)) {
+        if (!shouldHideAcionamentoName(person.name)) {
           personMap.set(person.name, { empresas: person.empresas, leads: person.leads });
         }
       }
@@ -335,7 +343,7 @@ export const AcionamentosView = ({
     const totals = new Map<string, { empresas: number; leads: number }>();
     for (const dayData of Object.values(geralMonthData)) {
       for (const person of dayData) {
-        if (isIgnoredCommercial(person.name)) continue;
+        if (shouldHideAcionamentoName(person.name)) continue;
         const prev = totals.get(person.name) ?? { empresas: 0, leads: 0 };
         totals.set(person.name, {
           empresas: prev.empresas + person.empresas,

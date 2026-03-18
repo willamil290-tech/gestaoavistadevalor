@@ -10,6 +10,7 @@ import {
   canonicalizeActiveCollaboratorName,
   canonicalizeCollaboratorNameForDate,
   collaboratorNameKey,
+  isMariaCollaboratorName,
 } from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { loadJson, saveJson } from "@/lib/localStore";
@@ -108,6 +109,10 @@ function normalizeDetMonthData(data: DetMonthData) {
   return normalized;
 }
 
+function shouldHideDetailedName(name: string) {
+  return isIgnoredCommercial(name) || isMariaCollaboratorName(name);
+}
+
 export const AcionamentoDetalhadoView = ({
   colaboradores,
   onUpdate,
@@ -170,7 +175,7 @@ export const AcionamentoDetalhadoView = ({
 
   const sortedColaboradores = [...colaboradores]
     .map((c) => ({ ...c, name: canonicalizeActiveCollaboratorName(c.name) }))
-    .filter((c) => !isIgnoredCommercial(c.name))
+    .filter((c) => !shouldHideDetailedName(c.name))
     .sort((a, b) => b.total - a.total);
 
   const grouped = groupByTeam(sortedColaboradores);
@@ -294,7 +299,7 @@ export const AcionamentoDetalhadoView = ({
     const nameSet = new Set<string>();
     for (const dayData of Object.values(detMonthData)) {
       for (const person of dayData) {
-        if (!isIgnoredCommercial(person.name)) nameSet.add(person.name);
+        if (!shouldHideDetailedName(person.name)) nameSet.add(person.name);
       }
     }
     const names = Array.from(nameSet);
@@ -328,7 +333,7 @@ export const AcionamentoDetalhadoView = ({
     for (const [date, dayData] of Object.entries(detMonthData)) {
       const personMap = new Map<string, DetDayPerson>();
       for (const person of dayData) {
-        if (!isIgnoredCommercial(person.name)) {
+        if (!shouldHideDetailedName(person.name)) {
           personMap.set(person.name, person);
         }
       }
@@ -353,7 +358,7 @@ export const AcionamentoDetalhadoView = ({
     const totals = new Map<string, number>();
     for (const dayData of Object.values(detMonthData)) {
       for (const person of dayData) {
-        if (isIgnoredCommercial(person.name)) continue;
+        if (shouldHideDetailedName(person.name)) continue;
         totals.set(person.name, (totals.get(person.name) ?? 0) + person.total);
       }
     }

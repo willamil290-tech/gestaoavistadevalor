@@ -41,6 +41,12 @@ export function activeCollaboratorNameKey(name: string) {
   return normalizeLooseName(canonicalizeActiveCollaboratorName(name));
 }
 
+export function isMariaCollaboratorName(name: string) {
+  const cleaned = canonicalizeCollaboratorName(name);
+  if (!cleaned) return false;
+  return normalizeLooseName(cleaned.split(" ")[0]) === "maria";
+}
+
 export function sameCollaboratorName(a: string, b: string, dateISO?: string | null) {
   return collaboratorNameKey(a, dateISO) === collaboratorNameKey(b, dateISO);
 }
