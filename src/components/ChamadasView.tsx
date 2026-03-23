@@ -80,6 +80,8 @@ const TEAM_HEADER_COLORS: Record<TeamGroup, string> = {
   "Executivos": "bg-slate-600 text-white",
 };
 
+const ALWAYS_VISIBLE_PEOPLE = ["Gisele"];
+
 interface ChamadasViewProps {
   tvMode?: boolean;
 }
@@ -240,6 +242,9 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     const nameSet = new Set<string>();
     for (const m of dailyMetrics) {
       if (!shouldHideCallName(m.name)) nameSet.add(m.name);
+    }
+    for (const name of ALWAYS_VISIBLE_PEOPLE) {
+      if (!shouldHideCallName(name)) nameSet.add(name);
     }
     const names = Array.from(nameSet);
     // Sort by team group order, then alphabetically
