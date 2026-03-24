@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
 import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/lib/collaboratorNames";
-import { getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
+import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
   parseCallsText,
@@ -228,7 +228,24 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     () => storedCalls.filter((call) => !shouldHideCallName(call.name)),
     [storedCalls]
   );
-  const dailyMetrics = useMemo(() => computeCallMetrics(visibleStoredCalls), [visibleStoredCalls]);
+  const rawDailyMetrics = useMemo(() => computeCallMetrics(visibleStoredCalls), [visibleStoredCalls]);
+  const rawMonthMetrics = useMemo(() => aggregateMonthMetrics(rawDailyMetrics), [rawDailyMetrics]);
+
+  const callNameAliases = useMemo(() => {
+    const candidates = rawMonthMetrics.map((metric) => ({ name: metric.name, score: metric.totalCalls }));
+    for (const name of ALWAYS_VISIBLE_PEOPLE) candidates.push({ name, score: 0 });
+    return buildPreferredCollaboratorNameMap(candidates);
+  }, [rawMonthMetrics]);
+
+  const normalizedVisibleStoredCalls = useMemo(
+    () => visibleStoredCalls.map((call) => {
+      const preferredName = callNameAliases.get(call.name) ?? call.name;
+      return preferredName === call.name ? call : { ...call, name: preferredName };
+    }),
+    [visibleStoredCalls, callNameAliases]
+  );
+
+  const dailyMetrics = useMemo(() => computeCallMetrics(normalizedVisibleStoredCalls), [normalizedVisibleStoredCalls]);
   const monthMetrics = useMemo(() => aggregateMonthMetrics(dailyMetrics), [dailyMetrics]);
 
   // Unique days sorted
@@ -240,11 +257,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // All unique people sorted by team group
   const allPeople = useMemo(() => {
     const nameSet = new Set<string>();
-    for (const m of dailyMetrics) {
-      if (!shouldHideCallName(m.name)) nameSet.add(m.name);
-    }
-    for (const name of ALWAYS_VISIBLE_PEOPLE) {
-      if (!shouldHideCallName(name)) nameSet.add(name);
+    for (const preferredName of callNameAliases.values()) {
+      if (!shouldHideCallName(preferredName)) nameSet.add(preferredName);
     }
     const names = Array.from(nameSet);
     // Sort by team group order, then alphabetically
@@ -256,7 +270,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       return a.localeCompare(b);
     });
     return names;
-  }, [dailyMetrics]);
+  }, [callNameAliases]);
 
   // People grouped by team (for header)
   const peopleByTeam = useMemo(() => {
@@ -302,16 +316,16 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const currentDayCalls = useMemo(
     () =>
       selectedDay
-        ? storedCalls
+        ? normalizedVisibleStoredCalls
             .filter((c) => c.dateISO === selectedDay && !shouldHideCallName(c.name))
             .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime())
         : [],
-    [storedCalls, selectedDay]
+    [normalizedVisibleStoredCalls, selectedDay]
   );
 
   // Open drill-down dialog for a specific person + day
   const openDrill = (name: string, day: string) => {
-    const calls = visibleStoredCalls
+    const calls = normalizedVisibleStoredCalls
       .filter((c) => c.name === name && c.dateISO === day)
       .sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
     const metrics = metricsLookup.get(day)?.get(name) ?? null;

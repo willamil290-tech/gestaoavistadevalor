@@ -22,7 +22,7 @@ import {
   collaboratorNameKey,
   isMariaCollaboratorName,
 } from "@/lib/collaboratorNames";
-import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
+import { buildPreferredCollaboratorNameMap, getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Building2, Users, CalendarDays, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -197,6 +197,22 @@ export const AcionamentosView = ({
 
   const geralGrouped = useMemo(() => groupByTeam(geralData), [geralData]);
 
+  const geralNameAliases = useMemo(() => {
+    const totalsByName = new Map<string, number>();
+
+    for (const dayData of Object.values(geralMonthData)) {
+      for (const person of dayData) {
+        if (shouldHideAcionamentoName(person.name)) continue;
+        const total = Number(person.empresas ?? 0) + Number(person.leads ?? 0);
+        totalsByName.set(person.name, (totalsByName.get(person.name) ?? 0) + total);
+      }
+    }
+
+    return buildPreferredCollaboratorNameMap(
+      Array.from(totalsByName, ([name, score]) => ({ name, score }))
+    );
+  }, [geralMonthData]);
+
   // Load monthly data on month change
   useEffect(() => {
     const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
@@ -281,11 +297,9 @@ export const AcionamentosView = ({
   const geralAllPeople = useMemo(() => {
     const nameSet = new Set<string>();
     const excluded = ["Bianca", "Karina", "Nayad"];
-    for (const dayData of Object.values(geralMonthData)) {
-      for (const person of dayData) {
-        const firstName = person.name.split(" ")[0];
-        if (!shouldHideAcionamentoName(person.name) && !excluded.includes(firstName)) nameSet.add(person.name);
-      }
+    for (const preferredName of geralNameAliases.values()) {
+      const firstName = preferredName.split(" ")[0];
+      if (!shouldHideAcionamentoName(preferredName) && !excluded.includes(firstName)) nameSet.add(preferredName);
     }
     const names = Array.from(nameSet);
     const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
@@ -296,7 +310,7 @@ export const AcionamentosView = ({
       return a.localeCompare(b);
     });
     return names;
-  }, [geralMonthData]);
+  }, [geralNameAliases]);
 
   const geralPeopleByTeam = useMemo(() => {
     const groups: { group: TeamGroup; names: string[] }[] = [];
@@ -319,13 +333,18 @@ export const AcionamentosView = ({
       const personMap = new Map<string, { empresas: number; leads: number }>();
       for (const person of dayData) {
         if (!shouldHideAcionamentoName(person.name)) {
-          personMap.set(person.name, { empresas: person.empresas, leads: person.leads });
+          const preferredName = geralNameAliases.get(person.name) ?? person.name;
+          const current = personMap.get(preferredName) ?? { empresas: 0, leads: 0 };
+          personMap.set(preferredName, {
+            empresas: current.empresas + person.empresas,
+            leads: current.leads + person.leads,
+          });
         }
       }
       lookup.set(date, personMap);
     }
     return lookup;
-  }, [geralMonthData]);
+  }, [geralMonthData, geralNameAliases]);
 
   const geralDayTotals = useMemo(() => {
     const totals = new Map<string, number>();
@@ -344,15 +363,16 @@ export const AcionamentosView = ({
     for (const dayData of Object.values(geralMonthData)) {
       for (const person of dayData) {
         if (shouldHideAcionamentoName(person.name)) continue;
-        const prev = totals.get(person.name) ?? { empresas: 0, leads: 0 };
-        totals.set(person.name, {
+        const preferredName = geralNameAliases.get(person.name) ?? person.name;
+        const prev = totals.get(preferredName) ?? { empresas: 0, leads: 0 };
+        totals.set(preferredName, {
           empresas: prev.empresas + person.empresas,
           leads: prev.leads + person.leads,
         });
       }
     }
     return totals;
-  }, [geralMonthData]);
+  }, [geralMonthData, geralNameAliases]);
 
   const geralFirstName = (name: string) => name.split(" ")[0];
 

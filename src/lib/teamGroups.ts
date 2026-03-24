@@ -1,21 +1,83 @@
 import { canonicalizeCollaboratorName } from "./collaboratorNames";
 
 export type TeamGroup = "SDRs" | "Closers" | "CS" | "Grandes Contas" | "Executivos";
+export type PreferredCollaboratorNameCandidate = { name: string; score: number };
 
 const TEAM_GROUP_ORDER: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
 
-export function getTeamGroup(name: string): TeamGroup {
-  const firstName = canonicalizeCollaboratorName(name)
+function normalizeTeamFirstName(name: string) {
+  return canonicalizeCollaboratorName(name)
     .trim()
     .split(/\s+/)[0]
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function collaboratorNameDetailScore(name: string) {
+  const cleaned = canonicalizeCollaboratorName(name);
+  if (!cleaned) return 0;
+
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  return (parts.length * 1000) + cleaned.length;
+}
+
+function preferredCollaboratorGroupKey(name: string) {
+  const cleaned = canonicalizeCollaboratorName(name);
+  return `${getTeamGroup(cleaned)}::${normalizeTeamFirstName(cleaned)}`;
+}
+
+function isBetterCollaboratorCandidate(
+  candidate: PreferredCollaboratorNameCandidate,
+  current: PreferredCollaboratorNameCandidate,
+) {
+  if (candidate.score !== current.score) return candidate.score > current.score;
+
+  const candidateDetail = collaboratorNameDetailScore(candidate.name);
+  const currentDetail = collaboratorNameDetailScore(current.name);
+  if (candidateDetail !== currentDetail) return candidateDetail > currentDetail;
+
+  return candidate.name.localeCompare(current.name) < 0;
+}
+
+export function getTeamGroup(name: string): TeamGroup {
+  const firstName = normalizeTeamFirstName(name);
 
   if (["alana", "vanessa", "william", "gabriel"].includes(firstName)) return "SDRs";
   if (["samara", "gisele"].includes(firstName)) return "Closers";
   if (firstName === "bruna") return "CS";
   return "Executivos";
+}
+
+export function buildPreferredCollaboratorNameMap(
+  candidates: PreferredCollaboratorNameCandidate[],
+) {
+  const preferredByGroup = new Map<string, PreferredCollaboratorNameCandidate>();
+
+  for (const candidate of candidates) {
+    const cleaned = canonicalizeCollaboratorName(candidate.name);
+    if (!cleaned) continue;
+
+    const normalizedCandidate = { ...candidate, name: cleaned };
+    const groupKey = preferredCollaboratorGroupKey(cleaned);
+    const current = preferredByGroup.get(groupKey);
+
+    if (!current || isBetterCollaboratorCandidate(normalizedCandidate, current)) {
+      preferredByGroup.set(groupKey, normalizedCandidate);
+    }
+  }
+
+  const aliasByName = new Map<string, string>();
+
+  for (const candidate of candidates) {
+    const cleaned = canonicalizeCollaboratorName(candidate.name);
+    if (!cleaned) continue;
+
+    const preferred = preferredByGroup.get(preferredCollaboratorGroupKey(cleaned));
+    if (preferred) aliasByName.set(cleaned, preferred.name);
+  }
+
+  return aliasByName;
 }
 
 export function groupByTeam<T extends { name: string }>(items: T[]): { group: TeamGroup; items: T[] }[] {
