@@ -43,7 +43,7 @@ function isBetterCollaboratorCandidate(
 export function getTeamGroup(name: string): TeamGroup {
   const firstName = normalizeTeamFirstName(name);
 
-  if (["alana", "vanessa", "william", "gabriel"].includes(firstName)) return "SDRs";
+  if (["alana", "vanessa", "william", "gabriel", "maicon", "adriana"].includes(firstName)) return "SDRs";
   if (["samara", "gisele"].includes(firstName)) return "Closers";
   if (firstName === "bruna") return "CS";
   return "Executivos";
