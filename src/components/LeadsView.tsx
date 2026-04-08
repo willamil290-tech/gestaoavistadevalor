@@ -34,6 +34,16 @@ function genId(prefix = "lead") {
   return u ? String(u) : `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function shouldHideLeadsName(name: string) {
+  const firstName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)[0];
+  return isIgnoredCommercial(name) || firstName === "filipe";
+}
+
 export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMode?: boolean; saveDate?: string; onHistoricalSave?: () => void }) => {
   const remote = useTeamMembers("leads");
   const businessDate = getBusinessDate();
@@ -45,7 +55,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
       : (loadJson(localKey, initialLeadsData as any) as TeamMember[]);
     return (base ?? [])
       .map((m) => ({ ...m, name: canonicalizeActiveCollaboratorName(m.name) }))
-      .filter((m) => !isIgnoredCommercial(m.name));
+      .filter((m) => !shouldHideLeadsName(m.name));
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -60,7 +70,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
     if (!data) return;
 
     const mapped: TeamMember[] = data
-      .filter((m) => !isIgnoredCommercial(m.name))
+      .filter((m) => !shouldHideLeadsName(m.name))
       .map((m) => ({
       id: m.id,
       name: canonicalizeActiveCollaboratorName(m.name),
@@ -93,7 +103,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
 
   const sortedLeadsData = useMemo(() => {
     return [...leadsData]
-      .filter((m) => !isIgnoredCommercial(m.name))
+      .filter((m) => !shouldHideLeadsName(m.name))
       .sort((a, b) => {
       const diff = b.total - a.total;
       if (diff !== 0) return diff;
@@ -189,7 +199,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
         if (parsed.hasTag && parsed.category === null) continue;
         if (parsed.category && parsed.category !== "leads") continue;
         const baseName = parsed.baseName;
-        if (isIgnoredCommercial(baseName)) continue;
+        if (shouldHideLeadsName(baseName)) continue;
         const nk = normalizeNameKey(baseName);
         const existing = existingMap.get(nk);
         const total = e.morning + e.afternoon;
@@ -224,7 +234,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
           if (parsed.category && parsed.category !== "leads") continue;
 
           const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
-          if (isIgnoredCommercial(baseName)) continue;
+          if (shouldHideLeadsName(baseName)) continue;
 		  const key = normalizeNameKey(baseName);
           const existing = map.get(key);
           if (existing) {
@@ -262,7 +272,7 @@ export const LeadsView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMo
       if (parsed.category && parsed.category !== "leads") continue;
 
 	  const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
-	  if (isIgnoredCommercial(baseName)) continue;
+    if (shouldHideLeadsName(baseName)) continue;
 	  const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);
 

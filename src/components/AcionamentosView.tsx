@@ -79,7 +79,13 @@ function normalizeGeralMonthData(data: GeralMonthData) {
 }
 
 function shouldHideAcionamentoName(name: string) {
-  return isIgnoredCommercial(name) || isMariaCollaboratorName(name);
+  const firstName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)[0];
+  return isIgnoredCommercial(name) || isMariaCollaboratorName(name) || firstName === "filipe";
 }
 
 interface AcionamentosViewProps {

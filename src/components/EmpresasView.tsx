@@ -36,6 +36,16 @@ function genId(prefix = "emp") {
   return u ? String(u) : `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function shouldHideEmpresasName(name: string) {
+  const firstName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)[0];
+  return isIgnoredCommercial(name) || firstName === "filipe";
+}
+
 export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { tvMode?: boolean; saveDate?: string; onHistoricalSave?: () => void }) => {
   const remote = useTeamMembers("empresas");
   const businessDate = getBusinessDate();
@@ -46,7 +56,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
     const base = loadJson(localKey, initialTeamData as any) as TeamMember[];
     return (base ?? [])
       .map((m) => ({ ...m, name: canonicalizeActiveCollaboratorName(m.name) }))
-      .filter((m) => !isIgnoredCommercial(m.name));
+      .filter((m) => !shouldHideEmpresasName(m.name));
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -61,7 +71,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
     if (!data) return;
 
     const mapped: TeamMember[] = data
-      .filter((m) => !isIgnoredCommercial(m.name))
+      .filter((m) => !shouldHideEmpresasName(m.name))
       .map((m) => ({
       id: m.id,
       name: canonicalizeActiveCollaboratorName(m.name),
@@ -94,7 +104,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
 
   const sortedTeamData = useMemo(() => {
     return [...teamData]
-      .filter((m) => !isIgnoredCommercial(m.name))
+      .filter((m) => !shouldHideEmpresasName(m.name))
       .sort((a, b) => {
       const diff = b.total - a.total;
       if (diff !== 0) return diff;
@@ -190,7 +200,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
         if (parsed.hasTag && parsed.category === null) continue;
         if (parsed.category && parsed.category !== "empresas") continue;
         const baseName = parsed.baseName;
-        if (isIgnoredCommercial(baseName)) continue;
+        if (shouldHideEmpresasName(baseName)) continue;
         const nk = normalizeNameKey(baseName);
         const existing = existingMap.get(nk);
         const total = e.morning + e.afternoon;
@@ -226,7 +236,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
           if (parsed.category && parsed.category !== "empresas") continue;
 
           const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
-          if (isIgnoredCommercial(baseName)) continue;
+          if (shouldHideEmpresasName(baseName)) continue;
           const key = normalizeNameKey(baseName);
           const existing = map.get(key);
           if (existing) {
@@ -264,7 +274,7 @@ export const EmpresasView = ({ tvMode = false, saveDate, onHistoricalSave }: { t
       if (parsed.category && parsed.category !== "empresas") continue;
 
       const baseName = canonicalizeActiveCollaboratorName(parsed.baseName);
-      if (isIgnoredCommercial(baseName)) continue;
+      if (shouldHideEmpresasName(baseName)) continue;
       const key = normalizeNameKey(baseName);
       const existing = existingByName.get(key);
 
