@@ -146,6 +146,7 @@ export const AcionamentosView = ({
   const empresasRemote = useTeamMembers("empresas");
   const leadsRemote = useTeamMembers("leads");
   const [expandedGeral, setExpandedGeral] = useState<Set<string>>(new Set());
+  const [showAverageRow, setShowAverageRow] = useState(false);
 
   // -- Monthly table state --
   const todayDate = new Date();
@@ -374,13 +375,65 @@ export const AcionamentosView = ({
     return totals;
   }, [geralMonthData, geralNameAliases]);
 
+  const geralPersonAverages = useMemo(() => {
+    const averages = new Map<string, { empresas: number; leads: number }>();
+
+    for (const name of geralAllPeople) {
+      let empresas = 0;
+      let leads = 0;
+      let activeDays = 0;
+
+      for (const day of geralDaysWithData) {
+        const dayMap = geralDataLookup.get(day);
+        const person = dayMap?.get(name);
+        if (!person) continue;
+        if (person.empresas + person.leads <= 0) continue;
+
+        empresas += person.empresas;
+        leads += person.leads;
+        activeDays += 1;
+      }
+
+      if (activeDays > 0) {
+        averages.set(name, {
+          empresas: empresas / activeDays,
+          leads: leads / activeDays,
+        });
+      }
+    }
+
+    return averages;
+  }, [geralAllPeople, geralDaysWithData, geralDataLookup]);
+
+  const geralAverageGrandTotal = useMemo(
+    () => Array.from(geralPersonAverages.values()).reduce((s, v) => s + v.empresas + v.leads, 0),
+    [geralPersonAverages]
+  );
+
   const geralFirstName = (name: string) => name.split(" ")[0];
+  const formatAverageNumber = (value: number) =>
+    Number.isInteger(value)
+      ? String(value)
+      : value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const formatActionCategoryLabel = (category?: string) => {
+    const labels: Record<string, string> = {
+      ETAPA_ALTERADA: "Etapa alterada",
+      ATIVIDADE_CRIADA: "Atividade criada",
+      STATUS_ATIVIDADE_ALTERADA: "Status da atividade",
+      CHAMADA_TELEFONICA: "Chamada telefônica",
+      OUTROS: "Outros",
+    };
+
+    if (!category) return "";
+    return labels[category] ?? category;
+  };
 
   // -- Events drill-down dialog state --
   const [eventsDialog, setEventsDialog] = useState<{
     open: boolean;
     title: string;
-    items: { empresa: string; tipo: string; hora: string }[];
+    items: { empresa: string; tipo: string; hora: string; tipoEvento?: string }[];
   }>({ open: false, title: "", items: [] });
 
   const openGeralCellEvents = (name: string, day: string, filter?: "EMPRESA" | "LEAD") => {
@@ -398,13 +451,18 @@ export const AcionamentosView = ({
       toast.info(`Nenhum evento encontrado para ${name} neste dia.`);
       return;
     }
-    let items: { empresa: string; tipo: string; hora: string }[];
+    let items: { empresa: string; tipo: string; hora: string; tipoEvento?: string }[];
     if (filter === "EMPRESA") {
       items = (detail.uniqueEmpresas ?? []).map((e: any) => ({ empresa: e.empresa, tipo: "Negócio", hora: e.timeHHMM }));
     } else if (filter === "LEAD") {
       items = (detail.uniqueLeads ?? []).map((e: any) => ({ empresa: e.empresa, tipo: "Lead", hora: e.timeHHMM }));
     } else {
-      items = (detail.events ?? []).map((e: any) => ({ empresa: e.empresa, tipo: e.entityType, hora: e.timeHHMM }));
+      items = (detail.events ?? []).map((e: any) => ({
+        empresa: e.empresa,
+        tipo: e.entityType,
+        hora: e.timeHHMM,
+        tipoEvento: e.actionCategory ?? e.actionLine,
+      }));
     }
     const [, m, d] = day.split("-");
     const label = filter === "EMPRESA" ? "Negócios" : filter === "LEAD" ? "Leads" : "Todos";
@@ -604,6 +662,16 @@ export const AcionamentosView = ({
               <Button variant="ghost" size="icon" onClick={nextGeralMonth}><ChevronRight className="w-5 h-5" /></Button>
             </div>
 
+            <div className="flex justify-end mb-3">
+              <Button
+                variant={showAverageRow ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowAverageRow((prev) => !prev)}
+              >
+                Média
+              </Button>
+            </div>
+
             {geralDaysWithData.length === 0 ? (
               <div className="text-center text-muted-foreground py-16">
                 <Building2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
@@ -685,8 +753,23 @@ export const AcionamentosView = ({
                       })}
                       {/* Total row */}
                       <tr className="bg-muted/30 font-semibold border-t-2 border-border">
-                        <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">Total</td>
+                        <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">
+                          {showAverageRow ? "Média" : "Total"}
+                        </td>
                         {geralAllPeople.map(name => {
+                          if (showAverageRow) {
+                            const pa = geralPersonAverages.get(name);
+                            if (!pa) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                            return (
+                              <td key={name} colSpan={2} className="border-r border-border/30 p-0">
+                                <div className="grid grid-cols-2 divide-x divide-border/20">
+                                  <span className="px-1 py-2 text-center font-bold text-secondary tabular-nums">{formatAverageNumber(pa.empresas)}</span>
+                                  <span className="px-1 py-2 text-center font-bold text-amber-600 dark:text-amber-400 tabular-nums">{formatAverageNumber(pa.leads)}</span>
+                                </div>
+                              </td>
+                            );
+                          }
+
                           const pt = geralPersonTotals.get(name);
                           if (!pt) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>;
                           return (
@@ -699,7 +782,9 @@ export const AcionamentosView = ({
                           );
                         })}
                         <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
-                          {Array.from(geralPersonTotals.values()).reduce((s, v) => s + v.empresas + v.leads, 0)}
+                          {showAverageRow
+                            ? formatAverageNumber(geralAverageGrandTotal)
+                            : Array.from(geralPersonTotals.values()).reduce((s, v) => s + v.empresas + v.leads, 0)}
                         </td>
                       </tr>
                     </tbody>
@@ -721,7 +806,7 @@ export const AcionamentosView = ({
 
       {/* Events drill-down dialog */}
       <Dialog open={eventsDialog.open} onOpenChange={(open) => setEventsDialog((prev) => ({ ...prev, open }))}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{eventsDialog.title}</DialogTitle>
             <DialogDescription>{eventsDialog.items.length} registro(s) encontrado(s)</DialogDescription>
@@ -731,9 +816,10 @@ export const AcionamentosView = ({
               <p className="text-muted-foreground text-sm text-center py-4">Nenhum registro encontrado.</p>
             )}
             {eventsDialog.items.map((item, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/30 text-sm">
-                <span className="truncate flex-1 font-medium">{item.empresa}</span>
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-lg bg-muted/30 text-sm">
+                <span className="truncate min-w-0 font-medium">{item.empresa}</span>
                 <span className="text-xs text-muted-foreground shrink-0">{item.tipo}</span>
+                <span className="text-xs text-blue-600 dark:text-blue-400 shrink-0">{formatActionCategoryLabel(item.tipoEvento)}</span>
                 <span className="text-xs text-muted-foreground shrink-0 tabular-nums">{item.hora}</span>
               </div>
             ))}

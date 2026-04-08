@@ -92,6 +92,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [pasteText, setPasteText] = useState("");
   const [showPaste, setShowPaste] = useState(false);
+  const [showAverageRow, setShowAverageRow] = useState(false);
 
   // Drill-down: selected day + person
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -350,6 +351,36 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
 
   // Person first name for compact display
   const firstName = (name: string) => name.split(" ")[0];
+  const formatAverageNumber = (value: number) =>
+    Number.isInteger(value)
+      ? String(value)
+      : value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const monthAveragesByPerson = useMemo(() => {
+    const averages = new Map<string, {
+      totalCalls: number;
+      answeredCalls: number;
+      canceledCalls: number;
+      totalDurationSeconds: number;
+    }>();
+
+    for (const metric of monthMetrics) {
+      if (metric.daysWorked <= 0) continue;
+      averages.set(metric.name, {
+        totalCalls: metric.totalCalls / metric.daysWorked,
+        answeredCalls: metric.answeredCalls / metric.daysWorked,
+        canceledCalls: metric.canceledCalls / metric.daysWorked,
+        totalDurationSeconds: metric.totalDurationSeconds / metric.daysWorked,
+      });
+    }
+
+    return averages;
+  }, [monthMetrics]);
+
+  const monthAverageTotalCalls = useMemo(
+    () => Array.from(monthAveragesByPerson.values()).reduce((sum, item) => sum + item.totalCalls, 0),
+    [monthAveragesByPerson]
+  );
 
   return (
     <div className="animate-fade-in-up">
@@ -364,6 +395,13 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
 
         {!tvMode && (
           <div className="flex items-center gap-2">
+            <Button
+              variant={showAverageRow ? "default" : "outline"}
+              className="rounded-xl"
+              onClick={() => setShowAverageRow((prev) => !prev)}
+            >
+              Média
+            </Button>
             <Button variant="outline" className="rounded-xl" onClick={() => setShowPaste(!showPaste)}>
               <ClipboardPaste className="w-4 h-4 mr-2" />Importar
             </Button>
@@ -564,9 +602,34 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                 {/* Month totals row */}
                 <tr className="bg-muted/30 font-semibold border-t-2 border-border">
                   <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">
-                    Total
+                    {showAverageRow ? "Média" : "Total"}
                   </td>
                   {allPeople.map((name) => {
+                    if (showAverageRow) {
+                      const avg = monthAveragesByPerson.get(name);
+                      if (!avg) {
+                        return <td key={name} colSpan={4} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                      }
+                      return (
+                        <td key={name} colSpan={4} className="border-r border-border/30 p-0">
+                          <div className="grid grid-cols-4 divide-x divide-border/20">
+                            <span className="px-1 py-2 text-center font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                              {formatAverageNumber(avg.totalCalls)}
+                            </span>
+                            <span className="px-1 py-2 text-center tabular-nums font-bold text-green-600 dark:text-green-400">
+                              {formatAverageNumber(avg.answeredCalls)}
+                            </span>
+                            <span className="px-1 py-2 text-center tabular-nums font-bold text-red-600 dark:text-red-400">
+                              {formatAverageNumber(avg.canceledCalls)}
+                            </span>
+                            <span className="px-1 py-2 text-center tabular-nums font-bold text-amber-600 dark:text-amber-400">
+                              {formatTimeShort(avg.totalDurationSeconds)}
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    }
+
                     const pm = monthMetrics.find((m) => m.name === name);
                     if (!pm) {
                       return <td key={name} colSpan={4} className="text-center px-1 py-2 border-r border-border/30">—</td>;
@@ -591,7 +654,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                     );
                   })}
                   <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
-                    {visibleStoredCalls.length}
+                    {showAverageRow ? formatAverageNumber(monthAverageTotalCalls) : visibleStoredCalls.length}
                   </td>
                 </tr>
               </tbody>
