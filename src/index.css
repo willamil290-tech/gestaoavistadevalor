@@ -244,3 +244,120 @@
 .anim-rainbow-text {
   animation: rainbow-text 3s linear infinite;
 }
+
+/* ===== >400% FIRE INFERNO MODE ===== */
+
+/* Fire gradient for SVG strokes */
+@keyframes fire-stop1 {
+  0%   { stop-color: #ff0000; }
+  25%  { stop-color: #ff4400; }
+  50%  { stop-color: #ffaa00; }
+  75%  { stop-color: #ff6600; }
+  100% { stop-color: #ff0000; }
+}
+@keyframes fire-stop2 {
+  0%   { stop-color: #ff6600; }
+  25%  { stop-color: #ffcc00; }
+  50%  { stop-color: #ff4400; }
+  75%  { stop-color: #ffee00; }
+  100% { stop-color: #ff6600; }
+}
+@keyframes fire-stop3 {
+  0%   { stop-color: #ffcc00; }
+  25%  { stop-color: #ff0000; }
+  50%  { stop-color: #ff6600; }
+  75%  { stop-color: #ff2200; }
+  100% { stop-color: #ffcc00; }
+}
+@keyframes fire-stop4 {
+  0%   { stop-color: #ffee00; }
+  25%  { stop-color: #ff8800; }
+  50%  { stop-color: #ff0000; }
+  75%  { stop-color: #ffaa00; }
+  100% { stop-color: #ffee00; }
+}
+@keyframes fire-stop5 {
+  0%   { stop-color: #ff4400; }
+  25%  { stop-color: #ff0000; }
+  50%  { stop-color: #ffee00; }
+  75%  { stop-color: #ff6600; }
+  100% { stop-color: #ff4400; }
+}
+
+.anim-fire-stop1 { animation: fire-stop1 1.2s ease-in-out infinite; }
+.anim-fire-stop2 { animation: fire-stop2 1.2s ease-in-out infinite 0.1s; }
+.anim-fire-stop3 { animation: fire-stop3 1.2s ease-in-out infinite 0.2s; }
+.anim-fire-stop4 { animation: fire-stop4 1.2s ease-in-out infinite 0.3s; }
+.anim-fire-stop5 { animation: fire-stop5 1.2s ease-in-out infinite 0.4s; }
+
+/* Fire text: blazing orange/red/yellow with intense glow */
+@keyframes fire-text {
+  0%   { color: #ff2200; text-shadow: 0 0 20px #ff440099, 0 0 40px #ff000066, 0 -10px 30px #ff880044; }
+  15%  { color: #ff6600; text-shadow: 0 0 25px #ff660099, 0 0 50px #ff220066, 0 -12px 35px #ffaa0044; }
+  30%  { color: #ffaa00; text-shadow: 0 0 30px #ffcc0099, 0 0 60px #ff440066, 0 -15px 40px #ffee0044; }
+  50%  { color: #ffee00; text-shadow: 0 0 35px #ffee0099, 0 0 70px #ff660066, 0 -18px 50px #ffffff44; }
+  70%  { color: #ffaa00; text-shadow: 0 0 30px #ffcc0099, 0 0 60px #ff440066, 0 -15px 40px #ffee0044; }
+  85%  { color: #ff6600; text-shadow: 0 0 25px #ff660099, 0 0 50px #ff220066, 0 -12px 35px #ffaa0044; }
+  100% { color: #ff2200; text-shadow: 0 0 20px #ff440099, 0 0 40px #ff000066, 0 -10px 30px #ff880044; }
+}
+.anim-fire-text {
+  animation: fire-text 1.5s ease-in-out infinite;
+}
+
+/* Screen shake for fire mode */
+@keyframes fire-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-1px, -1px); }
+  20% { transform: translate(1px, 0px); }
+  30% { transform: translate(-1px, 1px); }
+  40% { transform: translate(1px, -1px); }
+  50% { transform: translate(-1px, 0px); }
+  60% { transform: translate(1px, 1px); }
+  70% { transform: translate(0px, -1px); }
+  80% { transform: translate(-1px, 1px); }
+  90% { transform: translate(1px, 0px); }
+}
+.anim-fire-shake {
+  animation: fire-shake 0.4s ease-in-out infinite;
+}
+
+/* Fire card border glow */
+@keyframes fire-border-glow {
+  0%   { border-color: #ff2200; box-shadow: 0 0 15px #ff440066, inset 0 0 15px #ff000022; }
+  33%  { border-color: #ff8800; box-shadow: 0 0 25px #ff880066, inset 0 0 25px #ff440022; }
+  66%  { border-color: #ffcc00; box-shadow: 0 0 35px #ffcc0066, inset 0 0 35px #ff880022; }
+  100% { border-color: #ff2200; box-shadow: 0 0 15px #ff440066, inset 0 0 15px #ff000022; }
+}
+.anim-fire-border {
+  animation: fire-border-glow 1.5s ease-in-out infinite;
+  border-width: 2px;
+}
+
+/* Fire background gradient wave */
+@keyframes fire-bg-wave {
+  0%   { background-position: 0% 100%; }
+  50%  { background-position: 100% 0%; }
+  100% { background-position: 0% 100%; }
+}
+.anim-fire-bg {
+  background: linear-gradient(
+    -45deg,
+    rgba(255, 0, 0, 0.08),
+    rgba(255, 68, 0, 0.12),
+    rgba(255, 136, 0, 0.08),
+    rgba(255, 204, 0, 0.06),
+    rgba(255, 68, 0, 0.10),
+    rgba(255, 0, 0, 0.08)
+  );
+  background-size: 400% 400%;
+  animation: fire-bg-wave 3s ease-in-out infinite;
+}
+
+/* Pulsing scale for fire mode circular progress */
+@keyframes fire-pulse-scale {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.anim-fire-pulse {
+  animation: fire-pulse-scale 1.5s ease-in-out infinite;
+}

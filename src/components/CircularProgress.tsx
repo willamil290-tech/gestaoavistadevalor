@@ -27,6 +27,7 @@ export const CircularProgress = ({
 
   const isOver200 = percentage >= 200;
   const isOver300 = percentage >= 300;
+  const isOver400 = percentage >= 400;
 
   const colors = {
     primary: {
@@ -49,14 +50,22 @@ export const CircularProgress = ({
       <span className="text-base md:text-lg lg:text-xl font-semibold text-muted-foreground uppercase tracking-wider">
         {label}
       </span>
-      <div className="relative" style={{ width: size, height: size }}>
+      <div className={cn("relative", isOver400 && "anim-fire-pulse")} style={{ width: size, height: size }}>
         <svg
-          className="transform -rotate-90"
+          className={cn("transform -rotate-90", isOver400 && "anim-fire-shake")}
           width={size}
           height={size}
         >
           <defs>
-            {isOver300 ? (
+            {isOver400 ? (
+              <linearGradient id={gradientId} x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" className="anim-fire-stop1" />
+                <stop offset="25%" className="anim-fire-stop2" />
+                <stop offset="50%" className="anim-fire-stop3" />
+                <stop offset="75%" className="anim-fire-stop4" />
+                <stop offset="100%" className="anim-fire-stop5" />
+              </linearGradient>
+            ) : isOver300 ? (
               <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" className="anim-rainbow-stop1" />
                 <stop offset="25%" className="anim-rainbow-stop2" />
@@ -107,14 +116,32 @@ export const CircularProgress = ({
               cy={size / 2}
               r={radius}
               fill="none"
-              strokeWidth={strokeWidth + 6}
+              strokeWidth={strokeWidth + (isOver400 ? 14 : 6)}
               strokeLinecap="round"
-              className="opacity-20"
+              className={isOver400 ? "opacity-40" : "opacity-20"}
               style={{
                 strokeDasharray: circumference,
                 strokeDashoffset: offset,
                 stroke: `url(#${gradientId})`,
-                filter: "blur(6px)",
+                filter: isOver400 ? "blur(12px)" : "blur(6px)",
+              }}
+            />
+          )}
+          {/* Extra intense outer glow for >400% */}
+          {isOver400 && (
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              strokeWidth={strokeWidth + 24}
+              strokeLinecap="round"
+              className="opacity-15"
+              style={{
+                strokeDasharray: circumference,
+                strokeDashoffset: offset,
+                stroke: `url(#${gradientId})`,
+                filter: "blur(20px)",
               }}
             />
           )}
@@ -122,7 +149,7 @@ export const CircularProgress = ({
         <div className="absolute inset-0 flex items-center justify-center">
           <span className={cn(
             "text-3xl md:text-4xl font-bold",
-            isOver300 ? "anim-rainbow-text" : isOver200 ? "anim-pulse-text" : "text-white",
+            isOver400 ? "anim-fire-text" : isOver300 ? "anim-rainbow-text" : isOver200 ? "anim-pulse-text" : "text-white",
           )}>
             {percentage.toFixed(1)}%
           </span>

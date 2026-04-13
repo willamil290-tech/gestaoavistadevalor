@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { CircularProgress } from "./CircularProgress";
 import { EditableValue } from "./EditableValue";
+import { FireOverlay } from "./FireOverlay";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getBusinessDate } from "@/lib/businessDate";
@@ -41,7 +42,7 @@ export const DashboardView = ({
   readOnly = false,
 }: DashboardViewProps) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playedRef = useRef({ day100: false, day200: false, day300: false, month100: false, month200: false, month300: false });
+  const playedRef = useRef({ day100: false, day200: false, day300: false, day400: false, month100: false, month200: false, month300: false, month400: false });
   const playedKeyRef = useRef({ dayKey: "", monthKey: "" });
 
   useEffect(() => {
@@ -63,9 +64,11 @@ export const DashboardView = ({
     playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
     playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
     playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
+    playedRef.current.day400 = localStorage.getItem(`themePlayed:day:400:${dayKey}`) === "1";
     playedRef.current.month100 = localStorage.getItem(`themePlayed:month:100:${monthKey}`) === "1";
     playedRef.current.month200 = localStorage.getItem(`themePlayed:month:200:${monthKey}`) === "1";
     playedRef.current.month300 = localStorage.getItem(`themePlayed:month:300:${monthKey}`) === "1";
+    playedRef.current.month400 = localStorage.getItem(`themePlayed:month:400:${monthKey}`) === "1";
   }, []);
 
 
@@ -103,16 +106,22 @@ export const DashboardView = ({
       playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
       playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
       playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
+      playedRef.current.day400 = localStorage.getItem(`themePlayed:day:400:${dayKey}`) === "1";
     }
     if (playedKeyRef.current.monthKey !== monthKey) {
       playedKeyRef.current.monthKey = monthKey;
       playedRef.current.month100 = localStorage.getItem(`themePlayed:month:100:${monthKey}`) === "1";
       playedRef.current.month200 = localStorage.getItem(`themePlayed:month:200:${monthKey}`) === "1";
       playedRef.current.month300 = localStorage.getItem(`themePlayed:month:300:${monthKey}`) === "1";
+      playedRef.current.month400 = localStorage.getItem(`themePlayed:month:400:${monthKey}`) === "1";
     }
 
-    // Day milestones: 300% > 200% > 100% (play highest unplayed)
-    if (percentualDia >= 300 && !playedRef.current.day300) {
+    // Day milestones: 400% > 300% > 200% > 100% (play highest unplayed)
+    if (percentualDia >= 400 && !playedRef.current.day400) {
+      playedRef.current.day400 = true;
+      try { localStorage.setItem(`themePlayed:day:400:${dayKey}`, "1"); } catch {}
+      playTheme("dia");
+    } else if (percentualDia >= 300 && !playedRef.current.day300) {
       playedRef.current.day300 = true;
       try { localStorage.setItem(`themePlayed:day:300:${dayKey}`, "1"); } catch {}
       playTheme("dia");
@@ -126,8 +135,12 @@ export const DashboardView = ({
       playTheme("dia");
     }
 
-    // Month milestones: 300% > 200% > 100%
-    if (percentualMes >= 300 && !playedRef.current.month300) {
+    // Month milestones: 400% > 300% > 200% > 100%
+    if (percentualMes >= 400 && !playedRef.current.month400) {
+      playedRef.current.month400 = true;
+      try { localStorage.setItem(`themePlayed:month:400:${monthKey}`, "1"); } catch {}
+      playTheme("mes");
+    } else if (percentualMes >= 300 && !playedRef.current.month300) {
       playedRef.current.month300 = true;
       try { localStorage.setItem(`themePlayed:month:300:${monthKey}`, "1"); } catch {}
       playTheme("mes");
@@ -145,14 +158,17 @@ export const DashboardView = ({
   const circleSize = tvMode ? 170 : 200;
   const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-  const pctDiaClass = percentualDia >= 300 ? "anim-rainbow-text" : percentualDia >= 200 ? "anim-pulse-text" : "";
-  const pctMesClass = percentualMes >= 300 ? "anim-rainbow-text" : percentualMes >= 200 ? "anim-pulse-text" : "";
+  const pctDiaClass = percentualDia >= 400 ? "anim-fire-text" : percentualDia >= 300 ? "anim-rainbow-text" : percentualDia >= 200 ? "anim-pulse-text" : "";
+  const pctMesClass = percentualMes >= 400 ? "anim-fire-text" : percentualMes >= 300 ? "anim-rainbow-text" : percentualMes >= 200 ? "anim-pulse-text" : "";
+
+  const isFireMode = percentualDia >= 400 || percentualMes >= 400;
 
   return (
-    <div className={cn(tvMode ? "space-y-4" : "space-y-6")}>
+    <div className={cn(tvMode ? "space-y-4" : "space-y-6", isFireMode && "anim-fire-bg")}>
+      {isFireMode && <FireOverlay />}
       <div className={cn("grid grid-cols-1 lg:grid-cols-2", tvMode ? "gap-4" : "gap-4 md:gap-6")}>
         {/* Month Section */}
-        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-4" : "p-4 md:p-6")}>
+        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-4" : "p-4 md:p-6", percentualMes >= 400 && "anim-fire-border")}>
           <div className={cn("flex flex-col items-center", tvMode ? "gap-3" : "gap-4")}>
             <EditableValue
               value={atingidoMesLiquido}
@@ -196,7 +212,7 @@ export const DashboardView = ({
         </div>
 
         {/* Day Section */}
-        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-4" : "p-4 md:p-6")}>
+        <div className={cn("bg-card rounded-2xl border border-border", tvMode ? "p-4" : "p-4 md:p-6", percentualDia >= 400 && "anim-fire-border")}>
           <div className={cn("flex flex-col items-center", tvMode ? "gap-3" : "gap-4")}>
             <EditableValue
               value={atingidoDiaLiquido}
@@ -242,11 +258,11 @@ export const DashboardView = ({
 
       {/* Summary Cards */}
       <div className={cn("grid grid-cols-2 md:grid-cols-4", tvMode ? "gap-3" : "gap-3 md:gap-4")}>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4", percentualMes >= 400 && "anim-fire-border")}>
           <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>% Mês</p>
           <p className={cn("font-bold text-primary", tvMode ? "text-2xl" : "text-2xl md:text-3xl", pctMesClass)}>{percentualMes.toFixed(1)}%</p>
         </div>
-        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4")}>
+        <div className={cn("bg-card rounded-xl border border-border text-center", tvMode ? "p-3" : "p-4", percentualDia >= 400 && "anim-fire-border")}>
           <p className={cn("text-muted-foreground", tvMode ? "text-sm mb-1" : "text-sm md:text-base mb-2")}>% Dia</p>
           <p className={cn("font-bold text-secondary", tvMode ? "text-2xl" : "text-2xl md:text-3xl", pctDiaClass)}>{percentualDia.toFixed(1)}%</p>
         </div>
