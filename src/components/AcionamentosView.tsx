@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from "recharts";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -353,6 +353,35 @@ export const AcionamentosView = ({
     return lookup;
   }, [geralMonthData, geralNameAliases]);
 
+  // Daily sector subtotals for geral tab
+  const geralDaySectorMetrics = useMemo(() => {
+    const lookup = new Map<string, Map<TeamGroup, { empresas: number; leads: number }>>();
+
+    for (const day of geralDaysWithData) {
+      const dayMap = geralDataLookup.get(day);
+      if (!dayMap) continue;
+
+      const sectorMap = new Map<TeamGroup, { empresas: number; leads: number }>();
+      const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+      for (const group of groupOrder) {
+        sectorMap.set(group, { empresas: 0, leads: 0 });
+      }
+
+      for (const [name, metrics] of dayMap.entries()) {
+        const group = getTeamGroup(name);
+        const current = sectorMap.get(group);
+        if (current) {
+          current.empresas += metrics.empresas;
+          current.leads += metrics.leads;
+        }
+      }
+
+      lookup.set(day, sectorMap);
+    }
+
+    return lookup;
+  }, [geralDaysWithData, geralDataLookup]);
+
   const geralDayTotals = useMemo(() => {
     const totals = new Map<string, number>();
     for (const day of geralDaysWithData) {
@@ -415,6 +444,26 @@ export const AcionamentosView = ({
     () => Array.from(geralPersonAverages.values()).reduce((s, v) => s + v.empresas + v.leads, 0),
     [geralPersonAverages]
   );
+
+  const geralSectorTotals = useMemo(() => {
+    const totals = new Map<TeamGroup, { empresas: number; leads: number }>();
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    
+    for (const group of groupOrder) {
+      totals.set(group, { empresas: 0, leads: 0 });
+    }
+
+    for (const [name, total] of geralPersonTotals.entries()) {
+      const group = getTeamGroup(name);
+      const current = totals.get(group) ?? { empresas: 0, leads: 0 };
+      totals.set(group, {
+        empresas: current.empresas + total.empresas,
+        leads: current.leads + total.leads,
+      });
+    }
+
+    return totals;
+  }, [geralPersonTotals]);
 
   const geralFirstName = (name: string) => name.split(" ")[0];
   const formatAverageNumber = (value: number) =>
@@ -729,35 +778,109 @@ export const AcionamentosView = ({
                         const dayMap = geralDataLookup.get(day);
                         const dayTotal = geralDayTotals.get(day) ?? 0;
                         return (
-                          <tr key={day} className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
-                            <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
-                              {parseInt(d)}
+                          <Fragment key={day}>
+                            <tr className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
+                              <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
+                                {parseInt(d)}
+                              </td>
+                              {geralAllPeople.map(name => {
+                                const m = dayMap?.get(name);
+                                if (!m) return (
+                                  <td key={name} colSpan={2} className="text-center px-1 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
+                                );
+                                return (
+                                  <td key={name} colSpan={2} className="border-r border-border/30 p-0">
+                                    <button
+                                      onClick={() => openGeralCellEvents(name, day)}
+                                      className="w-full hover:bg-secondary/10 transition-colors cursor-pointer"
+                                      title={`${name} — Dia ${parseInt(d)}: clique para ver logs`}
+                                    >
+                                      <div className="grid grid-cols-2 divide-x divide-border/20">
+                                        <span className="px-1 py-2 text-center font-semibold text-secondary tabular-nums">{m.empresas}</span>
+                                        <span className="px-1 py-2 text-center font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{m.leads}</span>
+                                      </div>
+                                    </button>
+                                  </td>
+                                );
+                              })}
+                              <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                            </tr>
+
+                            {/* Sector subtotals for this day */}
+                            {geralPeopleByTeam.map(({ group, names }) => {
+                              const sectorMetricsForDay = geralDaySectorMetrics.get(day)?.get(group);
+                              if (!sectorMetricsForDay || (sectorMetricsForDay.empresas + sectorMetricsForDay.leads === 0)) return null;
+
+                              return (
+                                <tr key={`${day}-${group}`} className="bg-blue-500/5 border-b border-border/20 text-xs">
+                                  <td className="text-center px-2 py-1.5 border-r border-border sticky left-0 z-10 bg-blue-500/5 text-[11px] font-medium text-muted-foreground">
+                                    {group}
+                                  </td>
+                                  {geralAllPeople.map(name => {
+                                    if (!names.includes(name)) {
+                                      return <td key={name} colSpan={2} className="border-r border-border/20" />;
+                                    }
+                                    const m = dayMap?.get(name);
+                                    if (!m) {
+                                      return (
+                                        <td key={name} colSpan={2} className="text-center px-1 py-1.5 text-muted-foreground/20 border-r border-border/20">
+                                          —
+                                        </td>
+                                      );
+                                    }
+                                    return (
+                                      <td key={name} colSpan={2} className="border-r border-border/20 p-0">
+                                        <div className="grid grid-cols-2 divide-x divide-border/20">
+                                          <span className="px-1 py-1 text-center text-xs text-secondary tabular-nums font-medium">
+                                            {m.empresas}
+                                          </span>
+                                          <span className="px-1 py-1 text-center tabular-nums text-xs text-amber-500 font-medium">
+                                            {m.leads}
+                                          </span>
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="text-center px-2 py-1.5 font-bold text-secondary tabular-nums text-xs">
+                                    {sectorMetricsForDay.empresas + sectorMetricsForDay.leads}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
+                        );
+                      })}
+                      {/* Sector subtotal rows */}
+                      {geralPeopleByTeam.map(({ group, names }) => {
+                        const st = geralSectorTotals.get(group);
+                        if (!st) return null;
+                        return (
+                          <tr key={`sector-${group}`} className="bg-muted/20 font-semibold border-t border-border/50">
+                            <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/20 text-xs">
+                              {group}
                             </td>
                             {geralAllPeople.map(name => {
-                              const m = dayMap?.get(name);
-                              if (!m) return (
-                                <td key={name} colSpan={2} className="text-center px-1 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
-                              );
+                              if (!names.includes(name)) {
+                                return <td key={name} colSpan={2} className="border-r border-border/30" />;
+                              }
+                              const pt = geralPersonTotals.get(name);
+                              if (!pt) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>;
                               return (
                                 <td key={name} colSpan={2} className="border-r border-border/30 p-0">
-                                  <button
-                                    onClick={() => openGeralCellEvents(name, day)}
-                                    className="w-full hover:bg-secondary/10 transition-colors cursor-pointer"
-                                    title={`${name} — Dia ${parseInt(d)}: clique para ver logs`}
-                                  >
-                                    <div className="grid grid-cols-2 divide-x divide-border/20">
-                                      <span className="px-1 py-2 text-center font-semibold text-secondary tabular-nums">{m.empresas}</span>
-                                      <span className="px-1 py-2 text-center font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{m.leads}</span>
-                                    </div>
-                                  </button>
+                                  <div className="grid grid-cols-2 divide-x divide-border/20">
+                                    <span className="px-1 py-2 text-center text-secondary tabular-nums">{pt.empresas}</span>
+                                    <span className="px-1 py-2 text-center text-amber-600 dark:text-amber-400 tabular-nums">{pt.leads}</span>
+                                  </div>
                                 </td>
                               );
                             })}
-                            <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                            <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                              {st.empresas + st.leads}
+                            </td>
                           </tr>
                         );
                       })}
-                      {/* Total row */}
+                      {/* Grand total row */}
                       <tr className="bg-muted/30 font-semibold border-t-2 border-border">
                         <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">
                           {showAverageRow ? "Média" : "Total"}
@@ -777,7 +900,7 @@ export const AcionamentosView = ({
                           }
 
                           const pt = geralPersonTotals.get(name);
-                          if (!pt) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                          if (!pt) return <td key={name} colSpan={2} className="text-center px-1 py-2 border-r border-border/30">—</td>
                           return (
                             <td key={name} colSpan={2} className="border-r border-border/30 p-0">
                               <div className="grid grid-cols-2 divide-x divide-border/20">
@@ -791,7 +914,6 @@ export const AcionamentosView = ({
                           {showAverageRow
                             ? formatAverageNumber(geralAverageGrandTotal)
                             : Array.from(geralPersonTotals.values()).reduce((s, v) => s + v.empresas + v.leads, 0)}
-                        </td>
                       </tr>
                     </tbody>
                   </table>

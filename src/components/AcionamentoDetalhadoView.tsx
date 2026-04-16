@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -360,6 +360,32 @@ export const AcionamentoDetalhadoView = ({
     return totals;
   }, [detDaysWithData, detDataLookup]);
 
+  // Daily sector subtotals for detailed tab
+  const detDaySectorMetrics = useMemo(() => {
+    const lookup = new Map<string, Map<TeamGroup, number>>();
+
+    for (const day of detDaysWithData) {
+      const dayMap = detDataLookup.get(day);
+      if (!dayMap) continue;
+
+      const sectorMap = new Map<TeamGroup, number>();
+      const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+      for (const group of groupOrder) {
+        sectorMap.set(group, 0);
+      }
+
+      for (const [name, person] of dayMap.entries()) {
+        const group = getTeamGroup(name);
+        const current = sectorMap.get(group) ?? 0;
+        sectorMap.set(group, current + person.total);
+      }
+
+      lookup.set(day, sectorMap);
+    }
+
+    return lookup;
+  }, [detDaysWithData, detDataLookup]);
+
   const detPersonTotals = useMemo(() => {
     const totals = new Map<string, number>();
     for (const dayData of Object.values(detMonthData)) {
@@ -370,6 +396,23 @@ export const AcionamentoDetalhadoView = ({
     }
     return totals;
   }, [detMonthData]);
+
+  const detSectorTotals = useMemo(() => {
+    const totals = new Map<TeamGroup, number>();
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    
+    for (const group of groupOrder) {
+      totals.set(group, 0);
+    }
+
+    for (const [name, total] of detPersonTotals.entries()) {
+      const group = getTeamGroup(name);
+      const current = totals.get(group) ?? 0;
+      totals.set(group, current + total);
+    }
+
+    return totals;
+  }, [detPersonTotals]);
 
   const detFirstName = (name: string) => name.split(" ")[0];
 
@@ -488,31 +531,94 @@ export const AcionamentoDetalhadoView = ({
                   const dayMap = detDataLookup.get(day);
                   const dayTotal = detDayTotals.get(day) ?? 0;
                   return (
-                    <tr key={day} className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
-                      <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
-                        {parseInt(d)}
+                    <Fragment key={day}>
+                      <tr className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", rowIdx % 2 === 0 ? "" : "bg-muted/5")}>
+                        <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
+                          {parseInt(d)}
+                        </td>
+                        {detAllPeople.map(name => {
+                          const m = dayMap?.get(name);
+                          if (!m) return (
+                            <td key={name} className="text-center px-2 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
+                          );
+                          return (
+                            <td key={name} className="text-center border-r border-border/30 p-0">
+                              <button
+                                onClick={() => openCellDetail(name, day)}
+                                className="w-full px-2 py-2 hover:bg-secondary/10 transition-colors cursor-pointer font-semibold text-secondary tabular-nums"
+                                title={`${name} — Dia ${parseInt(d)}: ${m.total} acionamentos`}
+                              >
+                                {m.total}
+                              </button>
+                            </td>
+                          );
+                        })}
+                        <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                      </tr>
+
+                      {/* Sector subtotals for this day */}
+                      {detPeopleByTeam.map(({ group, names }) => {
+                        const sectorMetricsForDay = detDaySectorMetrics.get(day)?.get(group) ?? 0;
+                        if (sectorMetricsForDay === 0) return null;
+
+                        return (
+                          <tr key={`${day}-${group}`} className="bg-blue-500/5 border-b border-border/20 text-xs">
+                            <td className="text-center px-2 py-1.5 border-r border-border sticky left-0 z-10 bg-blue-500/5 text-[11px] font-medium text-muted-foreground">
+                              {group}
+                            </td>
+                            {detAllPeople.map(name => {
+                              if (!names.includes(name)) {
+                                return <td key={name} className="border-r border-border/20" />;
+                              }
+                              const m = dayMap?.get(name);
+                              if (!m) {
+                                return (
+                                  <td key={name} className="text-center px-2 py-1.5 text-muted-foreground/20 border-r border-border/20">
+                                    —
+                                  </td>
+                                );
+                              }
+                              return (
+                                <td key={name} className="text-center px-2 py-1.5 text-secondary tabular-nums font-medium border-r border-border/20">
+                                  {m.total}
+                                </td>
+                              );
+                            })}
+                            <td className="text-center px-2 py-1.5 font-bold text-secondary tabular-nums text-xs">
+                              {sectorMetricsForDay}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+                {/* Sector subtotal rows */}
+                {detPeopleByTeam.map(({ group, names }) => {
+                  const st = detSectorTotals.get(group) ?? 0;
+                  return (
+                    <tr key={`sector-${group}`} className="bg-muted/20 font-semibold border-t border-border/50">
+                      <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/20 text-xs">
+                        {group}
                       </td>
                       {detAllPeople.map(name => {
-                        const m = dayMap?.get(name);
-                        if (!m) return (
-                          <td key={name} className="text-center px-2 py-2 text-muted-foreground/30 border-r border-border/30">—</td>
-                        );
+                        if (!names.includes(name)) {
+                          return <td key={name} className="border-r border-border/30" />;
+                        }
+                        const pt = detPersonTotals.get(name) ?? 0;
                         return (
-                          <td key={name} className="text-center border-r border-border/30 p-0">
-                            <button
-                              onClick={() => openCellDetail(name, day)}
-                              className="w-full px-2 py-2 hover:bg-secondary/10 transition-colors cursor-pointer font-semibold text-secondary tabular-nums"
-                              title={`${name} — Dia ${parseInt(d)}: ${m.total} acionamentos`}
-                            >
-                              {m.total}
-                            </button>
+                          <td key={name} className="text-center px-2 py-2 text-secondary tabular-nums border-r border-border/30">
+                            {pt}
                           </td>
                         );
                       })}
-                      <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">{dayTotal}</td>
+                      <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                        {st}
+                      </td>
                     </tr>
                   );
                 })}
+                {/* Grand total row */}
                 <tr className="bg-muted/30 font-semibold border-t-2 border-border">
                   <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">Total</td>
                   {detAllPeople.map(name => {

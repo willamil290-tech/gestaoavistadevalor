@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { Phone, Timer, Clock, PhoneIncoming, PhoneOff, CalendarDays, ChevronLeft, ChevronRight, ClipboardPaste, Trash2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -300,6 +300,48 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     return lookup;
   }, [dailyMetrics]);
 
+  // Daily sector subtotals: day -> group -> metrics
+  const daySectorMetrics = useMemo(() => {
+    const lookup = new Map<string, Map<TeamGroup, {
+      totalCalls: number;
+      answeredCalls: number;
+      canceledCalls: number;
+      totalDurationSeconds: number;
+    }>>();
+
+    for (const day of daysWithData) {
+      const dayMap = metricsLookup.get(day);
+      if (!dayMap) continue;
+
+      const sectorMap = new Map<TeamGroup, {
+        totalCalls: number;
+        answeredCalls: number;
+        canceledCalls: number;
+        totalDurationSeconds: number;
+      }>();
+      
+      const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+      for (const group of groupOrder) {
+        sectorMap.set(group, { totalCalls: 0, answeredCalls: 0, canceledCalls: 0, totalDurationSeconds: 0 });
+      }
+
+      for (const [name, metrics] of dayMap.entries()) {
+        const group = getTeamGroup(name);
+        const current = sectorMap.get(group);
+        if (current) {
+          current.totalCalls += metrics.totalCalls;
+          current.answeredCalls += metrics.answeredCalls;
+          current.canceledCalls += metrics.canceledCalls;
+          current.totalDurationSeconds += metrics.totalDurationSeconds;
+        }
+      }
+
+      lookup.set(day, sectorMap);
+    }
+
+    return lookup;
+  }, [daysWithData, metricsLookup]);
+
   // Daily totals
   const dayTotals = useMemo(() => {
     const totals = new Map<string, number>();
@@ -381,6 +423,33 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     () => Array.from(monthAveragesByPerson.values()).reduce((sum, item) => sum + item.totalCalls, 0),
     [monthAveragesByPerson]
   );
+
+  const sectorMetrics = useMemo(() => {
+    const totals = new Map<TeamGroup, {
+      totalCalls: number;
+      answeredCalls: number;
+      canceledCalls: number;
+      totalDurationSeconds: number;
+    }>();
+    const groupOrder: TeamGroup[] = ["SDRs", "Closers", "CS", "Grandes Contas", "Executivos"];
+    
+    for (const group of groupOrder) {
+      totals.set(group, { totalCalls: 0, answeredCalls: 0, canceledCalls: 0, totalDurationSeconds: 0 });
+    }
+
+    for (const metric of monthMetrics) {
+      const group = getTeamGroup(metric.name);
+      const current = totals.get(group);
+      if (current) {
+        current.totalCalls += metric.totalCalls;
+        current.answeredCalls += metric.answeredCalls;
+        current.canceledCalls += metric.canceledCalls;
+        current.totalDurationSeconds += metric.totalDurationSeconds;
+      }
+    }
+
+    return totals;
+  }, [monthMetrics]);
 
   return (
     <div className="animate-fade-in-up">
@@ -539,22 +608,22 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   const dayTotal = dayTotals.get(day) ?? 0;
 
                   return (
-                    <tr
-                      key={day}
-                      className={cn(
-                        "border-b border-border/30 hover:bg-muted/20 transition-colors",
-                        rowIdx % 2 === 0 ? "" : "bg-muted/5"
-                      )}
-                    >
-                      {/* Day number - clickable to drill into day */}
-                      <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
-                        <button
-                          onClick={() => setSelectedDay(day)}
-                          className="hover:text-blue-500 hover:underline cursor-pointer transition-colors"
-                          title={`Ver detalhes do dia ${parseInt(d)}`}
-                        >
-                          {parseInt(d)}
-                        </button>
+                    <Fragment key={day}>
+                      <tr
+                        className={cn(
+                          "border-b border-border/30 hover:bg-muted/20 transition-colors",
+                          rowIdx % 2 === 0 ? "" : "bg-muted/5"
+                        )}
+                      >
+                        {/* Day number - clickable to drill into day */}
+                        <td className="text-center px-2 py-2 font-semibold border-r border-border sticky left-0 z-10 bg-card">
+                          <button
+                            onClick={() => setSelectedDay(day)}
+                            className="hover:text-blue-500 hover:underline cursor-pointer transition-colors"
+                            title={`Ver detalhes do dia ${parseInt(d)}`}
+                          >
+                            {parseInt(d)}
+                          </button>
                       </td>
 
                       {/* Per-person cells */}
@@ -596,10 +665,101 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                         {dayTotal}
                       </td>
                     </tr>
+
+                    {/* Sector subtotals for this day */}
+                    {peopleByTeam.map(({ group, names }) => {
+                      const sectorMetricsForDay = daySectorMetrics.get(day)?.get(group);
+                      if (!sectorMetricsForDay || sectorMetricsForDay.totalCalls === 0) return null;
+
+                      return (
+                        <tr key={`${day}-${group}`} className="bg-blue-500/5 border-b border-border/20 text-xs">
+                          <td className="text-center px-2 py-1.5 border-r border-border sticky left-0 z-10 bg-blue-500/5 text-[11px] font-medium text-muted-foreground">
+                            {group}
+                          </td>
+                          {allPeople.map((name) => {
+                            if (!names.includes(name)) {
+                              return <td key={name} colSpan={4} className="border-r border-border/20" />;
+                            }
+                            const m = dayMap?.get(name);
+                            if (!m) {
+                              return (
+                                <td key={name} colSpan={4} className="text-center px-1 py-1.5 text-muted-foreground/20 border-r border-border/20">
+                                  —
+                                </td>
+                              );
+                            }
+                            return (
+                              <td key={name} colSpan={4} className="border-r border-border/20 p-0">
+                                <div className="grid grid-cols-4 divide-x divide-border/20">
+                                  <span className="px-1 py-1 text-center text-xs text-blue-500 tabular-nums font-medium">
+                                    {m.totalCalls}
+                                  </span>
+                                  <span className="px-1 py-1 text-center tabular-nums text-xs text-green-500 font-medium">
+                                    {m.answeredCalls}
+                                  </span>
+                                  <span className="px-1 py-1 text-center tabular-nums text-xs text-red-500 font-medium">
+                                    {m.canceledCalls}
+                                  </span>
+                                  <span className="px-1 py-1 text-center tabular-nums text-xs text-amber-500 font-medium">
+                                    {formatTimeShort(m.totalDurationSeconds)}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td className="text-center px-2 py-1.5 font-bold text-blue-600 dark:text-blue-400 tabular-nums text-xs">
+                            {sectorMetricsForDay.totalCalls}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    </Fragment>
                   );
                 })}
 
-                {/* Month totals row */}
+                {peopleByTeam.map(({ group, names }) => {
+                  const st = sectorMetrics.get(group);
+                  if (!st) return null;
+                  return (
+                    <tr key={`sector-${group}`} className="bg-muted/20 font-semibold border-t border-border/50">
+                      <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/20 text-xs">
+                        {group}
+                      </td>
+                      {allPeople.map((name) => {
+                        if (!names.includes(name)) {
+                          return <td key={name} colSpan={4} className="border-r border-border/30" />;
+                        }
+                        const pm = monthMetrics.find((m) => m.name === name);
+                        if (!pm) {
+                          return <td key={name} colSpan={4} className="text-center px-1 py-2 border-r border-border/30">—</td>;
+                        }
+                        return (
+                          <td key={name} colSpan={4} className="border-r border-border/30 p-0">
+                            <div className="grid grid-cols-4 divide-x divide-border/20">
+                              <span className="px-1 py-2 text-center text-blue-600 dark:text-blue-400 tabular-nums">
+                                {pm.totalCalls}
+                              </span>
+                              <span className="px-1 py-2 text-center tabular-nums text-green-600 dark:text-green-400">
+                                {pm.answeredCalls}
+                              </span>
+                              <span className="px-1 py-2 text-center tabular-nums text-red-600 dark:text-red-400">
+                                {pm.canceledCalls}
+                              </span>
+                              <span className="px-1 py-2 text-center tabular-nums text-amber-600 dark:text-amber-400">
+                                {formatTimeShort(pm.totalDurationSeconds)}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                        {st.totalCalls}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* Grand total row */}
                 <tr className="bg-muted/30 font-semibold border-t-2 border-border">
                   <td className="text-center px-2 py-2 border-r border-border sticky left-0 z-10 bg-muted/30">
                     {showAverageRow ? "Média" : "Total"}
