@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,14 +28,21 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const StorageWarning = () => {
+  const [warning, setWarning] = useState(false);
+
   useEffect(() => {
-    const stats = getStorageStats();
-    if (stats.usingMemoryStore) {
-      console.warn("[App] Aviso: localStorage não disponível. Usando memória como fallback. Os dados serão perdidos ao recarregar.", stats);
+    try {
+      if (isUsingMemoryStore()) {
+        const stats = getStorageStats();
+        console.warn("[App] Aviso: localStorage não disponível. Usando memória como fallback.", stats);
+        setWarning(true);
+      }
+    } catch (e) {
+      console.error("[App] Erro ao verificar storage:", e);
     }
   }, []);
 
-  if (!isUsingMemoryStore()) {
+  if (!warning) {
     return null;
   }
 
