@@ -28,30 +28,60 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const StorageWarning = () => {
-  const [warning, setWarning] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [storageInfo, setStorageInfo] = useState<string>("");
 
   useEffect(() => {
-    try {
-      if (isUsingMemoryStore()) {
-        const stats = getStorageStats();
-        console.warn("[App] Aviso: localStorage não disponível. Usando memória como fallback.", stats);
-        setWarning(true);
+    const checkStorage = async () => {
+      try {
+        const stats = await getStorageStats();
+        
+        let info = "";
+        if (stats.sqliteAvailable) {
+          info = `SQLite ativo (${stats.sqliteStats.recordCount || 0} registros)`;
+        } else if (stats.indexedDBAvailable) {
+          info = "IndexedDB ativo";
+        } else if (stats.localStorageAvailable) {
+          info = "localStorage ativo";
+        } else {
+          info = "Apenas memória (dados serão perdidos!)";
+        }
+        setStorageInfo(info);
+
+        if (stats.usingMemoryStore) {
+          setWarning("Nenhum sistema de armazenamento persistente disponível!");
+        } else if (!stats.sqliteAvailable && !stats.indexedDBAvailable && !stats.localStorageAvailable) {
+          setWarning("Todos os sistemas de armazenamento falharam!");
+        }
+        
+        console.log("[App] Status de armazenamento:", stats);
+      } catch (e) {
+        console.error("[App] Erro ao verificar storage:", e);
+        setWarning("Erro ao verificar sistemas de armazenamento.");
       }
-    } catch (e) {
-      console.error("[App] Erro ao verificar storage:", e);
-    }
+    };
+    
+    checkStorage();
   }, []);
 
-  if (!warning) {
-    return null;
-  }
-
   return (
-    <Alert variant="destructive" className="m-4">
-      <AlertDescription>
-        ⚠️ <strong>localStorage indisponível!</strong> Dados estão sendo salvos apenas em memória. Serão perdidos ao recarregar a página. Verifique permissões do navegador ou modo anônimo.
-      </AlertDescription>
-    </Alert>
+    <>
+      {/* Info bar */}
+      <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-sm text-blue-800">
+        💾 Armazenamento: {storageInfo}
+      </div>
+      
+      {/* Warning */}
+      {warning && (
+        <Alert variant="destructive" className="m-4">
+          <AlertDescription>
+            ⚠️ <strong>Problema crítico:</strong> {warning}
+            <br />
+            <small>Verifique permissões do navegador, modo anônimo ou configurações de privacidade.</small>
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
   );
 };
 
