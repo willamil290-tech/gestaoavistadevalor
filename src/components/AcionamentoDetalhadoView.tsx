@@ -266,6 +266,7 @@ export const AcionamentoDetalhadoView = ({
   const [detYear, setDetYear] = useState(todayDate.getFullYear());
   const [detMonth, setDetMonth] = useState(todayDate.getMonth() + 1);
   const [detMonthData, setDetMonthData] = useState<DetMonthData>({});
+  const [showSectorSubtotals, setShowSectorSubtotals] = useState(false);
 
   useEffect(() => {
     const key = `acionDet:${detYear}-${pad2(detMonth)}`;
@@ -492,6 +493,17 @@ export const AcionamentoDetalhadoView = ({
         <Button variant="ghost" size="icon" onClick={nextDetMonth}><ChevronRight className="w-5 h-5" /></Button>
       </div>
 
+      {/* Controls */}
+      <div className="flex justify-end mb-3">
+        <Button
+          variant={showSectorSubtotals ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowSectorSubtotals((prev) => !prev)}
+        >
+          Subtotais
+        </Button>
+      </div>
+
       {/* Monthly table — acionamento detalhado per person */}
       {detDaysWithData.length === 0 ? (
         <div className="text-center text-muted-foreground py-16">
@@ -557,7 +569,7 @@ export const AcionamentoDetalhadoView = ({
                       </tr>
 
                       {/* Sector subtotals for this day */}
-                      {detPeopleByTeam.map(({ group, names }) => {
+                      {showSectorSubtotals && detPeopleByTeam.map(({ group, names }) => {
                         const sectorMetricsForDay = detDaySectorMetrics.get(day)?.get(group) ?? 0;
                         if (sectorMetricsForDay === 0) return null;
 
@@ -594,7 +606,7 @@ export const AcionamentoDetalhadoView = ({
                   );
                 })}
                 {/* Sector subtotal rows */}
-                {detPeopleByTeam.map(({ group, names }) => {
+                {showSectorSubtotals && detPeopleByTeam.map(({ group, names }) => {
                   const st = detSectorTotals.get(group) ?? 0;
                   return (
                     <tr key={`sector-${group}`} className="bg-muted/20 font-semibold border-t border-border/50">

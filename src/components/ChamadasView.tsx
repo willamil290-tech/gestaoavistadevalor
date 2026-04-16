@@ -93,6 +93,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const [pasteText, setPasteText] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [showAverageRow, setShowAverageRow] = useState(false);
+  const [showSectorSubtotals, setShowSectorSubtotals] = useState(false);
 
   // Drill-down: selected day + person
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -471,6 +472,13 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
             >
               Média
             </Button>
+            <Button
+              variant={showSectorSubtotals ? "default" : "outline"}
+              className="rounded-xl"
+              onClick={() => setShowSectorSubtotals((prev) => !prev)}
+            >
+              Subtotais
+            </Button>
             <Button variant="outline" className="rounded-xl" onClick={() => setShowPaste(!showPaste)}>
               <ClipboardPaste className="w-4 h-4 mr-2" />Importar
             </Button>
@@ -667,7 +675,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                     </tr>
 
                     {/* Sector subtotals for this day */}
-                    {peopleByTeam.map(({ group, names }) => {
+                    {showSectorSubtotals && peopleByTeam.map(({ group, names }) => {
                       const sectorMetricsForDay = daySectorMetrics.get(day)?.get(group);
                       if (!sectorMetricsForDay || sectorMetricsForDay.totalCalls === 0) return null;
 
@@ -710,6 +718,15 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                           <td className="text-center px-2 py-1.5 font-bold text-blue-600 dark:text-blue-400 tabular-nums text-xs">
                             {sectorMetricsForDay.totalCalls}
                           </td>
+                          <td className="text-center px-2 py-1.5 font-bold text-green-600 dark:text-green-400 tabular-nums text-xs">
+                            {sectorMetricsForDay.answeredCalls}
+                          </td>
+                          <td className="text-center px-2 py-1.5 font-bold text-red-600 dark:text-red-400 tabular-nums text-xs">
+                            {sectorMetricsForDay.canceledCalls}
+                          </td>
+                          <td className="text-center px-2 py-1.5 font-bold text-amber-600 dark:text-amber-400 tabular-nums text-xs">
+                            {formatTimeShort(sectorMetricsForDay.totalDurationSeconds)}
+                          </td>
                         </tr>
                       );
                     })}
@@ -717,7 +734,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   );
                 })}
 
-                {peopleByTeam.map(({ group, names }) => {
+                {showSectorSubtotals && peopleByTeam.map(({ group, names }) => {
                   const st = sectorMetrics.get(group);
                   if (!st) return null;
                   return (
@@ -752,8 +769,17 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                           </td>
                         );
                       })}
-                      <td className="text-center px-2 py-2 font-bold text-foreground tabular-nums">
+                      <td className="text-center px-2 py-2 font-bold text-blue-600 dark:text-blue-400 tabular-nums">
                         {st.totalCalls}
+                      </td>
+                      <td className="text-center px-2 py-2 font-bold text-green-600 dark:text-green-400 tabular-nums">
+                        {st.answeredCalls}
+                      </td>
+                      <td className="text-center px-2 py-2 font-bold text-red-600 dark:text-red-400 tabular-nums">
+                        {st.canceledCalls}
+                      </td>
+                      <td className="text-center px-2 py-2 font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                        {formatTimeShort(st.totalDurationSeconds)}
                       </td>
                     </tr>
                   );

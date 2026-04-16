@@ -153,6 +153,7 @@ export const AcionamentosView = ({
   const leadsRemote = useTeamMembers("leads");
   const [expandedGeral, setExpandedGeral] = useState<Set<string>>(new Set());
   const [showAverageRow, setShowAverageRow] = useState(false);
+  const [showSectorSubtotals, setShowSectorSubtotals] = useState(false);
 
   // -- Monthly table state --
   const todayDate = new Date();
@@ -718,13 +719,22 @@ export const AcionamentosView = ({
             </div>
 
             <div className="flex justify-end mb-3">
-              <Button
-                variant={showAverageRow ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowAverageRow((prev) => !prev)}
-              >
-                Média
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant={showAverageRow ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowAverageRow((prev) => !prev)}
+                >
+                  Média
+                </Button>
+                <Button
+                  variant={showSectorSubtotals ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowSectorSubtotals((prev) => !prev)}
+                >
+                  Subtotais
+                </Button>
+              </div>
             </div>
 
             {geralDaysWithData.length === 0 ? (
@@ -807,7 +817,7 @@ export const AcionamentosView = ({
                             </tr>
 
                             {/* Sector subtotals for this day */}
-                            {geralPeopleByTeam.map(({ group, names }) => {
+                            {showSectorSubtotals && geralPeopleByTeam.map(({ group, names }) => {
                               const sectorMetricsForDay = geralDaySectorMetrics.get(day)?.get(group);
                               if (!sectorMetricsForDay || (sectorMetricsForDay.empresas + sectorMetricsForDay.leads === 0)) return null;
 
@@ -851,7 +861,7 @@ export const AcionamentosView = ({
                         );
                       })}
                       {/* Sector subtotal rows */}
-                      {geralPeopleByTeam.map(({ group, names }) => {
+                      {showSectorSubtotals && geralPeopleByTeam.map(({ group, names }) => {
                         const st = geralSectorTotals.get(group);
                         if (!st) return null;
                         return (
