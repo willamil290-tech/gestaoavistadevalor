@@ -914,6 +914,7 @@ export const AcionamentosView = ({
                           {showAverageRow
                             ? formatAverageNumber(geralAverageGrandTotal)
                             : Array.from(geralPersonTotals.values()).reduce((s, v) => s + v.empresas + v.leads, 0)}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
