@@ -32,36 +32,30 @@ const StorageWarning = () => {
   const [storageInfo, setStorageInfo] = useState<string>("");
 
   useEffect(() => {
-    const checkStorage = async () => {
-      try {
-        const stats = await getStorageStats();
-        
-        let info = "";
-        if (stats.sqliteAvailable) {
-          info = `SQLite ativo (${stats.sqliteStats.recordCount || 0} registros)`;
-        } else if (stats.indexedDBAvailable) {
-          info = "IndexedDB ativo";
-        } else if (stats.localStorageAvailable) {
-          info = "localStorage ativo";
-        } else {
-          info = "Apenas memória (dados serão perdidos!)";
-        }
-        setStorageInfo(info);
+    try {
+      const stats = getStorageStats();
 
-        if (stats.usingMemoryStore) {
-          setWarning("Nenhum sistema de armazenamento persistente disponível!");
-        } else if (!stats.sqliteAvailable && !stats.indexedDBAvailable && !stats.localStorageAvailable) {
-          setWarning("Todos os sistemas de armazenamento falharam!");
-        }
-        
-        console.log("[App] Status de armazenamento:", stats);
-      } catch (e) {
-        console.error("[App] Erro ao verificar storage:", e);
-        setWarning("Erro ao verificar sistemas de armazenamento.");
+      let info = "";
+      if (stats.indexedDBAvailable) {
+        info = "IndexedDB ativo";
+      } else if (stats.localStorageAvailable) {
+        info = "localStorage ativo";
+      } else {
+        info = "Apenas memória (dados serão perdidos!)";
       }
-    };
-    
-    checkStorage();
+      setStorageInfo(info);
+
+      if (stats.usingMemoryStore) {
+        setWarning("localStorage não está disponível. Usando memória como fallback!");
+      } else if (!stats.localStorageAvailable && !stats.indexedDBAvailable) {
+        setWarning("Nenhum sistema de armazenamento local persistente disponível!");
+      }
+
+      console.log("[App] Status de armazenamento:", stats);
+    } catch (e) {
+      console.error("[App] Erro ao verificar storage:", e);
+      setWarning("Erro ao verificar sistemas de armazenamento.");
+    }
   }, []);
 
   return (
