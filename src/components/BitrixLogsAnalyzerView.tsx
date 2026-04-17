@@ -84,7 +84,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     if (!negociosText.trim() || !leadsText.trim()) return;
 
     const res = parseAndBuildBitrixReport({ currentHHMM: t, negociosText, leadsText });
-    if (!res.ok) {
+    if (res.ok === false) {
       toast.error(res.error);
       return;
     }
@@ -277,7 +277,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
                     const t2 = normalizeHHMM(currentTime);
                     if (!t2) return;
                     const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText });
-                    if (!res2.ok) {
+                    if (res2.ok === false) {
                       toast.error(res2.error);
                       return;
                     }

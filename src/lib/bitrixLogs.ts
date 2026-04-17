@@ -524,9 +524,9 @@ export function parseAndBuildBitrixReport(params: {
   | { ok: true; reportText: string; eventsCount: number; report: BitrixReport }
   | { ok: false; error: string } {
   const a = parseBitrixTextToEvents(params.negociosText, params.currentHHMM, 0);
-  if (!a.ok) return { ok: false, error: a.error };
+  if (a.ok === false) return { ok: false, error: a.error };
   const b = parseBitrixTextToEvents(params.leadsText, params.currentHHMM, a.events.length);
-  if (!b.ok) return { ok: false, error: b.error };
+  if (b.ok === false) return { ok: false, error: b.error };
   const all = [...a.events, ...b.events];
   const filtered = all.filter((e) => !isIgnoredCommercial(e.comercial));
   const report = buildBitrixReport(filtered);
