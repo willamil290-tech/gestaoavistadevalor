@@ -36,9 +36,7 @@ const StorageWarning = () => {
       const stats = getStorageStats();
 
       let info = "";
-      if (stats.indexedDBAvailable) {
-        info = "IndexedDB ativo";
-      } else if (stats.localStorageAvailable) {
+      if (stats.localStorageAvailable) {
         info = "localStorage ativo";
       } else {
         info = "Apenas memória (dados serão perdidos!)";
@@ -47,7 +45,7 @@ const StorageWarning = () => {
 
       if (stats.usingMemoryStore) {
         setWarning("localStorage não está disponível. Usando memória como fallback!");
-      } else if (!stats.localStorageAvailable && !stats.indexedDBAvailable) {
+      } else if (!stats.localStorageAvailable) {
         setWarning("Nenhum sistema de armazenamento local persistente disponível!");
       }
 

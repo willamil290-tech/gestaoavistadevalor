@@ -29,7 +29,7 @@ export const FaixaVencimentoView = ({
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<FaixaVencimento[]>([]);
   const [activeTab, setActiveTab] = useState<"mes" | "dia">("mes");
-  const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const tabIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auto-switch tabs in TV mode
   useEffect(() => {

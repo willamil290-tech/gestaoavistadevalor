@@ -110,7 +110,7 @@ export const AcionamentosView = ({
   onSaveDateChange,
 }: AcionamentosViewProps) => {
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "empresas" | "leads">("geral");
-  const tabIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const tabIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [manualTrendData, setManualTrendData] = useState<HourlyTrend[]>([]);
 
   const analytics = useQuery({

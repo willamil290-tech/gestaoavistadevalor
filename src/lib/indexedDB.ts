@@ -2,9 +2,9 @@ import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 
 // IndexedDB para persistência robusta
 class IndexedDBStore {
-  private db: IDBDatabase | null = null;
-  private dbName = 'gestao_avista_db';
-  private version = 1;
+  db: IDBDatabase | null = null;
+  dbName = 'gestao_avista_db';
+  version = 1;
 
   async init(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -175,8 +175,9 @@ export function isIndexedDBAvailable(): boolean {
 }
 
 // Estatísticas de uso
+import { getStorageStats as _getStorageStats } from './localStore';
 export async function getDBStats() {
-  const localStorageStats = getStorageStats();
+  const localStorageStats = _getStorageStats();
   const indexedDBStats = {
     available: indexedDBReady,
     dbName: indexedDBStore.dbName,
