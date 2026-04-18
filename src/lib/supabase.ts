@@ -1,12 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+// O app não fala mais com Postgres. Toda persistência passa pela Edge Function
+// `sheets-sync` (vê src/lib/sheetsClient.ts), que escreve no Google Sheets.
+// Mantemos esta flag por compat: indica se o Lovable Cloud está disponível
+// para hospedar a Edge Function.
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-// Observação: se você abrir o app sem as env vars configuradas, ele roda, mas sem persistência.
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
+export const isSupabaseConfigured = Boolean(supabaseUrl && publishableKey);
 
-export const isSupabaseConfigured = Boolean(supabase);
+// Não há mais cliente Postgres. Mantemos `null` para evitar imports quebrados.
+export const supabase = null as unknown as null;
