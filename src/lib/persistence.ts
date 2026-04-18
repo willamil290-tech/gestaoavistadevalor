@@ -1,23 +1,23 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+// Persistência baseada em Google Sheets via Edge Function `sheets-sync`.
+// O Lovable Cloud (Supabase) é usado APENAS como proxy seguro — nenhum dado
+// de negócio é salvo em tabelas Postgres. Cada "tabela" lógica abaixo
+// (dashboard_settings, team_members, daily_events) corresponde a uma aba na
+// planilha do Google.
+//
+// API pública mantém os mesmos nomes/assinaturas usados nos hooks e componentes.
+
 import { canonicalizeActiveCollaboratorName } from "@/lib/collaboratorNames";
+import {
+  jsonField,
+  num,
+  sheetsAppend,
+  sheetsDelete,
+  sheetsInit,
+  sheetsSelect,
+  sheetsUpsert,
+} from "@/lib/sheetsClient";
 
-let dailyEventsDisabled = false;
-let dashboardExtrasDisabled = false;
-const isMissingDailyEventsError = (msg?: string) => {
-  const m = String(msg ?? "");
-  return m.includes("daily_events") && (m.includes("Could not find the table") || m.includes("schema cache") || m.includes("404"));
-};
-const isMissingDashboardExtrasError = (msg?: string) => {
-  const m = String(msg ?? "");
-  // Column missing on dashboard_settings (e.g., "column dashboard_settings.commercials does not exist")
-  return (
-    m.includes("dashboard_settings") &&
-    (m.includes("does not exist") || m.includes("schema cache") || m.includes("42703"))
-  );
-};
-export const isDailyEventsEnabled = () => !dailyEventsDisabled;
-export const isDashboardExtrasEnabled = () => !dashboardExtrasDisabled;
-
+// ---------- Tipos ----------
 
 export type DashboardSettings = {
   metaMes: number;
@@ -28,8 +28,6 @@ export type DashboardSettings = {
   atingidoDia: number;
 };
 
-// Extras persistidos como JSONB no mesmo registro de dashboard_settings (key='default')
-// Motivo: evita criar várias tabelas novas e simplifica o sync.
 export type CommercialGroup = "executivo" | "cs" | "closer";
 
 export type CommercialProgress = {
@@ -40,11 +38,7 @@ export type CommercialProgress = {
   group: CommercialGroup;
 };
 
-export type FaixaVencimentoRow = {
-  faixa: string;
-  valorMes: number;
-  valorDia: number;
-};
+export type FaixaVencimentoRow = { faixa: string; valorMes: number; valorDia: number };
 
 export type ClienteBorderoRow = {
   id: string;
@@ -55,19 +49,9 @@ export type ClienteBorderoRow = {
   observacao: string;
 };
 
-export type AgendadaRealizadaRow = {
-  label: string;
-  agendadas: number;
-  realizadas: number;
-};
-
-export type HourlyTrendRow = {
-  hour: string;
-  actions: number;
-};
-
+export type AgendadaRealizadaRow = { label: string; agendadas: number; realizadas: number };
+export type HourlyTrendRow = { hour: string; actions: number };
 export type AcionamentoCategoriaRow = { tipo: string; quantidade: number };
-
 export type ColaboradorAcionamentoRow = {
   id: string;
   name: string;
@@ -86,7 +70,6 @@ export type DashboardExtras = {
 };
 
 export type TeamCategory = "empresas" | "leads";
-
 export type TeamMember = {
   id: string;
   category: TeamCategory;
@@ -95,7 +78,23 @@ export type TeamMember = {
   afternoon: number;
 };
 
-// Defaults atuais do app (para primeiro uso / seed)
+export type DailyEventScope = "empresas" | "leads" | "bordero";
+export type DailyEventKind = "bulk" | "single" | "reset" | "undo";
+
+export type DailyEvent = {
+  id: string;
+  businessDate: string;
+  scope: DailyEventScope;
+  kind: DailyEventKind;
+  memberId?: string | null;
+  deltaMorning: number;
+  deltaAfternoon: number;
+  deltaBorderoDia: number;
+  createdAt: string;
+};
+
+// ---------- Defaults ----------
+
 export const DEFAULT_SETTINGS: DashboardSettings = {
   metaMes: 15800000,
   ajusteMes: 0,
@@ -131,327 +130,190 @@ export const DEFAULT_LEADS: TeamMember[] = [
 
 const SETTINGS_KEY = "default";
 
-function assertConfigured() {
-  if (!isSupabaseConfigured || !supabase) {
-    throw new Error(
-      "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas variáveis de ambiente."
-    );
+// ---------- Bootstrap ----------
+// Garante que as abas/headers da planilha existam. Roda uma vez por sessão.
+
+let initPromise: Promise<void> | null = null;
+function ensureInit(): Promise<void> {
+  if (!initPromise) {
+    initPromise = sheetsInit().catch((e) => {
+      initPromise = null;
+      throw e;
+    });
   }
+  return initPromise;
 }
 
-export async function getDashboardSettings(): Promise<DashboardSettings> {
-  assertConfigured();
+// Sempre habilitado neste modo — mantemos os flags por compat.
+export const isDailyEventsEnabled = () => true;
+export const isDashboardExtrasEnabled = () => true;
 
-  // Tenta buscar já com as colunas de ajuste. Se o Supabase ainda não tiver
-  // essas colunas, faz fallback para o formato antigo (ajustes = 0).
-  const selectWithAdjust = "meta_mes, ajuste_mes, meta_dia, ajuste_dia, atingido_mes, atingido_dia";
-  const selectLegacy = "meta_mes, meta_dia, atingido_mes, atingido_dia";
+// ---------- dashboard_settings (linha única, key='default') ----------
 
-  let data: any = null;
-
-  {
-    const res = await supabase!
-      .from("dashboard_settings")
-      .select(selectWithAdjust)
-      .eq("key", SETTINGS_KEY)
-      .maybeSingle();
-
-    if (res.error) {
-      if (isMissingDashboardExtrasError(res.error.message)) {
-        const legacy = await supabase!
-          .from("dashboard_settings")
-          .select(selectLegacy)
-          .eq("key", SETTINGS_KEY)
-          .maybeSingle();
-        if (legacy.error) throw legacy.error;
-        data = legacy.data;
-      } else {
-        throw res.error;
-      }
-    } else {
-      data = res.data;
-    }
-  }
-
-  // Se ainda não existir, cria com default
-  if (!data) {
-    const { error: insertError } = await supabase!
-      .from("dashboard_settings")
-      .insert({
-        key: SETTINGS_KEY,
-        meta_mes: DEFAULT_SETTINGS.metaMes,
-        ajuste_mes: DEFAULT_SETTINGS.ajusteMes,
-        meta_dia: DEFAULT_SETTINGS.metaDia,
-        ajuste_dia: DEFAULT_SETTINGS.ajusteDia,
-        atingido_mes: DEFAULT_SETTINGS.atingidoMes,
-        atingido_dia: DEFAULT_SETTINGS.atingidoDia,
-        updated_at: new Date().toISOString(),
-      });
-
-    // Se o banco ainda não tiver as colunas de ajuste, tenta inserir no formato antigo.
-    if (insertError && isMissingDashboardExtrasError(insertError.message)) {
-      const { error: legacyInsertError } = await supabase!
-        .from("dashboard_settings")
-        .insert({
-          key: SETTINGS_KEY,
-          meta_mes: DEFAULT_SETTINGS.metaMes,
-          meta_dia: DEFAULT_SETTINGS.metaDia,
-          atingido_mes: DEFAULT_SETTINGS.atingidoMes,
-          atingido_dia: DEFAULT_SETTINGS.atingidoDia,
-          updated_at: new Date().toISOString(),
-        });
-      if (legacyInsertError) throw legacyInsertError;
-      return { ...DEFAULT_SETTINGS, ajusteMes: 0, ajusteDia: 0 };
-    }
-
-    if (insertError) throw insertError;
-    return DEFAULT_SETTINGS;
-  }
-
+function rowToSettings(row: Record<string, string> | undefined): DashboardSettings {
+  if (!row) return DEFAULT_SETTINGS;
   return {
-    metaMes: Number(data.meta_mes ?? 0),
-    ajusteMes: Number(data.ajuste_mes ?? 0),
-    metaDia: Number(data.meta_dia ?? 0),
-    ajusteDia: Number(data.ajuste_dia ?? 0),
-    atingidoMes: Number(data.atingido_mes ?? 0),
-    atingidoDia: Number(data.atingido_dia ?? 0),
+    metaMes: num(row.meta_mes, DEFAULT_SETTINGS.metaMes),
+    ajusteMes: num(row.ajuste_mes, 0),
+    metaDia: num(row.meta_dia, DEFAULT_SETTINGS.metaDia),
+    ajusteDia: num(row.ajuste_dia, 0),
+    atingidoMes: num(row.atingido_mes, 0),
+    atingidoDia: num(row.atingido_dia, 0),
   };
 }
 
-export async function updateDashboardSettings(patch: Partial<DashboardSettings>) {
-  assertConfigured();
-
-  const payload: Record<string, any> = {};
-  payload.updated_at = new Date().toISOString();
-  if (typeof patch.metaMes === "number") payload.meta_mes = patch.metaMes;
-  if (typeof patch.ajusteMes === "number") payload.ajuste_mes = patch.ajusteMes;
-  if (typeof patch.metaDia === "number") payload.meta_dia = patch.metaDia;
-  if (typeof patch.ajusteDia === "number") payload.ajuste_dia = patch.ajusteDia;
-  if (typeof patch.atingidoMes === "number") payload.atingido_mes = patch.atingidoMes;
-  if (typeof patch.atingidoDia === "number") payload.atingido_dia = patch.atingidoDia;
-
-  const { error } = await supabase!
-    .from("dashboard_settings")
-    .update(payload)
-    .eq("key", SETTINGS_KEY);
-  if (error) {
-    if (isMissingDashboardExtrasError(error.message)) {
-      throw new Error("Colunas de ajuste ainda não existem no Supabase. Rode o SQL para adicionar ajuste_mes/ajuste_dia na tabela dashboard_settings.");
-    }
-    throw error;
-  }
+function rowToExtras(row: Record<string, string> | undefined): DashboardExtras {
+  if (!row) return DEFAULT_EXTRAS;
+  return {
+    commercials: jsonField<CommercialProgress[]>(row.commercials, []),
+    faixas: jsonField<FaixaVencimentoRow[]>(row.faixas, []),
+    clientes: jsonField<ClienteBorderoRow[]>(row.clientes, []),
+    acionamentoDetalhado: jsonField<ColaboradorAcionamentoRow[]>(row.acionamento_detalhado, []),
+    agendadasMes: jsonField<AgendadaRealizadaRow[]>(row.agendadas_mes, []),
+    agendadasDia: jsonField<AgendadaRealizadaRow[]>(row.agendadas_dia, []),
+    trendData: jsonField<HourlyTrendRow[]>(row.trend_data, []),
+  };
 }
 
-/**
- * Carrega extras (comerciais, faixas, clientes, etc.) a partir do mesmo registro
- * de dashboard_settings (key='default').
- *
- * Se as colunas ainda não existirem no Supabase, o app continua funcionando,
- * porém sem persistir esses extras (dashboardExtrasDisabled=true).
- */
+async function fetchSettingsRow(): Promise<Record<string, string> | undefined> {
+  await ensureInit();
+  const rows = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
+  return rows[0];
+}
+
+async function ensureSettingsRow(): Promise<Record<string, string>> {
+  const existing = await fetchSettingsRow();
+  if (existing) return existing;
+  const seed = {
+    key: SETTINGS_KEY,
+    meta_mes: DEFAULT_SETTINGS.metaMes,
+    ajuste_mes: DEFAULT_SETTINGS.ajusteMes,
+    meta_dia: DEFAULT_SETTINGS.metaDia,
+    ajuste_dia: DEFAULT_SETTINGS.ajusteDia,
+    atingido_mes: DEFAULT_SETTINGS.atingidoMes,
+    atingido_dia: DEFAULT_SETTINGS.atingidoDia,
+    commercials: [],
+    faixas: [],
+    clientes: [],
+    acionamento_detalhado: [],
+    agendadas_mes: [],
+    agendadas_dia: [],
+    trend_data: [],
+    updated_at: new Date().toISOString(),
+  };
+  await sheetsUpsert("dashboard_settings", [seed], "key");
+  return (await fetchSettingsRow()) ?? {};
+}
+
+export async function getDashboardSettings(): Promise<DashboardSettings> {
+  await ensureInit();
+  const row = await ensureSettingsRow();
+  return rowToSettings(row);
+}
+
+export async function updateDashboardSettings(patch: Partial<DashboardSettings>) {
+  const row = await ensureSettingsRow();
+  const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
+  if (typeof patch.metaMes === "number") merged.meta_mes = patch.metaMes;
+  if (typeof patch.ajusteMes === "number") merged.ajuste_mes = patch.ajusteMes;
+  if (typeof patch.metaDia === "number") merged.meta_dia = patch.metaDia;
+  if (typeof patch.ajusteDia === "number") merged.ajuste_dia = patch.ajusteDia;
+  if (typeof patch.atingidoMes === "number") merged.atingido_mes = patch.atingidoMes;
+  if (typeof patch.atingidoDia === "number") merged.atingido_dia = patch.atingidoDia;
+  merged.updated_at = new Date().toISOString();
+  await sheetsUpsert("dashboard_settings", [merged], "key");
+}
+
 export async function getDashboardExtras(): Promise<DashboardExtras> {
-  if (!isSupabaseConfigured || dashboardExtrasDisabled) return DEFAULT_EXTRAS;
-
-  try {
-    assertConfigured();
-    const { data, error } = await supabase!
-      .from("dashboard_settings")
-      .select("commercials, faixas, clientes, acionamento_detalhado, agendadas_mes, agendadas_dia")
-      .eq("key", SETTINGS_KEY)
-      .maybeSingle();
-
-    if (error) {
-      if (isMissingDashboardExtrasError(error.message)) dashboardExtrasDisabled = true;
-      return DEFAULT_EXTRAS;
-    }
-
-        // trend_data é opcional (coluna pode não existir). Tentamos ler sem derrubar os outros extras.
-    let trendData: HourlyTrendRow[] = [];
-    try {
-      const { data: td, error: tdErr } = await supabase!
-        .from("dashboard_settings")
-        .select("trend_data")
-        .eq("key", SETTINGS_KEY)
-        .maybeSingle();
-      if (!tdErr) trendData = (td?.trend_data ?? []) as HourlyTrendRow[];
-    } catch {
-      // ignore
-    }
-
-    return {
-      commercials: (data?.commercials ?? []) as CommercialProgress[],
-      faixas: (data?.faixas ?? []) as FaixaVencimentoRow[],
-      clientes: (data?.clientes ?? []) as ClienteBorderoRow[],
-      acionamentoDetalhado: (data?.acionamento_detalhado ?? []) as ColaboradorAcionamentoRow[],
-      agendadasMes: (data?.agendadas_mes ?? []) as AgendadaRealizadaRow[],
-      agendadasDia: (data?.agendadas_dia ?? []) as AgendadaRealizadaRow[],
-      trendData,
-    };
-  } catch (e: any) {
-    if (isMissingDashboardExtrasError(e?.message)) dashboardExtrasDisabled = true;
-    return DEFAULT_EXTRAS;
-  }
+  await ensureInit();
+  const row = await ensureSettingsRow();
+  return rowToExtras(row);
 }
 
 export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
-  if (!isSupabaseConfigured || dashboardExtrasDisabled) return;
-  assertConfigured();
+  const row = await ensureSettingsRow();
+  const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
+  if (patch.commercials) merged.commercials = patch.commercials;
+  if (patch.faixas) merged.faixas = patch.faixas;
+  if (patch.clientes) merged.clientes = patch.clientes;
+  if (patch.acionamentoDetalhado) merged.acionamento_detalhado = patch.acionamentoDetalhado;
+  if (patch.agendadasMes) merged.agendadas_mes = patch.agendadasMes;
+  if (patch.agendadasDia) merged.agendadas_dia = patch.agendadasDia;
+  if (patch.trendData !== undefined) merged.trend_data = patch.trendData;
+  merged.updated_at = new Date().toISOString();
+  await sheetsUpsert("dashboard_settings", [merged], "key");
+}
 
-  const payload: Record<string, any> = { updated_at: new Date().toISOString() };
-  if (patch.commercials) payload.commercials = patch.commercials;
-  if (patch.faixas) payload.faixas = patch.faixas;
-  if (patch.clientes) payload.clientes = patch.clientes;
-  if (patch.acionamentoDetalhado) payload.acionamento_detalhado = patch.acionamentoDetalhado;
-  if (patch.agendadasMes) payload.agendadas_mes = patch.agendadasMes;
-  if (patch.agendadasDia) payload.agendadas_dia = patch.agendadasDia;
+// ---------- team_members ----------
 
-  // trend_data é opcional (coluna pode não existir).
-  // Mantemos update separado para não derrubar outros campos se a coluna não existir.
-  const trendPatch = patch.trendData;
-
-  const { error } = await supabase!
-    .from("dashboard_settings")
-    .update(payload)
-    .eq("key", SETTINGS_KEY);
-
-  if (error) {
-    if (isMissingDashboardExtrasError(error.message)) {
-      dashboardExtrasDisabled = true;
-      return;
-    }
-    throw error;
-  }
-
-  if (trendPatch !== undefined) {
-    const { error: tErr } = await supabase!
-      .from("dashboard_settings")
-      .update({ updated_at: new Date().toISOString(), trend_data: trendPatch })
-      .eq("key", SETTINGS_KEY);
-
-    if (tErr) {
-      const msg = String(tErr.message ?? "");
-      const isMissingTrend =
-        msg.includes("trend_data") &&
-        (msg.includes("does not exist") || msg.includes("42703") || msg.includes("schema cache"));
-
-      // Em vez de falhar silenciosamente (o que dá impressão de "salvou só no meu PC"),
-      // levantamos um erro com instrução clara de como habilitar a sincronização.
-      if (isMissingTrend) {
-        throw new Error(
-          "Supabase: falta a coluna trend_data em public.dashboard_settings. Rode o SQL em supabase/add_dashboard_extras.sql para habilitar a sincronização da Tendência entre computadores."
-        );
-      }
-
-      throw tErr;
-    }
-  }
+function rowToMember(row: Record<string, string>): TeamMember {
+  return {
+    id: String(row.id ?? ""),
+    category: (row.category as TeamCategory) || "empresas",
+    name: canonicalizeActiveCollaboratorName(String(row.name ?? "")),
+    morning: num(row.morning, 0),
+    afternoon: num(row.afternoon, 0),
+  };
 }
 
 export async function listTeamMembers(category: TeamCategory): Promise<TeamMember[]> {
-  assertConfigured();
+  await ensureInit();
+  const rows = await sheetsSelect("team_members", { category });
+  let members = rows.map(rowToMember);
 
-  const { data, error } = await supabase!
-    .from("team_members")
-    .select("id, category, name, morning, afternoon")
-    .eq("category", category);
+  if (members.length === 0) {
+    const seed = category === "empresas" ? DEFAULT_EMPRESAS : DEFAULT_LEADS;
+    await sheetsUpsert(
+      "team_members",
+      seed.map((m) => ({ ...m, updated_at: new Date().toISOString() })),
+      "id",
+    );
+    members = seed;
+  }
 
-  if (error) throw error;
-
-  const rows = (data ?? []).map((r) => ({
-    id: String(r.id),
-    category: (r.category as TeamCategory) ?? category,
-    name: canonicalizeActiveCollaboratorName(String(r.name ?? "")),
-    morning: Number(r.morning ?? 0),
-    afternoon: Number(r.afternoon ?? 0),
-  }));
-
-  // Ordena sempre pelo total (manhã + tarde), desc.
-  rows.sort((a, b) => {
+  members.sort((a, b) => {
     const diff = (b.morning + b.afternoon) - (a.morning + a.afternoon);
     if (diff !== 0) return diff;
     return a.name.localeCompare(b.name);
   });
-
-  // Seed se estiver vazio
-  if (rows.length === 0) {
-    const seed = category === "empresas" ? DEFAULT_EMPRESAS : DEFAULT_LEADS;
-    const { error: insertError } = await supabase!
-      .from("team_members")
-      .insert(seed.map((m) => ({ ...m, updated_at: new Date().toISOString() })) );
-    if (insertError) throw insertError;
-    return seed;
-  }
-
-  return rows;
+  return members;
 }
 
 export async function upsertTeamMember(member: TeamMember) {
-  assertConfigured();
-
-  const { error } = await supabase!
-    .from("team_members")
-    .upsert(
-      {
-        id: member.id,
-        category: member.category,
-        name: canonicalizeActiveCollaboratorName(member.name),
-        morning: member.morning,
-        afternoon: member.afternoon,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
-  if (error) throw error;
+  await ensureInit();
+  await sheetsUpsert(
+    "team_members",
+    [{
+      id: member.id,
+      category: member.category,
+      name: canonicalizeActiveCollaboratorName(member.name),
+      morning: member.morning,
+      afternoon: member.afternoon,
+      updated_at: new Date().toISOString(),
+    }],
+    "id",
+  );
 }
 
 export async function addTeamMember(category: TeamCategory): Promise<TeamMember> {
-  assertConfigured();
-
+  await ensureInit();
   const id = (globalThis.crypto?.randomUUID?.() ?? Date.now().toString()) as string;
-  const newMember: any = {
-    id,
-    category,
-    name: "Novo Colaborador",
-    morning: 0,
-    afternoon: 0,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase!.from("team_members").insert(newMember);
-  if (error) throw error;
+  const newMember: TeamMember = { id, category, name: "Novo Colaborador", morning: 0, afternoon: 0 };
+  await sheetsUpsert(
+    "team_members",
+    [{ ...newMember, updated_at: new Date().toISOString() }],
+    "id",
+  );
   return newMember;
 }
 
 export async function deleteTeamMember(id: string) {
-  assertConfigured();
-  const { error } = await supabase!.from("team_members").delete().eq("id", id);
-  if (error) throw error;
+  await ensureInit();
+  await sheetsDelete("team_members", id, "id");
 }
 
+// ---------- daily_events ----------
 
-export type DailyEventScope = "empresas" | "leads" | "bordero";
-export type DailyEventKind = "bulk" | "single" | "reset" | "undo";
-
-export type DailyEvent = {
-  id: string;
-  businessDate: string;
-  scope: DailyEventScope;
-  kind: DailyEventKind;
-  memberId?: string | null;
-  deltaMorning: number;
-  deltaAfternoon: number;
-  deltaBorderoDia: number;
-  createdAt: string;
-};
-
-async function safeFrom(table: string) {
-  assertConfigured();
-  return supabase!.from(table);
-}
-
-/**
- * Inserts a daily event. If the table doesn't exist, it fails silently (keeps the UI working).
- */
 export async function insertDailyEvent(event: {
   businessDate: string;
   scope: DailyEventScope;
@@ -461,114 +323,76 @@ export async function insertDailyEvent(event: {
   deltaAfternoon?: number;
   deltaBorderoDia?: number;
 }) {
-  if (!isSupabaseConfigured || dailyEventsDisabled) return;
-
-  try {
-    const { error } = await supabase!
-      .from("daily_events")
-      .insert({
-        business_date: event.businessDate,
-        scope: event.scope,
-        kind: event.kind,
-        member_id: event.memberId ?? null,
-        delta_morning: event.deltaMorning ?? 0,
-        delta_afternoon: event.deltaAfternoon ?? 0,
-        delta_bordero_dia: event.deltaBorderoDia ?? 0,
-      });
-
-    if (error) {
-      if (isMissingDailyEventsError(error.message)) dailyEventsDisabled = true;
-      return;
-    }
-  } catch (e: any) {
-    // ignore
-  }
+  await ensureInit();
+  const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`) as string;
+  await sheetsAppend("daily_events", [{
+    id,
+    business_date: event.businessDate,
+    scope: event.scope,
+    kind: event.kind,
+    member_id: event.memberId ?? "",
+    delta_morning: event.deltaMorning ?? 0,
+    delta_afternoon: event.deltaAfternoon ?? 0,
+    delta_bordero_dia: event.deltaBorderoDia ?? 0,
+    created_at: new Date().toISOString(),
+  }]);
 }
 
 export async function listDailyEvents(businessDate: string, beforeIso?: string): Promise<DailyEvent[]> {
-  if (!isSupabaseConfigured || dailyEventsDisabled) return [];
-
-  try {
-    let q = supabase!
-      .from("daily_events")
-      .select("id, business_date, scope, kind, member_id, delta_morning, delta_afternoon, delta_bordero_dia, created_at")
-      .eq("business_date", businessDate)
-      .order("created_at", { ascending: true });
-
-    if (beforeIso) q = q.lte("created_at", beforeIso);
-
-    const { data, error } = await q;
-    if (error) {
-      if (isMissingDailyEventsError(error.message)) dailyEventsDisabled = true;
-      return [];
-    }
-
-    return (data ?? []).map((r: any) => ({
-      id: String(r.id),
-      businessDate: String(r.business_date),
-      scope: r.scope as DailyEventScope,
-      kind: r.kind as DailyEventKind,
-      memberId: r.member_id ? String(r.member_id) : null,
-      deltaMorning: Number(r.delta_morning ?? 0),
-      deltaAfternoon: Number(r.delta_afternoon ?? 0),
-      deltaBorderoDia: Number(r.delta_bordero_dia ?? 0),
-      createdAt: String(r.created_at),
-    }));
-  } catch (e: any) {
-    return [];
-  }
+  await ensureInit();
+  const rows = await sheetsSelect("daily_events", { business_date: businessDate });
+  const evts: DailyEvent[] = rows.map((r) => ({
+    id: String(r.id ?? ""),
+    businessDate: String(r.business_date ?? ""),
+    scope: (r.scope as DailyEventScope) || "empresas",
+    kind: (r.kind as DailyEventKind) || "single",
+    memberId: r.member_id ? String(r.member_id) : null,
+    deltaMorning: num(r.delta_morning, 0),
+    deltaAfternoon: num(r.delta_afternoon, 0),
+    deltaBorderoDia: num(r.delta_bordero_dia, 0),
+    createdAt: String(r.created_at ?? ""),
+  }));
+  const filtered = beforeIso ? evts.filter((e) => e.createdAt <= beforeIso) : evts;
+  filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return filtered;
 }
 
-/**
- * Resets day counters:
- * - dashboard_settings.atingido_dia = 0
- * - team_members morning/afternoon = 0 for empresas/leads
- */
+// ---------- Reset diário e last activity ----------
+
 export async function resetDayCounters() {
-  assertConfigured();
-  const nowIso = new Date().toISOString();
+  await ensureInit();
 
-  const { error: e1 } = await supabase!
-    .from("dashboard_settings")
-    .update({ atingido_dia: 0, updated_at: nowIso })
-    .eq("key", SETTINGS_KEY);
-  if (e1) throw e1;
+  // Zera atingido_dia
+  const row = await ensureSettingsRow();
+  await sheetsUpsert(
+    "dashboard_settings",
+    [{ ...row, key: SETTINGS_KEY, atingido_dia: 0, updated_at: new Date().toISOString() }],
+    "key",
+  );
 
-  const { error: e2 } = await supabase!
-    .from("team_members")
-    .update({ morning: 0, afternoon: 0, updated_at: nowIso })
-    .in("category", ["empresas", "leads"]);
-  if (e2) throw e2;
+  // Zera morning/afternoon de todos os membros
+  const all = await sheetsSelect("team_members");
+  const updated = all
+    .filter((r) => r.category === "empresas" || r.category === "leads")
+    .map((r) => ({ ...r, morning: 0, afternoon: 0, updated_at: new Date().toISOString() }));
+  if (updated.length > 0) await sheetsUpsert("team_members", updated, "id");
 }
 
-/**
- * Returns the most recent activity timestamp (ISO string).
- * Uses updated_at columns to avoid depender de daily_events (que é opcional).
- */
 export async function getLastActivityIso(): Promise<string | null> {
-  assertConfigured();
-
-  // updated_at columns
   try {
-    const { data: sData } = await supabase!
-      .from("dashboard_settings")
-      .select("updated_at")
-      .eq("key", SETTINGS_KEY)
-      .maybeSingle();
+    await ensureInit();
+    const settings = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
+    const sUpdated = settings[0]?.updated_at ? new Date(settings[0].updated_at).getTime() : 0;
 
-    const sUpdated = sData?.updated_at ? new Date(sData.updated_at).getTime() : 0;
-
-    const { data: tData } = await supabase!
-      .from("team_members")
-      .select("updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(1);
-
-    const tUpdated = tData?.[0]?.updated_at ? new Date(tData[0].updated_at).getTime() : 0;
+    const members = await sheetsSelect("team_members");
+    const tUpdated = members.reduce((max, r) => {
+      const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+      return t > max ? t : max;
+    }, 0);
 
     const maxTs = Math.max(sUpdated, tUpdated);
     return maxTs ? new Date(maxTs).toISOString() : null;
-  } catch (_) {
+  } catch {
     return null;
   }
 }
