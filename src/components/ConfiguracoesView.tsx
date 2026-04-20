@@ -22,8 +22,9 @@ export function ConfiguracoesView() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<{ key: string; size: number; updated_at: string }[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
-  const [busy, setBusy] = useState<null | "migrate" | "restore">(null);
+  const [busy, setBusy] = useState<null | "migrate" | "restore" | "auto-migrate">(null);
   const [progress, setProgress] = useState<{ done: number; total: number; key: string } | null>(null);
+  const [autoMigrateMode, setAutoMigrateMode] = useState(false);
 
   function refreshLocal() {
     setLocalKeys(listLocalKeys(includeUnknown));
@@ -64,31 +65,48 @@ export function ConfiguracoesView() {
   const totalLocalBytes = localKeys.reduce((acc, k) => acc + k.size, 0);
   const totalArchivedBytes = archived.reduce((acc, k) => acc + k.size, 0);
 
-  async function handleMigrate() {
+  async function handleAutoMigrate() {
     if (localKeys.length === 0) {
       toast.info("Nada para migrar — localStorage não tem dados de negócio.");
       return;
     }
-    if (selectedKeys.size === 0) {
-      toast.info("Selecione ao menos uma chave para migrar.");
-      return;
-    }
-    setBusy("migrate");
-    setProgress({ done: 0, total: selectedKeys.size, key: "" });
+    setBusy("auto-migrate");
+    setAutoMigrateMode(true);
+    setProgress({ done: 0, total: localKeys.length, key: "" });
+
     try {
-      const res = await migrateLocalToSheets({
-        includeUnknown,
-        selectedKeys: Array.from(selectedKeys),
-        delayMs: 600,
-        onProgress: (done, total, key) => setProgress({ done, total, key }),
-      });
-      toast.success(`✅ ${res.count} chaves enviadas (${humanBytes(res.bytes)}) para o Google Sheets`);
+      let totalMigrated = 0;
+      let totalBytes = 0;
+      const batchSize = 3; // Migrar 3 chaves por vez
+      const keysToMigrate = localKeys.map(k => k.key);
+
+      for (let i = 0; i < keysToMigrate.length; i += batchSize) {
+        const batch = keysToMigrate.slice(i, i + batchSize);
+        const res = await migrateLocalToSheets({
+          includeUnknown,
+          selectedKeys: batch,
+          incremental: true, // Não apaga dados existentes
+          delayMs: 2000, // 2 segundos entre lotes para evitar quota
+          onProgress: (done, total, key) => {
+            const globalDone = totalMigrated + done;
+            setProgress({ done: globalDone, total: localKeys.length, key });
+          },
+        });
+        totalMigrated += res.count;
+        totalBytes += res.bytes;
+
+        // Pequena pausa entre lotes para dar feedback visual
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      toast.success(`✅ Migração automática concluída: ${totalMigrated} chaves (${humanBytes(totalBytes)}) para o Google Sheets`);
       await refreshArchive();
     } catch (e: any) {
-      toast.error(e?.message ?? "Falha ao migrar");
+      toast.error(e?.message ?? "Falha na migração automática");
     } finally {
       setBusy(null);
       setProgress(null);
+      setAutoMigrateMode(false);
     }
   }
 
@@ -134,6 +152,7 @@ export function ConfiguracoesView() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Lê o localStorage deste navegador e envia para a aba <code className="bg-muted px-1 rounded">local_archive</code> da planilha.
+                Use "Migração automática" para evitar limites de quota do Google Sheets.
               </p>
             </div>
             <Badge variant="outline" className="text-xs">
@@ -199,7 +218,19 @@ export function ConfiguracoesView() {
             disabled={busy !== null || localKeys.length === 0}
           >
             <CloudUpload className="w-4 h-4 mr-2" />
-            {busy === "migrate" ? `Enviando ${progress?.done}/${progress?.total}...` : "Migrar para o Google Sheets"}
+            {busy === "migrate" ? `Enviando ${progress?.done}/${progress?.total}...` : "Migrar selecionadas"}
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full rounded-xl"
+            onClick={handleAutoMigrate}
+            disabled={busy !== null || localKeys.length === 0}
+          >
+            <CloudUpload className="w-4 h-4 mr-2" />
+            {busy === "auto-migrate"
+              ? `Migrando automaticamente ${progress?.done}/${progress?.total}...`
+              : "Migração automática (lotes pequenos)"}
           </Button>
         </Card>
 

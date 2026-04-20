@@ -63,6 +63,7 @@ export async function migrateLocalToSheets(opts?: {
   includeUnknown?: boolean;
   selectedKeys?: string[];
   delayMs?: number;
+  incremental?: boolean;
   onProgress?: (done: number, total: number, key: string) => void;
 }): Promise<{ count: number; bytes: number }> {
   const keys = listLocalKeys(opts?.includeUnknown ?? false);
@@ -70,6 +71,26 @@ export async function migrateLocalToSheets(opts?: {
     ? keys.filter((k) => opts.selectedKeys?.includes(k.key))
     : keys;
   if (filteredKeys.length === 0) return { count: 0, bytes: 0 };
+
+  // Se incremental, verificar quais chaves já existem no Sheets
+  let existingKeys = new Set<string>();
+  if (opts?.incremental) {
+    try {
+      const archived = await listArchivedKeys();
+      existingKeys = new Set(archived.map((a) => a.key.split('#')[0])); // remover #0, #1 etc
+    } catch (e) {
+      console.warn('Não conseguiu verificar chaves existentes, migrando tudo:', e);
+    }
+  }
+
+  // Filtrar apenas chaves que ainda não existem
+  const keysToMigrate = opts?.incremental
+    ? filteredKeys.filter((k) => !existingKeys.has(k.key))
+    : filteredKeys;
+
+  if (keysToMigrate.length === 0) {
+    return { count: 0, bytes: 0 }; // Nada novo para migrar
+  }
 
   // Limite por célula do Sheets ~50.000 chars; usamos margem segura.
   const MAX_CELL = 45_000;
@@ -79,7 +100,7 @@ export async function migrateLocalToSheets(opts?: {
   let bytes = 0;
   const now = new Date().toISOString();
 
-  for (const { key } of filteredKeys) {
+  for (const { key } of keysToMigrate) {
     const v = localStorage.getItem(key) ?? "";
     bytes += v.length;
     if (v.length === 0) continue;
@@ -95,9 +116,11 @@ export async function migrateLocalToSheets(opts?: {
     }
   }
 
-  // ESTRATÉGIA: limpa a aba uma vez e usa append em lotes pequenos.
-  // Append não lê a planilha inteira a cada chamada (upsert sim — ficaria O(n²) e estouraria).
-  await withRetry(() => sheetsReplace("local_archive", []), "limpar aba");
+  // ESTRATÉGIA: se não incremental, limpa a aba uma vez e usa append em lotes pequenos.
+  // Se incremental, apenas adiciona sem limpar.
+  if (!opts?.incremental) {
+    await withRetry(() => sheetsReplace("local_archive", []), "limpar aba");
+  }
 
   // Lotes pequenos para não estourar payload do gateway (~6MB) nem timeout (~150s).
   // 3 linhas/lote ≈ 135KB max no body — bem seguro.
@@ -112,7 +135,7 @@ export async function migrateLocalToSheets(opts?: {
       await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
     }
   }
-  return { count: filteredKeys.length, bytes };
+  return { count: keysToMigrate.length, bytes };
 }
 
 async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 3): Promise<T> {
