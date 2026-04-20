@@ -22,19 +22,12 @@ export function ConfiguracoesView() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<{ key: string; size: number; updated_at: string }[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
-  const [busy, setBusy] = useState<null | "migrate" | "restore" | "update-existing">(null);
+  const [busy, setBusy] = useState<null | "migrate" | "restore" | "auto-migrate">(null);
   const [progress, setProgress] = useState<{ done: number; total: number; key: string } | null>(null);
+  const [autoMigrateMode, setAutoMigrateMode] = useState(false);
 
   function refreshLocal() {
-    try {
-      const keys = listLocalKeys(includeUnknown);
-      setLocalKeys(keys);
-      setSelectedKeys(new Set(keys.map((k) => k.key)));
-    } catch (e) {
-      console.error('Erro em refreshLocal:', e);
-      setLocalKeys([]);
-      setSelectedKeys(new Set());
-    }
+    setLocalKeys(listLocalKeys(includeUnknown));
   }
 
   function toggleKeySelection(key: string) {
@@ -59,46 +52,38 @@ export function ConfiguracoesView() {
     try {
       setArchived(await listArchivedKeys());
     } catch (e: any) {
-      console.error('Erro em refreshArchive:', e);
-      setArchived([]);
+      toast.error(e?.message ?? "Falha ao listar arquivos no Sheets");
     } finally {
       setLoadingArchive(false);
     }
   }
 
-  useEffect(() => { refreshLocal(); }, [includeUnknown]);
-  useEffect(() => { refreshArchive(); }, []);
+  useEffect(() => {
+    try {
+      refreshLocal();
+    } catch (e) {
+      console.error('Erro ao carregar chaves locais:', e);
+    }
+  }, [includeUnknown]);
+
+  useEffect(() => {
+    try {
+      setSelectedKeys(new Set(localKeys.map((k) => k.key)));
+    } catch (e) {
+      console.error('Erro ao inicializar seleção:', e);
+    }
+  }, [localKeys]);
+
+  useEffect(() => {
+    try {
+      refreshArchive();
+    } catch (e) {
+      console.error('Erro ao carregar arquivos:', e);
+    }
+  }, []);
 
   const totalLocalBytes = localKeys.reduce((acc, k) => acc + k.size, 0);
   const totalArchivedBytes = archived.reduce((acc, k) => acc + k.size, 0);
-
-  async function handleMigrate() {
-    if (localKeys.length === 0) {
-      toast.info("Nada para migrar — localStorage não tem dados de negócio.");
-      return;
-    }
-    if (selectedKeys.size === 0) {
-      toast.info("Selecione ao menos uma chave para migrar.");
-      return;
-    }
-    setBusy("migrate");
-    setProgress({ done: 0, total: selectedKeys.size, key: "" });
-    try {
-      const res = await migrateLocalToSheets({
-        includeUnknown,
-        selectedKeys: Array.from(selectedKeys),
-        delayMs: 600,
-        onProgress: (done, total, key) => setProgress({ done, total, key }),
-      });
-      toast.success(`✅ ${res.count} chaves enviadas (${humanBytes(res.bytes)}) para o Google Sheets`);
-      await refreshArchive();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Falha ao migrar");
-    } finally {
-      setBusy(null);
-      setProgress(null);
-    }
-  }
 
   async function handleUpdateExisting() {
     if (localKeys.length === 0) {
