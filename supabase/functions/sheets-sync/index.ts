@@ -192,25 +192,40 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    console.log("[sheets-sync] Requisição recebida", req.method, req.url);
+    console.log("[sheets-sync] SHEETS_ID:", SHEETS_ID ? "configurado" : "NÃO configurado");
+    console.log("[sheets-sync] SA_JSON_RAW:", SA_JSON_RAW ? "configurado" : "NÃO configurado");
+    
     if (!SHEETS_ID) throw new Error("GOOGLE_SHEETS_ID não configurado");
     if (!SA_JSON_RAW) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON não configurado");
 
-    const body = await req.json().catch(() => ({}));
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("[sheets-sync] Erro ao fazer parse de JSON:", e);
+      body = {};
+    }
     const op = String(body?.op ?? "");
     const table = String(body?.table ?? "");
     const payload = body?.payload;
 
+    console.log("[sheets-sync] Operação:", op, "Tabela:", table);
+    
     if (op === "ping") {
+      console.log("[sheets-sync] Executando ping");
       await ensureSheets(SHEET_NAMES);
       return json({ ok: true });
     }
 
     if (op === "init") {
+      console.log("[sheets-sync] Executando init com", SHEET_NAMES.length, "tabelas");
       await ensureSheets(SHEET_NAMES);
       // ensure headers row exists
       for (const t of SHEET_NAMES) {
         const rows = await readRange(t);
         if (rows.length === 0) {
+          console.log("[sheets-sync] Criando headers para", t);
           await writeRange(t, [SCHEMAS[t]]);
         }
       }
@@ -264,16 +279,21 @@ Deno.serve(async (req) => {
     }
 
     if (op === "append") {
+      console.log("[sheets-sync] Executando append para", table, "com", payload?.items?.length ?? 0, "items");
       const items = (payload?.items ?? []) as Record<string, unknown>[];
       // Ensure headers exist
       const existingRows = await readRange(table);
-      if (existingRows.length === 0) await writeRange(table, [headers]);
+      if (existingRows.length === 0) {
+        console.log("[sheets-sync] Tabela vazia, criando headers");
+        await writeRange(table, [headers]);
+      }
       const rows = items.map((it) => headers.map((h) => {
         const v = it[h];
         if (v === undefined || v === null) return "";
         if (typeof v === "object") return JSON.stringify(v);
         return String(v);
       }));
+      console.log("[sheets-sync] Anexando", rows.length, "linhas");
       await appendRows(table, rows);
       return json({ ok: true });
     }
@@ -281,8 +301,10 @@ Deno.serve(async (req) => {
     return json({ error: `Operação inválida: ${op}` }, 400);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    const stack = e instanceof Error ? e.stack : "";
     console.error("[sheets-sync] erro:", msg);
-    return json({ error: msg }, 500);
+    console.error("[sheets-sync] stack:", stack);
+    return json({ error: msg, details: stack }, 500);
   }
 });
 
