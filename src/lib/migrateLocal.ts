@@ -61,10 +61,15 @@ export function listLocalKeys(includeUnknown = false): LocalKeyPreview[] {
 /** Envia para o Sheets (aba local_archive) todas as chaves listadas. */
 export async function migrateLocalToSheets(opts?: {
   includeUnknown?: boolean;
+  selectedKeys?: string[];
+  delayMs?: number;
   onProgress?: (done: number, total: number, key: string) => void;
 }): Promise<{ count: number; bytes: number }> {
   const keys = listLocalKeys(opts?.includeUnknown ?? false);
-  if (keys.length === 0) return { count: 0, bytes: 0 };
+  const filteredKeys = opts?.selectedKeys
+    ? keys.filter((k) => opts.selectedKeys?.includes(k.key))
+    : keys;
+  if (filteredKeys.length === 0) return { count: 0, bytes: 0 };
 
   // Limite por célula do Sheets ~50.000 chars; usamos margem segura.
   const MAX_CELL = 45_000;
@@ -74,7 +79,7 @@ export async function migrateLocalToSheets(opts?: {
   let bytes = 0;
   const now = new Date().toISOString();
 
-  for (const { key } of keys) {
+  for (const { key } of filteredKeys) {
     const v = localStorage.getItem(key) ?? "";
     bytes += v.length;
     if (v.length === 0) continue;
@@ -103,8 +108,11 @@ export async function migrateLocalToSheets(opts?: {
     await withRetry(() => sheetsAppend("local_archive", slice), `append lote ${Math.floor(i / BATCH) + 1}`);
     done += slice.length;
     opts?.onProgress?.(done, rows.length, slice[slice.length - 1].key);
+    if (opts?.delayMs) {
+      await new Promise((resolve) => setTimeout(resolve, opts.delayMs));
+    }
   }
-  return { count: keys.length, bytes };
+  return { count: filteredKeys.length, bytes };
 }
 
 async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 3): Promise<T> {

@@ -19,6 +19,7 @@ export function ConfiguracoesView() {
   const [overwriteOnRestore, setOverwriteOnRestore] = useState(false);
 
   const [localKeys, setLocalKeys] = useState<LocalKeyPreview[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<{ key: string; size: number; updated_at: string }[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [busy, setBusy] = useState<null | "migrate" | "restore">(null);
@@ -26,6 +27,23 @@ export function ConfiguracoesView() {
 
   function refreshLocal() {
     setLocalKeys(listLocalKeys(includeUnknown));
+  }
+
+  function toggleKeySelection(key: string) {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedKeys.size === localKeys.length) {
+      setSelectedKeys(new Set());
+      return;
+    }
+    setSelectedKeys(new Set(localKeys.map((k) => k.key)));
   }
 
   async function refreshArchive() {
@@ -40,6 +58,7 @@ export function ConfiguracoesView() {
   }
 
   useEffect(() => { refreshLocal(); }, [includeUnknown]);
+  useEffect(() => { setSelectedKeys(new Set(localKeys.map((k) => k.key))); }, [localKeys]);
   useEffect(() => { refreshArchive(); }, []);
 
   const totalLocalBytes = localKeys.reduce((acc, k) => acc + k.size, 0);
@@ -50,11 +69,17 @@ export function ConfiguracoesView() {
       toast.info("Nada para migrar — localStorage não tem dados de negócio.");
       return;
     }
+    if (selectedKeys.size === 0) {
+      toast.info("Selecione ao menos uma chave para migrar.");
+      return;
+    }
     setBusy("migrate");
-    setProgress({ done: 0, total: localKeys.length, key: "" });
+    setProgress({ done: 0, total: selectedKeys.size, key: "" });
     try {
       const res = await migrateLocalToSheets({
         includeUnknown,
+        selectedKeys: Array.from(selectedKeys),
+        delayMs: 600,
         onProgress: (done, total, key) => setProgress({ done, total, key }),
       });
       toast.success(`✅ ${res.count} chaves enviadas (${humanBytes(res.bytes)}) para o Google Sheets`);
@@ -124,6 +149,17 @@ export function ConfiguracoesView() {
             Incluir chaves desconhecidas (qualquer coisa que não seja sessão/UI)
           </label>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>{selectedKeys.size} de {localKeys.length} chaves selecionadas</span>
+            <button
+              type="button"
+              className="text-primary underline-offset-2 hover:underline"
+              onClick={toggleSelectAll}
+            >
+              {selectedKeys.size === localKeys.length ? "Desmarcar todas" : "Selecionar todas"}
+            </button>
+          </div>
+
           <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-muted/30">
             {localKeys.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground text-center">
@@ -140,7 +176,15 @@ export function ConfiguracoesView() {
                 <tbody>
                   {localKeys.map((k) => (
                     <tr key={k.key} className="border-t border-border/40">
-                      <td className="px-3 py-1.5 font-mono">{k.key}</td>
+                      <td className="px-3 py-1.5 font-mono">
+                        <label className="flex items-center gap-2">
+                          <Checkbox
+                            checked={selectedKeys.has(k.key)}
+                            onCheckedChange={() => toggleKeySelection(k.key)}
+                          />
+                          <span>{k.key}</span>
+                        </label>
+                      </td>
                       <td className="px-3 py-1.5 text-right text-muted-foreground">{humanBytes(k.size)}</td>
                     </tr>
                   ))}
