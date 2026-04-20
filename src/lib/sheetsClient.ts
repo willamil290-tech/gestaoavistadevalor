@@ -11,8 +11,9 @@ function functionsUrl(): string {
 }
 
 function anonKey(): string {
-  const k = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-  if (!k) throw new Error("VITE_SUPABASE_PUBLISHABLE_KEY não disponível.");
+  const k = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined
+    ?? import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!k) throw new Error("VITE_SUPABASE_PUBLISHABLE_KEY / VITE_SUPABASE_ANON_KEY não disponível.");
   return k;
 }
 

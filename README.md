@@ -102,7 +102,7 @@ Crie um `.env` local (ou use o painel do Vercel) com:
 
 ```env
 VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
+VITE_SUPABASE_PUBLISHABLE_KEY=...  # também aceita VITE_SUPABASE_ANON_KEY
 VITE_SYNC_POLL_INTERVAL=5000
 ```
 
