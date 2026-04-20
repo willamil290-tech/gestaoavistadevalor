@@ -176,6 +176,12 @@ const SCHEMAS: Record<string, string[]> = {
   // Arquivo genérico para snapshots vindos do localStorage do navegador.
   // key = chave original; value = JSON serializado; size = bytes.
   local_archive: ["key", "value", "size", "updated_at"],
+  // Histórico de chamadas importadas do Bitrix
+  calls_log: [
+    "year", "month", "name", "phone", "direction", "duration_seconds",
+    "date_iso", "time_hhmm", "date_time", "status", "contact_info", "answered",
+    "updated_at",
+  ],
 };
 
 const SHEET_NAMES = Object.keys(SCHEMAS);

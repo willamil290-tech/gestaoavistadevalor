@@ -16,6 +16,7 @@ import {
   type ParsedCall,
   type PersonDayCallMetrics,
 } from "@/lib/callsParse";
+import { saveCallsMonth } from "@/lib/persistence";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -205,6 +206,20 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       `${totalAdded} chamada(s) importada(s) de ${parsed.length} reconhecida(s).` +
         (otherAdded > 0 ? ` (${otherAdded} de outro(s) mês(es))` : "")
     );
+    
+    // Sincronizar com Google Sheets
+    if (added > 0) {
+      saveCallsMonth(selectedYear, selectedMonth, existing)
+        .catch((e) => console.error('Erro ao salvar chamadas no Sheets:', e));
+    }
+    if (otherAdded > 0) {
+      // Salvar chamadas de outros meses também
+      for (const [monthKey, calls] of otherGroups) {
+        const [y, m] = monthKey.split('-');
+        saveCallsMonth(Number(y), Number(m), calls)
+          .catch((e) => console.error('Erro ao salvar chamadas de outro mês:', e));
+      }
+    }
   };
 
   const clearMonth = () => {
