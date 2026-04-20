@@ -369,7 +369,6 @@ export async function saveCallsMonth(year: number, month: number, calls: ParsedC
   console.log('saveCallsMonth chamado com', calls.length, 'chamadas para', year, month);
   await ensureInit();
   
-  // Formatar as chamadas para salvar
   const rows = calls.map((call) => ({
     year: String(year),
     month: String(month).padStart(2, '0'),
@@ -386,15 +385,32 @@ export async function saveCallsMonth(year: number, month: number, calls: ParsedC
     updated_at: new Date().toISOString(),
   }));
   
-  console.log('Rows formatadas:', rows.length);
   if (rows.length === 0) return;
   
-  // Adicionar � aba calls_log
-  console.log('Chamando sheetsAppend para calls_log');
-  // Adicionar à aba calls_log
-  console.log('Chamando sheetsAppend para calls_log');
-  await sheetsAppend("calls_log", rows);
-  console.log('sheetsAppend concluído com sucesso');
+  const BATCH_SIZE = 100;
+  const DELAY_MS = 1000;
+  
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(rows.length / BATCH_SIZE);
+    console.log(`Salvando lote ${batchNum}/${totalBatches} (${batch.length} linhas)`);
+    
+    try {
+      await sheetsAppend('calls_log', batch);
+      console.log(`Lote ${batchNum} salvo com sucesso`);
+      
+      if (i + BATCH_SIZE < rows.length) {
+        console.log(`Aguardando ${DELAY_MS}ms antes do próximo lote...`);
+        await new Promise(r => setTimeout(r, DELAY_MS));
+      }
+    } catch (e) {
+      console.error(`Erro ao salvar lote ${batchNum}:`, e);
+      throw e;
+    }
+  }
+  
+  console.log('Todas as chamadas foram salvas com sucesso');
 }
 
 /**
