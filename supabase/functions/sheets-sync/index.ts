@@ -77,7 +77,7 @@ async function getAccessToken(): Promise<string> {
 
 // ---------- Sheets helpers ----------
 
-async function sheetsFetch(path: string, init: RequestInit = {}) {
+async function sheetsFetch(path: string, init: RequestInit = {}, retries = 0) {
   const token = await getAccessToken();
   const res = await fetch(`${SHEETS_BASE}/${SHEETS_ID}${path}`, {
     ...init,
@@ -90,6 +90,15 @@ async function sheetsFetch(path: string, init: RequestInit = {}) {
   const text = await res.text();
   let data: unknown = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  
+  // Retry com exponential backoff para 429 (RATE_LIMIT_EXCEEDED)
+  if (res.status === 429 && retries < 5) {
+    const waitMs = Math.min(1000 * Math.pow(2, retries) + Math.random() * 1000, 30000);
+    console.log(`[sheets-sync] Rate limit hit, aguardando ${waitMs}ms antes de retry ${retries + 1}/5`);
+    await new Promise(r => setTimeout(r, waitMs));
+    return sheetsFetch(path, init, retries + 1);
+  }
+  
   if (!res.ok) throw new Error(`Sheets API ${res.status}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
   return data as any;
 }
@@ -124,10 +133,28 @@ async function writeRange(sheet: string, values: string[][]) {
 
 async function appendRows(sheet: string, values: string[][]) {
   if (values.length === 0) return;
-  await sheetsFetch(
-    `/values/${encodeURIComponent(sheet)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-    { method: "POST", body: JSON.stringify({ range: sheet, values }) },
-  );
+  console.log(`[sheets-sync] Anexando ${values.length} linhas para ${sheet}`);
+  
+  // Tenta anexar direto. Se falhar com erro de range não encontrado, cria headers
+  try {
+    await sheetsFetch(
+      `/values/${encodeURIComponent(sheet)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+      { method: "POST", body: JSON.stringify({ range: sheet, values }) },
+    );
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes("not found") || msg.includes("Unable to parse")) {
+      console.log(`[sheets-sync] Range não encontrado, criando headers para ${sheet}`);
+      // Se a aba não tiver dados, cria headers
+      const headers = SCHEMAS[sheet] || [];
+      await sheetsFetch(
+        `/values/${encodeURIComponent(sheet)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        { method: "POST", body: JSON.stringify({ range: sheet, values: [headers, ...values] }) },
+      );
+    } else {
+      throw e;
+    }
+  }
 }
 
 // ---------- Row <-> object mapping ----------
@@ -281,12 +308,6 @@ Deno.serve(async (req) => {
     if (op === "append") {
       console.log("[sheets-sync] Executando append para", table, "com", payload?.items?.length ?? 0, "items");
       const items = (payload?.items ?? []) as Record<string, unknown>[];
-      // Ensure headers exist
-      const existingRows = await readRange(table);
-      if (existingRows.length === 0) {
-        console.log("[sheets-sync] Tabela vazia, criando headers");
-        await writeRange(table, [headers]);
-      }
       const rows = items.map((it) => headers.map((h) => {
         const v = it[h];
         if (v === undefined || v === null) return "";
