@@ -389,7 +389,7 @@ export async function saveCallsMonth(year: number, month: number, calls: ParsedC
   console.log('Rows formatadas:', rows.length);
   if (rows.length === 0) return;
   
-  // Adicionar à aba calls_log
+  // Adicionar ï¿½ aba calls_log
   console.log('Chamando sheetsAppend para calls_log');
   // Adicionar Ã  aba calls_log
   console.log('Chamando sheetsAppend para calls_log');
