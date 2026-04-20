@@ -2,7 +2,7 @@
 // a aba `local_archive` no Google Sheets via Edge Function. Também permite
 // restaurar todas as chaves de volta para o localStorage do navegador atual.
 
-import { sheetsSelect, sheetsUpsert } from "@/lib/sheetsClient";
+import { sheetsAppend, sheetsReplace, sheetsSelect, sheetsUpsert } from "@/lib/sheetsClient";
 
 // Chaves que NÃO migramos (sessão/UI/flags efêmeras).
 const SKIP_PREFIXES = [
@@ -66,27 +66,60 @@ export async function migrateLocalToSheets(opts?: {
   const keys = listLocalKeys(opts?.includeUnknown ?? false);
   if (keys.length === 0) return { count: 0, bytes: 0 };
 
-  // Upload em lotes pequenos pra não estourar a Sheets API por request.
-  const BATCH = 25;
+  // Limite por célula do Sheets ~50.000 chars; usamos margem segura.
+  const MAX_CELL = 45_000;
+  // Quebra cada chave grande em múltiplas linhas key#0, key#1, ...
+  type Row = { key: string; value: string; size: number; updated_at: string };
+  const rows: Row[] = [];
   let bytes = 0;
+  const now = new Date().toISOString();
+
+  for (const { key } of keys) {
+    const v = localStorage.getItem(key) ?? "";
+    bytes += v.length;
+    if (v.length === 0) continue;
+    if (v.length <= MAX_CELL) {
+      rows.push({ key, value: v, size: v.length, updated_at: now });
+    } else {
+      let idx = 0;
+      for (let pos = 0; pos < v.length; pos += MAX_CELL) {
+        const part = v.slice(pos, pos + MAX_CELL);
+        rows.push({ key: `${key}#${idx}`, value: part, size: part.length, updated_at: now });
+        idx++;
+      }
+    }
+  }
+
+  // ESTRATÉGIA: limpa a aba uma vez e usa append em lotes pequenos.
+  // Append não lê a planilha inteira a cada chamada (upsert sim — ficaria O(n²) e estouraria).
+  await withRetry(() => sheetsReplace("local_archive", []), "limpar aba");
+
+  // Lotes pequenos para não estourar payload do gateway (~6MB) nem timeout (~150s).
+  // 3 linhas/lote ≈ 135KB max no body — bem seguro.
+  const BATCH = 3;
   let done = 0;
-  for (let i = 0; i < keys.length; i += BATCH) {
-    const slice = keys.slice(i, i + BATCH);
-    const items = slice.map(({ key, size }) => {
-      const value = localStorage.getItem(key) ?? "";
-      bytes += value.length;
-      return {
-        key,
-        value,
-        size,
-        updated_at: new Date().toISOString(),
-      };
-    });
-    await sheetsUpsert("local_archive", items, "key");
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    await withRetry(() => sheetsAppend("local_archive", slice), `append lote ${Math.floor(i / BATCH) + 1}`);
     done += slice.length;
-    opts?.onProgress?.(done, keys.length, slice[slice.length - 1].key);
+    opts?.onProgress?.(done, rows.length, slice[slice.length - 1].key);
   }
   return { count: keys.length, bytes };
+}
+
+async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const wait = 1200 * (i + 1);
+      console.warn(`[migrate] ${label} falhou (${i + 1}/${tries}). Retentando em ${wait}ms`, e);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
 }
 
 /** Lista o que está arquivado no Sheets (sem baixar valores). */
@@ -105,22 +138,41 @@ export async function restoreArchiveToLocal(opts?: {
   onProgress?: (done: number, total: number, key: string) => void;
 }): Promise<{ restored: number; skipped: number }> {
   const rows = await sheetsSelect<Record<string, string>>("local_archive");
+  // Reagrupa chunks key#0, key#1, ... -> concatena em ordem.
+  const chunks = new Map<string, { idx: number; value: string }[]>();
+  const flat = new Map<string, string>();
+  for (const r of rows) {
+    const k = String(r.key ?? "");
+    if (!k) continue;
+    const m = k.match(/^(.*)#(\d+)$/);
+    if (m) {
+      const arr = chunks.get(m[1]) ?? [];
+      arr.push({ idx: Number(m[2]), value: String(r.value ?? "") });
+      chunks.set(m[1], arr);
+    } else {
+      flat.set(k, String(r.value ?? ""));
+    }
+  }
+  for (const [base, parts] of chunks) {
+    parts.sort((a, b) => a.idx - b.idx);
+    flat.set(base, parts.map((p) => p.value).join(""));
+  }
+
   let restored = 0;
   let skipped = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const key = String(r.key ?? "");
-    if (!key) continue;
+  const entries = Array.from(flat.entries());
+  for (let i = 0; i < entries.length; i++) {
+    const [key, value] = entries[i];
     const existing = localStorage.getItem(key);
     if (existing !== null && !(opts?.overwrite ?? false)) {
       skipped++;
     } else {
       try {
-        localStorage.setItem(key, String(r.value ?? ""));
+        localStorage.setItem(key, value);
         restored++;
       } catch { skipped++; }
     }
-    opts?.onProgress?.(i + 1, rows.length, key);
+    opts?.onProgress?.(i + 1, entries.length, key);
   }
   return { restored, skipped };
 }
