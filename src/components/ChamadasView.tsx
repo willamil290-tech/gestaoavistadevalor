@@ -209,15 +209,25 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     
     // Sincronizar com Google Sheets
     if (added > 0) {
+      console.log('Salvando', added, 'chamadas no Sheets para', selectedYear, selectedMonth);
       saveCallsMonth(selectedYear, selectedMonth, existing)
-        .catch((e) => console.error('Erro ao salvar chamadas no Sheets:', e));
+        .then(() => console.log('Chamadas salvas com sucesso no Sheets'))
+        .catch((e) => {
+          console.error('Erro ao salvar chamadas no Sheets:', e);
+          toast.error('Erro ao salvar no Google Sheets: ' + e.message);
+        });
     }
     if (otherAdded > 0) {
       // Salvar chamadas de outros meses também
       for (const [monthKey, calls] of otherGroups) {
         const [y, m] = monthKey.split('-');
+        console.log('Salvando', calls.length, 'chamadas no Sheets para', y, m);
         saveCallsMonth(Number(y), Number(m), calls)
-          .catch((e) => console.error('Erro ao salvar chamadas de outro mês:', e));
+          .then(() => console.log('Chamadas de outro mês salvas com sucesso'))
+          .catch((e) => {
+            console.error('Erro ao salvar chamadas de outro mês:', e);
+            toast.error('Erro ao salvar no Google Sheets: ' + e.message);
+          });
       }
     }
   };

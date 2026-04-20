@@ -17,7 +17,7 @@ function anonKey(): string {
   return k;
 }
 
-export type SheetsTable = "dashboard_settings" | "team_members" | "daily_events" | "local_archive";
+export type SheetsTable = "dashboard_settings" | "team_members" | "daily_events" | "local_archive" | "calls_log";
 
 type RpcBody = {
   op: "ping" | "init" | "select" | "replace" | "upsert" | "delete" | "append";

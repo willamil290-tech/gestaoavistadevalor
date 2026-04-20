@@ -366,6 +366,7 @@ import type { ParsedCall } from "./callsParse";
  * Cada chamada é uma linha com name, phone, direction, duration, datetime, etc.
  */
 export async function saveCallsMonth(year: number, month: number, calls: ParsedCall[]) {
+  console.log('saveCallsMonth chamado com', calls.length, 'chamadas para', year, month);
   await ensureInit();
   
   // Formatar as chamadas para salvar
@@ -385,10 +386,15 @@ export async function saveCallsMonth(year: number, month: number, calls: ParsedC
     updated_at: new Date().toISOString(),
   }));
   
+  console.log('Rows formatadas:', rows.length);
   if (rows.length === 0) return;
   
+  // Adicionar � aba calls_log
+  console.log('Chamando sheetsAppend para calls_log');
   // Adicionar à aba calls_log
+  console.log('Chamando sheetsAppend para calls_log');
   await sheetsAppend("calls_log", rows);
+  console.log('sheetsAppend concluído com sucesso');
 }
 
 /**
@@ -453,3 +459,5 @@ export async function getLastActivityIso(): Promise<string | null> {
     return null;
   }
 }
+
+
