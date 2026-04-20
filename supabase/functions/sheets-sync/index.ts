@@ -173,6 +173,9 @@ const SCHEMAS: Record<string, string[]> = {
     "id", "business_date", "scope", "kind", "member_id",
     "delta_morning", "delta_afternoon", "delta_bordero_dia", "created_at",
   ],
+  // Arquivo genérico para snapshots vindos do localStorage do navegador.
+  // key = chave original; value = JSON serializado; size = bytes.
+  local_archive: ["key", "value", "size", "updated_at"],
 };
 
 const SHEET_NAMES = Object.keys(SCHEMAS);
