@@ -263,7 +263,6 @@ Deno.serve(async (req) => {
       return json({ error: `Tabela inválida: ${table}` }, 400);
     }
     const headers = SCHEMAS[table];
-    await ensureSheets([table]);
 
     if (op === "select") {
       const rows = await readRange(table);
