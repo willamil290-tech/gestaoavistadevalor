@@ -64,6 +64,7 @@ export async function migrateLocalToSheets(opts?: {
   selectedKeys?: string[];
   delayMs?: number;
   incremental?: boolean;
+  forceUpdate?: boolean; // Nova opção: sempre atualizar mesmo se chave existir
   onProgress?: (done: number, total: number, key: string) => void;
 }): Promise<{ count: number; bytes: number }> {
   const keys = listLocalKeys(opts?.includeUnknown ?? false);
@@ -72,9 +73,9 @@ export async function migrateLocalToSheets(opts?: {
     : keys;
   if (filteredKeys.length === 0) return { count: 0, bytes: 0 };
 
-  // Se incremental, verificar quais chaves já existem no Sheets
+  // Se incremental E não forçado, verificar quais chaves já existem no Sheets
   let existingKeys = new Set<string>();
-  if (opts?.incremental) {
+  if (opts?.incremental && !opts?.forceUpdate) {
     try {
       const archived = await listArchivedKeys();
       existingKeys = new Set(archived.map((a) => a.key.split('#')[0])); // remover #0, #1 etc
@@ -83,8 +84,8 @@ export async function migrateLocalToSheets(opts?: {
     }
   }
 
-  // Filtrar apenas chaves que ainda não existem
-  const keysToMigrate = opts?.incremental
+  // Filtrar apenas chaves que ainda não existem (se incremental) ou todas (se forceUpdate)
+  const keysToMigrate = opts?.incremental && !opts?.forceUpdate
     ? filteredKeys.filter((k) => !existingKeys.has(k.key))
     : filteredKeys;
 
@@ -116,9 +117,9 @@ export async function migrateLocalToSheets(opts?: {
     }
   }
 
-  // ESTRATÉGIA: se não incremental, limpa a aba uma vez e usa append em lotes pequenos.
-  // Se incremental, apenas adiciona sem limpar.
-  if (!opts?.incremental) {
+  // ESTRATÉGIA: se incremental E não forçado, apenas adiciona sem limpar.
+  // Se forceUpdate ou não incremental, limpa a aba primeiro.
+  if (!opts?.incremental || opts?.forceUpdate) {
     await withRetry(() => sheetsReplace("local_archive", []), "limpar aba");
   }
 

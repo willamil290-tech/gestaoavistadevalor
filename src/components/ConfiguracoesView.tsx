@@ -65,48 +65,29 @@ export function ConfiguracoesView() {
   const totalLocalBytes = localKeys.reduce((acc, k) => acc + k.size, 0);
   const totalArchivedBytes = archived.reduce((acc, k) => acc + k.size, 0);
 
-  async function handleAutoMigrate() {
+  async function handleUpdateExisting() {
     if (localKeys.length === 0) {
-      toast.info("Nada para migrar — localStorage não tem dados de negócio.");
+      toast.info("Nada para atualizar — localStorage não tem dados de negócio.");
       return;
     }
-    setBusy("auto-migrate");
-    setAutoMigrateMode(true);
+    setBusy("update-existing");
     setProgress({ done: 0, total: localKeys.length, key: "" });
 
     try {
-      let totalMigrated = 0;
-      let totalBytes = 0;
-      const batchSize = 3; // Migrar 3 chaves por vez
-      const keysToMigrate = localKeys.map(k => k.key);
-
-      for (let i = 0; i < keysToMigrate.length; i += batchSize) {
-        const batch = keysToMigrate.slice(i, i + batchSize);
-        const res = await migrateLocalToSheets({
-          includeUnknown,
-          selectedKeys: batch,
-          incremental: true, // Não apaga dados existentes
-          delayMs: 2000, // 2 segundos entre lotes para evitar quota
-          onProgress: (done, total, key) => {
-            const globalDone = totalMigrated + done;
-            setProgress({ done: globalDone, total: localKeys.length, key });
-          },
-        });
-        totalMigrated += res.count;
-        totalBytes += res.bytes;
-
-        // Pequena pausa entre lotes para dar feedback visual
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      toast.success(`✅ Migração automática concluída: ${totalMigrated} chaves (${humanBytes(totalBytes)}) para o Google Sheets`);
+      const res = await migrateLocalToSheets({
+        includeUnknown,
+        incremental: true,
+        forceUpdate: true, // Sempre sobrescrever dados existentes
+        delayMs: 2000, // 2 segundos entre lotes
+        onProgress: (done, total, key) => setProgress({ done, total, key }),
+      });
+      toast.success(`✅ Dados atualizados: ${res.count} chaves (${humanBytes(res.bytes)}) no Google Sheets`);
       await refreshArchive();
     } catch (e: any) {
-      toast.error(e?.message ?? "Falha na migração automática");
+      toast.error(e?.message ?? "Falha ao atualizar dados");
     } finally {
       setBusy(null);
       setProgress(null);
-      setAutoMigrateMode(false);
     }
   }
 
@@ -151,8 +132,9 @@ export function ConfiguracoesView() {
                 <h3 className="font-bold text-lg text-foreground">Enviar para o Sheets</h3>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Lê o localStorage deste navegador e envia para a aba <code className="bg-muted px-1 rounded">local_archive</code> da planilha.
-                Use "Migração automática" para evitar limites de quota do Google Sheets.
+                <strong>Migração automática:</strong> Migra apenas dados novos, sem apagar existentes.<br/>
+                <strong>Atualizar dados existentes:</strong> Sobrescreve todos os dados no Sheets com versões atuais.<br/>
+                Use "Atualizar dados existentes" quando importar dados atualizados de dias já migrados.
               </p>
             </div>
             <Badge variant="outline" className="text-xs">
@@ -224,13 +206,13 @@ export function ConfiguracoesView() {
           <Button
             variant="outline"
             className="w-full rounded-xl"
-            onClick={handleAutoMigrate}
+            onClick={handleUpdateExisting}
             disabled={busy !== null || localKeys.length === 0}
           >
-            <CloudUpload className="w-4 h-4 mr-2" />
-            {busy === "auto-migrate"
-              ? `Migrando automaticamente ${progress?.done}/${progress?.total}...`
-              : "Migração automática (lotes pequenos)"}
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {busy === "update-existing"
+              ? `Atualizando ${progress?.done}/${progress?.total}...`
+              : "Atualizar dados existentes"}
           </Button>
         </Card>
 
