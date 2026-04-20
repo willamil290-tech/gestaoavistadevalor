@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, PhoneCall, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Settings2 } from "lucide-react";
+import { LayoutDashboard, Phone, PhoneCall, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, Settings2, Cog } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -13,6 +13,7 @@ import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
 import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
 import { ChamadasView } from "@/components/ChamadasView";
 import { ExcelBorderoImporter } from "@/components/ExcelBorderoImporter";
+import { ConfiguracoesView } from "@/components/ConfiguracoesView";
 import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -46,7 +47,7 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix" | "chamadas";
+type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "bordero-diario" | "bitrix" | "chamadas" | "configuracoes";
 
 const TV_TABS_STORAGE_KEY = "tvTabs";
 const DEFAULT_TV_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
@@ -724,6 +725,7 @@ const Index = () => {
     { id: "chamadas" as const, label: "Chamadas", icon: PhoneCall, color: "bg-blue-500" },
     { id: "bitrix" as const, label: "Bitrix", icon: BarChart3, color: "bg-primary" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
+    { id: "configuracoes" as const, label: "Configurações", icon: Cog, color: "bg-muted-foreground" },
   ];
 
   return (
@@ -882,6 +884,9 @@ const Index = () => {
           )}
           {activeTab === "bordero-diario" && (
             <BorderoDiarioView clientes={clientes} metaDia={metaDia} onClienteAdd={() => setClientes((prev) => [...prev, { id: `cli_${Date.now()}`, cliente: "Novo Cliente", comercial: "", valor: 0, horario: "", observacao: "" }])} onClienteUpdate={(c) => setClientes((prev) => prev.map((x) => (x.id === c.id ? c : x)))} onClienteDelete={(id) => setClientes((prev) => prev.filter((x) => x.id !== id))} onMetaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }} readOnly={readOnly} tvMode={tvMode} />
+          )}
+          {activeTab === "configuracoes" && (
+            <ConfiguracoesView />
           )}
         </div>
 
