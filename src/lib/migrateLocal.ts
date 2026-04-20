@@ -2,7 +2,7 @@
 // a aba `local_archive` no Google Sheets via Edge Function. Também permite
 // restaurar todas as chaves de volta para o localStorage do navegador atual.
 
-import { sheetsAppend, sheetsReplace, sheetsSelect, sheetsUpsert } from "@/lib/sheetsClient";
+import { sheetsAppend, sheetsReplace, sheetsSelect } from "@/lib/sheetsClient";
 
 // Chaves que NÃO migramos (sessão/UI/flags efêmeras).
 const SKIP_PREFIXES = [
