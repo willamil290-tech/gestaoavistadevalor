@@ -117,9 +117,12 @@ export async function migrateLocalToSheets(opts?: {
     }
   }
 
-  // ESTRATÉGIA: se incremental E não forçado, apenas adiciona sem limpar.
-  // Se forceUpdate ou não incremental, limpa a aba primeiro.
-  if (!opts?.incremental || opts?.forceUpdate) {
+  // ESTRATÉGIA: 
+  // - Se incremental E não forçado E não tem selectedKeys: apenas adiciona sem limpar
+  // - Se forceUpdate ou (não incremental E não tem selectedKeys): limpa a aba primeiro
+  // - Se tem selectedKeys: nunca limpa, apenas adiciona/atualiza as selecionadas
+  const shouldClearSheet = (!opts?.incremental || opts?.forceUpdate) && !opts?.selectedKeys;
+  if (shouldClearSheet) {
     await withRetry(() => sheetsReplace("local_archive", []), "limpar aba");
   }
 

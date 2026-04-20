@@ -27,6 +27,13 @@ export function ConfiguracoesView() {
 
   function refreshLocal() {
     try {
+      // Verificar se estamos no navegador e localStorage está disponível
+      if (typeof window === 'undefined' || !window.localStorage) {
+        console.warn('localStorage não disponível');
+        setLocalKeys([]);
+        setSelectedKeys(new Set());
+        return;
+      }
       const keys = listLocalKeys(includeUnknown);
       setLocalKeys(keys);
       setSelectedKeys(new Set(keys.map((k) => k.key)));
@@ -66,8 +73,21 @@ export function ConfiguracoesView() {
     }
   }
 
-  useEffect(() => { refreshLocal(); }, [includeUnknown]);
-  useEffect(() => { refreshArchive(); }, []);
+  useEffect(() => {
+    try {
+      refreshLocal();
+    } catch (e) {
+      console.error('Erro ao carregar chaves locais:', e);
+    }
+  }, [includeUnknown]);
+
+  useEffect(() => {
+    try {
+      refreshArchive();
+    } catch (e) {
+      console.error('Erro ao carregar arquivos:', e);
+    }
+  }, []);
 
   const totalLocalBytes = localKeys.reduce((acc, k) => acc + k.size, 0);
   const totalArchivedBytes = archived.reduce((acc, k) => acc + k.size, 0);
@@ -87,6 +107,8 @@ export function ConfiguracoesView() {
       const res = await migrateLocalToSheets({
         includeUnknown,
         selectedKeys: Array.from(selectedKeys),
+        incremental: false, // Para chaves selecionadas, sempre migrar (não incremental)
+        forceUpdate: false, // Não limpar toda a aba, apenas adicionar/atualizar as selecionadas
         delayMs: 600,
         onProgress: (done, total, key) => setProgress({ done, total, key }),
       });
@@ -100,26 +122,27 @@ export function ConfiguracoesView() {
     }
   }
 
-  async function handleUpdateExisting() {
-    if (localKeys.length === 0) {
-      toast.info("Nada para atualizar — localStorage não tem dados de negócio.");
+  async function handleUpdateSelected() {
+    if (selectedKeys.size === 0) {
+      toast.info("Selecione ao menos uma chave para atualizar.");
       return;
     }
-    setBusy("update-existing");
-    setProgress({ done: 0, total: localKeys.length, key: "" });
+    setBusy("update-selected");
+    setProgress({ done: 0, total: selectedKeys.size, key: "" });
 
     try {
       const res = await migrateLocalToSheets({
         includeUnknown,
+        selectedKeys: Array.from(selectedKeys),
         incremental: true,
-        forceUpdate: true, // Sempre sobrescrever dados existentes
-        delayMs: 2000, // 2 segundos entre lotes
+        forceUpdate: true, // Atualizar apenas as chaves selecionadas
+        delayMs: 2000,
         onProgress: (done, total, key) => setProgress({ done, total, key }),
       });
-      toast.success(`✅ Dados atualizados: ${res.count} chaves (${humanBytes(res.bytes)}) no Google Sheets`);
+      toast.success(`✅ Chaves atualizadas: ${res.count} (${humanBytes(res.bytes)}) no Google Sheets`);
       await refreshArchive();
     } catch (e: any) {
-      toast.error(e?.message ?? "Falha ao atualizar dados");
+      toast.error(e?.message ?? "Falha ao atualizar chaves");
     } finally {
       setBusy(null);
       setProgress(null);
@@ -235,19 +258,19 @@ export function ConfiguracoesView() {
             disabled={busy !== null || localKeys.length === 0}
           >
             <CloudUpload className="w-4 h-4 mr-2" />
-            {busy === "migrate" ? `Enviando ${progress?.done}/${progress?.total}...` : "Migrar selecionadas"}
+            {busy === "migrate" ? `Enviando ${progress?.done}/${progress?.total}...` : "Migrar selecionadas (incremental)"}
           </Button>
 
           <Button
             variant="outline"
             className="w-full rounded-xl"
-            onClick={handleUpdateExisting}
-            disabled={busy !== null || localKeys.length === 0}
+            onClick={handleUpdateSelected}
+            disabled={busy !== null || selectedKeys.size === 0}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
-            {busy === "update-existing"
+            {busy === "update-selected"
               ? `Atualizando ${progress?.done}/${progress?.total}...`
-              : "Atualizar dados existentes"}
+              : "Atualizar selecionadas"}
           </Button>
         </Card>
 
