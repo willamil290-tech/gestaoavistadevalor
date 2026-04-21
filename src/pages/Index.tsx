@@ -206,6 +206,12 @@ const Index = () => {
     toast.success(`Data de referência alterada para ${newDate.split("-").reverse().join("/")}`);
   };
 
+  // Carrega dados de eventos do localStorage quando a data de acionamentos muda
+  useEffect(() => {
+    const savedEvents = loadJson<PersonEventDetail[]>(`bitrixEvents:${acionSaveDate}`, []);
+    setPersonEventDetails(normalizePersonEventDetailsList(savedEvents));
+  }, [acionSaveDate]);
+
   const [agendadasMes, setAgendadasMes] = useState(initialAgendadasMes);
   const [agendadasDia, setAgendadasDia] = useState(initialAgendadasDia);
   const [trendStorageKey] = useState(() => `trendData:${getBusinessDate()}`);
