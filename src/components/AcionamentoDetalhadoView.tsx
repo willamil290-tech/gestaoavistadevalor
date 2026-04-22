@@ -14,6 +14,7 @@ import {
 } from "@/lib/collaboratorNames";
 import { getTeamGroup, groupByTeam, TEAM_GROUP_BADGE_COLORS, type TeamGroup } from "@/lib/teamGroups";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { pullKeyFromSheets } from "@/lib/sheetsSync";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
 import type { PersonEventDetail } from "@/lib/bitrixLogs";
 
@@ -426,12 +427,21 @@ export const AcionamentoDetalhadoView = ({
     events: { empresa: string; tipo: string; hora: string; actionCategory: string }[];
   }>({ open: false, name: "", day: "", total: 0, categorias: [], events: [] });
 
-  const openCellDetail = (name: string, day: string) => {
+  const openCellDetail = async (name: string, day: string) => {
     const dayMap = detDataLookup.get(day);
     const data = dayMap?.get(name);
     if (!data) return;
-    // Carregar eventos do localStorage
-    const stored = loadJson<any[]>(`bitrixEvents:${day}`, []);
+    // Carregar eventos do localStorage; se vazio, tentar puxar do Sheets sob demanda.
+    const eventsKey = `bitrixEvents:${day}`;
+    let stored = loadJson<any[]>(eventsKey, []);
+    if (!stored || stored.length === 0) {
+      try {
+        const ok = await pullKeyFromSheets(eventsKey);
+        if (ok) stored = loadJson<any[]>(eventsKey, []);
+      } catch (e) {
+        console.warn("[AcionamentoDetalhadoView] pullKeyFromSheets falhou:", e);
+      }
+    }
     const norm = collaboratorNameKey(name, day);
     const detail = stored?.find(
       (d: any) => collaboratorNameKey(d.comercial ?? "", day) === norm

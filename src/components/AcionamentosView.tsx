@@ -15,6 +15,7 @@ import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type Bul
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { pullKeyFromSheets } from "@/lib/sheetsSync";
 import {
   activeCollaboratorNameKey,
   canonicalizeActiveCollaboratorName,
@@ -496,10 +497,20 @@ export const AcionamentosView = ({
     items: { empresa: string; tipo: string; hora: string; tipoEvento?: string }[];
   }>({ open: false, title: "", items: [] });
 
-  const openGeralCellEvents = (name: string, day: string, filter?: "EMPRESA" | "LEAD") => {
-    const stored = loadJson<any[]>(`bitrixEvents:${day}`, []);
+  const openGeralCellEvents = async (name: string, day: string, filter?: "EMPRESA" | "LEAD") => {
+    const eventsKey = `bitrixEvents:${day}`;
+    let stored = loadJson<any[]>(eventsKey, []);
     if (!stored || stored.length === 0) {
-      toast.info("Sem logs de eventos salvos para este dia.");
+      // Tenta buscar do Google Sheets sob demanda (caso o pull inicial não tenha vindo).
+      try {
+        const ok = await pullKeyFromSheets(eventsKey);
+        if (ok) stored = loadJson<any[]>(eventsKey, []);
+      } catch (e) {
+        console.warn("[AcionamentosView] pullKeyFromSheets falhou:", e);
+      }
+    }
+    if (!stored || stored.length === 0) {
+      toast.info("Nenhum log detalhado para este dia. Reaplique o relatório do Bitrix em Bitrix Logs com a data correta para gerar os eventos.");
       return;
     }
     const norm = name.toLowerCase().trim();

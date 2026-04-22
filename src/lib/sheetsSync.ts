@@ -7,9 +7,14 @@
 //   no Sheets. Usado pelo `localStore.saveJson` para chaves de negócio.
 
 import { sheetsSelect } from "@/lib/sheetsClient";
+import { compressToBase64, decompressFromBase64 } from "lz-string";
 
 const FN_NAME = "sheets-sync";
 const MAX_CELL = 45_000;
+const COMPRESS_PREFIX = "LZB64:";
+// Chaves grandes (eventos detalhados) sempre comprimimos para reduzir
+// chunks e tamanho total da planilha.
+const ALWAYS_COMPRESS: RegExp[] = [/^bitrixEvents:/];
 
 function functionsUrl(): string {
   const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -34,6 +39,21 @@ const BUSINESS_PATTERNS: RegExp[] = [
 
 export function isBusinessKey(key: string): boolean {
   return BUSINESS_PATTERNS.some((re) => re.test(key));
+}
+
+function shouldCompress(key: string, value: string): boolean {
+  if (ALWAYS_COMPRESS.some((re) => re.test(key))) return true;
+  return value.length > MAX_CELL;
+}
+
+function maybeDecompress(value: string): string {
+  if (!value.startsWith(COMPRESS_PREFIX)) return value;
+  try {
+    const out = decompressFromBase64(value.slice(COMPRESS_PREFIX.length));
+    return out ?? value;
+  } catch {
+    return value;
+  }
 }
 
 // Debounce por chave: reduz spam quando vários `saveJson` rápidos acontecem.
@@ -91,13 +111,16 @@ export async function pushKeyToSheetsNow(key: string): Promise<void> {
   }
 
   const now = new Date().toISOString();
+  const stored = shouldCompress(key, value)
+    ? COMPRESS_PREFIX + compressToBase64(value)
+    : value;
   const items: Array<Record<string, unknown>> = [];
-  if (value.length <= MAX_CELL) {
-    items.push({ key, value, size: value.length, updated_at: now });
+  if (stored.length <= MAX_CELL) {
+    items.push({ key, value: stored, size: stored.length, updated_at: now });
   } else {
     let idx = 0;
-    for (let pos = 0; pos < value.length; pos += MAX_CELL) {
-      const part = value.slice(pos, pos + MAX_CELL);
+    for (let pos = 0; pos < stored.length; pos += MAX_CELL) {
+      const part = stored.slice(pos, pos + MAX_CELL);
       items.push({ key: `${key}#${idx}`, value: part, size: part.length, updated_at: now });
       idx++;
     }
@@ -158,8 +181,9 @@ export async function pullAllFromSheets(opts?: {
   let restored = 0;
   const entries = Array.from(flat.entries());
   for (let i = 0; i < entries.length; i++) {
-    const [key, value] = entries[i];
+    const [key, rawValue] = entries[i];
     if (!isBusinessKey(key)) continue;
+    const value = maybeDecompress(rawValue);
     try {
       // Marca para que o próximo saveJson não dispare push de volta com o mesmo valor.
       bootstrapKeys.add(key);
@@ -180,4 +204,47 @@ export function wasJustBootstrapped(key: string): boolean {
     return true;
   }
   return false;
+}
+
+/** Puxa UMA chave específica direto do Sheets e grava no localStorage.
+ *  Útil quando o usuário tenta acessar drill-down de um dia antigo que
+ *  ainda não foi baixado (ou que falhou no pullAll). */
+export async function pullKeyFromSheets(key: string): Promise<boolean> {
+  await ensureInit();
+  const rows = await sheetsSelect<Record<string, string>>("local_archive");
+  const parts: { idx: number; value: string }[] = [];
+  let flatValue: string | null = null;
+  for (const r of rows) {
+    const k = String(r.key ?? "");
+    if (k === key) flatValue = String(r.value ?? "");
+    const m = k.match(/^(.*)#(\d+)$/);
+    if (m && m[1] === key) parts.push({ idx: Number(m[2]), value: String(r.value ?? "") });
+  }
+  let value: string | null = flatValue;
+  if (value === null && parts.length > 0) {
+    parts.sort((a, b) => a.idx - b.idx);
+    value = parts.map((p) => p.value).join("");
+  }
+  if (value === null) return false;
+  const decoded = maybeDecompress(value);
+  try {
+    bootstrapKeys.add(key);
+    localStorage.setItem(key, decoded);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Aguarda todos os pushes debounced pendentes finalizarem agora. */
+export async function flushPendingPushes(): Promise<void> {
+  const keys = Array.from(pending.keys());
+  for (const k of keys) {
+    const t = pending.get(k);
+    if (t) clearTimeout(t);
+    pending.delete(k);
+  }
+  await Promise.all(keys.map((k) => pushKeyToSheetsNow(k).catch((e) => {
+    console.warn(`[sheetsSync] flush falhou para '${k}':`, e);
+  })));
 }
