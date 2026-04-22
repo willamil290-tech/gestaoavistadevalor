@@ -181,8 +181,9 @@ export async function pullAllFromSheets(opts?: {
   let restored = 0;
   const entries = Array.from(flat.entries());
   for (let i = 0; i < entries.length; i++) {
-    const [key, value] = entries[i];
+    const [key, rawValue] = entries[i];
     if (!isBusinessKey(key)) continue;
+    const value = maybeDecompress(rawValue);
     try {
       // Marca para que o próximo saveJson não dispare push de volta com o mesmo valor.
       bootstrapKeys.add(key);
