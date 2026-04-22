@@ -318,6 +318,30 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // Upsert atômico de uma chave do local_archive (com seus chunks).
+    // Remove TODAS as linhas cuja key seja `baseKey` ou `baseKey#N`, depois anexa as novas.
+    // payload: { baseKey: string, items: [{key,value,size,updated_at}, ...] }
+    if (op === "upsert_local_key" && table === "local_archive") {
+      const baseKey = String(payload?.baseKey ?? "");
+      const items = (payload?.items ?? []) as Record<string, unknown>[];
+      if (!baseKey) return json({ error: "baseKey obrigatório" }, 400);
+      const all = await readRange("local_archive");
+      const headerRow = all[0] ?? SCHEMAS.local_archive;
+      const dataRows = all.slice(1);
+      const keep = dataRows.filter((r) => {
+        const k = r[0] ?? "";
+        return k !== baseKey && !k.startsWith(`${baseKey}#`);
+      });
+      const newRows = items.map((it) => headers.map((h) => {
+        const v = it[h];
+        if (v === undefined || v === null) return "";
+        if (typeof v === "object") return JSON.stringify(v);
+        return String(v);
+      }));
+      await writeRange("local_archive", [headerRow, ...keep, ...newRows]);
+      return json({ ok: true, removed: dataRows.length - keep.length, added: newRows.length });
+    }
+
     return json({ error: `Operação inválida: ${op}` }, 400);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
