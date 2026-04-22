@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSimpleAuth } from "@/hooks/useSimpleAuth";
+import { pullAllFromSheets } from "@/lib/sheetsSync";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -13,7 +14,19 @@ const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useSimpleAuth();
-  
+  const [bootstrapped, setBootstrapped] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      pullAllFromSheets()
+        .then(({ restored }) => {
+          if (restored > 0) console.log(`[boot] ${restored} chave(s) restauradas do Google Sheets.`);
+        })
+        .catch((e) => console.warn("[boot] Falha ao puxar do Sheets:", e))
+        .finally(() => setBootstrapped(true));
+    }
+  }, [isAuthenticated]);
+
   if (isAuthenticated === null) {
     return <div className="min-h-screen bg-background flex items-center justify-center">Carregando...</div>;
   }
@@ -21,7 +34,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  
+
+  if (!bootstrapped) {
+    return <div className="min-h-screen bg-background flex items-center justify-center">Sincronizando dados…</div>;
+  }
+
   return <>{children}</>;
 };
 
