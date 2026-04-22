@@ -7,9 +7,14 @@
 //   no Sheets. Usado pelo `localStore.saveJson` para chaves de negócio.
 
 import { sheetsSelect } from "@/lib/sheetsClient";
+import { compressToBase64, decompressFromBase64 } from "lz-string";
 
 const FN_NAME = "sheets-sync";
 const MAX_CELL = 45_000;
+const COMPRESS_PREFIX = "LZB64:";
+// Chaves grandes (eventos detalhados) sempre comprimimos para reduzir
+// chunks e tamanho total da planilha.
+const ALWAYS_COMPRESS: RegExp[] = [/^bitrixEvents:/];
 
 function functionsUrl(): string {
   const base = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -34,6 +39,21 @@ const BUSINESS_PATTERNS: RegExp[] = [
 
 export function isBusinessKey(key: string): boolean {
   return BUSINESS_PATTERNS.some((re) => re.test(key));
+}
+
+function shouldCompress(key: string, value: string): boolean {
+  if (ALWAYS_COMPRESS.some((re) => re.test(key))) return true;
+  return value.length > MAX_CELL;
+}
+
+function maybeDecompress(value: string): string {
+  if (!value.startsWith(COMPRESS_PREFIX)) return value;
+  try {
+    const out = decompressFromBase64(value.slice(COMPRESS_PREFIX.length));
+    return out ?? value;
+  } catch {
+    return value;
+  }
 }
 
 // Debounce por chave: reduz spam quando vários `saveJson` rápidos acontecem.
