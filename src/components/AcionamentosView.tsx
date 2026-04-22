@@ -15,6 +15,7 @@ import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type Bul
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { pullKeyFromSheets } from "@/lib/sheetsSync";
 import {
   activeCollaboratorNameKey,
   canonicalizeActiveCollaboratorName,
