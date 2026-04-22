@@ -96,9 +96,12 @@ interface AcionamentosViewProps {
   onDetailedUpdate?: (entries: DetailedEntry[]) => void;
   saveDate?: string;
   onSaveDateChange?: (date: string) => void;
+  personEventDetails?: PersonEventDetail[];
 }
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
+
+import type { PersonEventDetail } from "@/lib/bitrixLogs";
 
 export const AcionamentosView = ({ 
   tvMode = false, 
@@ -108,6 +111,7 @@ export const AcionamentosView = ({
   onDetailedUpdate,
   saveDate: saveDateProp,
   onSaveDateChange,
+  personEventDetails = [],
 }: AcionamentosViewProps) => {
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "empresas" | "leads">("geral");
   const tabIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
