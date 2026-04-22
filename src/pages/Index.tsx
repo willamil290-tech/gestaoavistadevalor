@@ -707,7 +707,16 @@ const Index = () => {
         uniqueEmpresas: p.uniqueEmpresas,
         uniqueLeads: p.uniqueLeads,
       }));
-      saveJson(`bitrixEvents:${businessDate}`, eventsToSave);
+      const eventsKey = `bitrixEvents:${businessDate}`;
+      saveJson(eventsKey, eventsToSave);
+      // Força flush imediato no Sheets (sem aguardar o debounce de 1.5s).
+      // Garante que ao recarregar a página os logs detalhados estarão lá.
+      try {
+        await pushKeyToSheetsNow(eventsKey);
+      } catch (e) {
+        console.warn("[applyBitrixReport] falha ao gravar bitrixEvents no Sheets:", e);
+        toast.warning("Logs detalhados salvos localmente, mas falhou ao espelhar no Google Sheets.");
+      }
     }
   };
 
