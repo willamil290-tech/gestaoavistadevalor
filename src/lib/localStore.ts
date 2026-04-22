@@ -1,4 +1,6 @@
 // Fallback em memória quando localStorage falhar
+import { pushKeyToSheets, wasJustBootstrapped } from "@/lib/sheetsSync";
+
 const memoryStore = new Map<string, string>();
 let localStorageAvailable = true;
 
@@ -43,6 +45,8 @@ export function saveJson(key: string, value: unknown): void {
     if (checkLocalStorage()) {
       try {
         localStorage.setItem(key, serialized);
+        // Auto-mirror para Google Sheets (debounced, só chaves de negócio).
+        if (!wasJustBootstrapped(key)) pushKeyToSheets(key);
         return;
       } catch (e) {
         console.warn("[LocalStore] Erro ao salvar no localStorage, usando memória como fallback:", e);
@@ -50,6 +54,7 @@ export function saveJson(key: string, value: unknown): void {
     }
 
     memoryStore.set(key, serialized);
+    if (!wasJustBootstrapped(key)) pushKeyToSheets(key);
   } catch (e) {
     console.error(`[LocalStore] Erro ao serializar '${key}':`, e);
   }
@@ -61,6 +66,7 @@ export function removeKey(key: string): void {
       localStorage.removeItem(key);
     }
     memoryStore.delete(key);
+    pushKeyToSheets(key); // valor vazio dispara delete no Sheets
   } catch (e) {
     console.error(`[LocalStore] Erro ao remover '${key}':`, e);
   }
