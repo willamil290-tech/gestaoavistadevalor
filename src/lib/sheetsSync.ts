@@ -111,13 +111,16 @@ export async function pushKeyToSheetsNow(key: string): Promise<void> {
   }
 
   const now = new Date().toISOString();
+  const stored = shouldCompress(key, value)
+    ? COMPRESS_PREFIX + compressToBase64(value)
+    : value;
   const items: Array<Record<string, unknown>> = [];
-  if (value.length <= MAX_CELL) {
-    items.push({ key, value, size: value.length, updated_at: now });
+  if (stored.length <= MAX_CELL) {
+    items.push({ key, value: stored, size: stored.length, updated_at: now });
   } else {
     let idx = 0;
-    for (let pos = 0; pos < value.length; pos += MAX_CELL) {
-      const part = value.slice(pos, pos + MAX_CELL);
+    for (let pos = 0; pos < stored.length; pos += MAX_CELL) {
+      const part = stored.slice(pos, pos + MAX_CELL);
       items.push({ key: `${key}#${idx}`, value: part, size: part.length, updated_at: now });
       idx++;
     }
