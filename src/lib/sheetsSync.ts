@@ -205,3 +205,46 @@ export function wasJustBootstrapped(key: string): boolean {
   }
   return false;
 }
+
+/** Puxa UMA chave específica direto do Sheets e grava no localStorage.
+ *  Útil quando o usuário tenta acessar drill-down de um dia antigo que
+ *  ainda não foi baixado (ou que falhou no pullAll). */
+export async function pullKeyFromSheets(key: string): Promise<boolean> {
+  await ensureInit();
+  const rows = await sheetsSelect<Record<string, string>>("local_archive");
+  const parts: { idx: number; value: string }[] = [];
+  let flatValue: string | null = null;
+  for (const r of rows) {
+    const k = String(r.key ?? "");
+    if (k === key) flatValue = String(r.value ?? "");
+    const m = k.match(/^(.*)#(\d+)$/);
+    if (m && m[1] === key) parts.push({ idx: Number(m[2]), value: String(r.value ?? "") });
+  }
+  let value: string | null = flatValue;
+  if (value === null && parts.length > 0) {
+    parts.sort((a, b) => a.idx - b.idx);
+    value = parts.map((p) => p.value).join("");
+  }
+  if (value === null) return false;
+  const decoded = maybeDecompress(value);
+  try {
+    bootstrapKeys.add(key);
+    localStorage.setItem(key, decoded);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Aguarda todos os pushes debounced pendentes finalizarem agora. */
+export async function flushPendingPushes(): Promise<void> {
+  const keys = Array.from(pending.keys());
+  for (const k of keys) {
+    const t = pending.get(k);
+    if (t) clearTimeout(t);
+    pending.delete(k);
+  }
+  await Promise.all(keys.map((k) => pushKeyToSheetsNow(k).catch((e) => {
+    console.warn(`[sheetsSync] flush falhou para '${k}':`, e);
+  })));
+}
