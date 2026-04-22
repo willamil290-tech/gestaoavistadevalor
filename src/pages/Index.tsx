@@ -36,6 +36,7 @@ import { useUndoToast } from "@/hooks/useUndoToast";
 import { parseDashboardBulk, parseClienteTable, parseDetailedAcionamento, parseHourlyTrend, parseBulkTeamText, normalizeName, type DetailedEntry, type HourlyTrend, type BulkEntry } from "@/lib/bulkParse";
 import { loadJson, saveJson, removeKey } from "@/lib/localStore";
 import { type BitrixReport, type PersonEventDetail } from "@/lib/bitrixLogs";
+import { pushKeyToSheetsNow } from "@/lib/sheetsSync";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import type { ExcelImportResult } from "@/lib/excelImport";
 
