@@ -17,6 +17,7 @@ import { loadJson, saveJson } from "@/lib/localStore";
 import { pullKeyFromSheets } from "@/lib/sheetsSync";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
 import type { PersonEventDetail } from "@/lib/bitrixLogs";
+import { runBitrixBackfillOnce } from "@/lib/bitrixBackfill";
 
 export interface AcionamentoCategoria {
   tipo: string;
