@@ -19,6 +19,10 @@ export type BitrixEvent = {
   hour: number; // 0-23
   ageSeconds: number; // usado para desempate (maior = mais antigo)
   idx: number; // ordem no texto (para desempate final)
+  /** Texto bruto da linha de tempo (ex.: "ontem, 14:32", "há 9 dias", "13/04/2025 10:05"). Útil para reprocessamento posterior. */
+  timeText?: string;
+  /** Data real do evento em YYYY-MM-DD (calculada a partir do texto + targetDate). */
+  dateISO?: string;
 };
 
 const DAY_SECONDS = 24 * 60 * 60;
