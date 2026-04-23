@@ -340,6 +340,10 @@ export type BitrixReport = {
   }>;
   personCallMetrics: PersonCallMetrics[];
   personEventDetails: PersonEventDetail[];
+  /** Eventos agrupados por data ISO (YYYY-MM-DD). Inclui apenas eventos com dateISO definido. */
+  eventsByDate: Record<string, BitrixEvent[]>;
+  /** Datas detectadas no texto, ordenadas. */
+  detectedDates: string[];
 };
 
 function compareCommercial(a: string, b: string) {
