@@ -156,45 +156,51 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
     return days;
   }, [from, to]);
 
-  // Dados do gráfico — formato amigável para LineChart com múltiplas séries
+  // Dados do gráfico — agregação por HORA DO DIA (0-23), consolidando todo o período
   const chartData = useMemo(() => {
-    // base: { day, label, [series]: count }
-    const rows = dayList.map((iso) => {
-      const [, m, d] = iso.split("-");
-      return { day: iso, label: `${d}/${m}` } as Record<string, any>;
-    });
-    const indexByDay = new Map(rows.map((r, i) => [r.day, i]));
+    // base: 24 linhas, uma por hora (0..23)
+    const rows: Record<string, any>[] = [];
+    for (let h = 0; h < 24; h++) {
+      rows.push({ hour: h, label: `${pad2(h)}h` });
+    }
+
+    const hourOf = (c: ParsedCall) => {
+      // Prefere hora extraída do timeHHMM (mais confiável que dateTime após serialização)
+      if (c.timeHHMM && /^\d{2}:\d{2}$/.test(c.timeHHMM)) {
+        return parseInt(c.timeHHMM.slice(0, 2), 10);
+      }
+      try { return new Date(c.dateTime).getHours(); } catch { return 0; }
+    };
 
     if (viewMode === "total") {
       for (const r of rows) r["Total"] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
-        rows[idx]["Total"] = (rows[idx]["Total"] ?? 0) + 1;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
+        rows[h]["Total"] = (rows[h]["Total"] ?? 0) + 1;
       }
     } else if (viewMode === "setor") {
       const groups = selectedGroup === "__ALL__" ? GROUP_ORDER : [selectedGroup];
       for (const r of rows) for (const g of groups) r[g] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
         const g = getTeamGroup(c.name);
         if (!groups.includes(g)) continue;
-        rows[idx][g] = (rows[idx][g] ?? 0) + 1;
+        rows[h][g] = (rows[h][g] ?? 0) + 1;
       }
     } else {
-      // individual
       const people = selectedPerson === "__ALL__" ? allPeople : [selectedPerson];
       for (const r of rows) for (const p of people) r[p] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
         if (!people.includes(c.name)) continue;
-        rows[idx][c.name] = (rows[idx][c.name] ?? 0) + 1;
+        rows[h][c.name] = (rows[h][c.name] ?? 0) + 1;
       }
     }
     return rows;
-  }, [dayList, normalizedCalls, viewMode, selectedGroup, selectedPerson, allPeople]);
+  }, [normalizedCalls, viewMode, selectedGroup, selectedPerson, allPeople]);
 
   // Séries (chaves do gráfico) e cores
   const series = useMemo(() => {
