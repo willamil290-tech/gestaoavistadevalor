@@ -794,8 +794,8 @@ export const AcionamentosView = ({
       {/* Bulk paste for updating */}
       {!tvMode && (
         <BulkPasteUpdater
-          title="Atualizar Acionamentos"
-          subtitle="Cole o texto completo com tendência, resumo numérico e detalhado"
+          title="Atualizar Acionamentos (Leads + Negócios + várias datas)"
+          subtitle="Cole tudo de uma vez — Leads, Negócios e múltiplos dias no mesmo texto. O sistema detecta automaticamente cada data (DD/MM/AAAA, “Data:”, “Dia DD/MM”) e separa o que é Lead do que é Negócio. Aceita também os blocos Resumo Numérico, Resumo Detalhado e Acionamentos por hora."
           onApply={handleBulkPaste}
         />
       )}
