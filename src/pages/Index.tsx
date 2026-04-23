@@ -692,31 +692,73 @@ const Index = () => {
       saveJson(detKey, detStored);
     }
 
-    // 5) Salvar personEventDetails no localStorage por data (para drill-down posterior)
+    // 5) Salvar personEventDetails no localStorage POR DATA REAL de cada evento.
+    //    Eventos sem `dateISO` caem no `businessDate` (data alvo, fallback).
     {
-      const eventsToSave = (bitrix.personEventDetails ?? []).map((p) => ({
-        comercial: canonicalizeCollaboratorNameForDate(p.comercial, businessDate),
-        events: p.events.map((e) => ({
-          entityType: e.entityType,
-          empresa: e.empresa,
-          comercial: canonicalizeCollaboratorNameForDate(e.comercial, businessDate),
-          actionLine: e.actionLine,
-          actionCategory: e.actionCategory,
-          timeHHMM: e.timeHHMM,
-          hour: e.hour,
-        })),
-        uniqueEmpresas: p.uniqueEmpresas,
-        uniqueLeads: p.uniqueLeads,
-      }));
-      const eventsKey = `bitrixEvents:${businessDate}`;
-      saveJson(eventsKey, eventsToSave);
-      // Força flush imediato no Sheets (sem aguardar o debounce de 1.5s).
-      // Garante que ao recarregar a página os logs detalhados estarão lá.
+      const eventsByDateAndPerson: Record<string, Map<string, {
+        comercial: string;
+        events: any[];
+        uniqueEmpresas: any[];
+        uniqueLeads: any[];
+      }>> = {};
+
+      for (const p of (bitrix.personEventDetails ?? [])) {
+        for (const e of p.events) {
+          const dest = (e as any).dateISO ?? businessDate;
+          if (!eventsByDateAndPerson[dest]) eventsByDateAndPerson[dest] = new Map();
+          const personName = canonicalizeCollaboratorNameForDate(p.comercial, dest);
+          if (!eventsByDateAndPerson[dest].has(personName)) {
+            eventsByDateAndPerson[dest].set(personName, {
+              comercial: personName,
+              events: [],
+              uniqueEmpresas: [],
+              uniqueLeads: [],
+            });
+          }
+          eventsByDateAndPerson[dest].get(personName)!.events.push({
+            entityType: e.entityType,
+            empresa: e.empresa,
+            comercial: canonicalizeCollaboratorNameForDate(e.comercial, dest),
+            actionLine: e.actionLine,
+            actionCategory: e.actionCategory,
+            timeHHMM: e.timeHHMM,
+            hour: e.hour,
+            dateISO: dest,
+            timeText: (e as any).timeText,
+          });
+        }
+      }
+
+      // Reconstrói uniqueEmpresas/uniqueLeads por dia.
+      const datesWritten: string[] = [];
+      for (const [date, byPerson] of Object.entries(eventsByDateAndPerson)) {
+        for (const p of byPerson.values()) {
+          const seenE = new Set<string>(); const seenL = new Set<string>();
+          for (const ev of p.events) {
+            const k = (ev.empresa ?? "").toLowerCase().trim();
+            if (ev.entityType === "NEGÓCIO") {
+              if (!seenE.has(k)) { seenE.add(k); p.uniqueEmpresas.push({ empresa: ev.empresa, entityType: "NEGÓCIO", timeHHMM: ev.timeHHMM }); }
+            } else {
+              if (!seenL.has(k)) { seenL.add(k); p.uniqueLeads.push({ empresa: ev.empresa, entityType: "LEAD", timeHHMM: ev.timeHHMM }); }
+            }
+          }
+        }
+        const arr = Array.from(byPerson.values());
+        const eventsKey = `bitrixEvents:${date}`;
+        saveJson(eventsKey, arr);
+        datesWritten.push(date);
+      }
+
+      // Flush no Cloud para todas as datas afetadas.
       try {
-        await pushKeyToSheetsNow(eventsKey);
+        await Promise.all(datesWritten.map((d) => pushKeyToSheetsNow(`bitrixEvents:${d}`)));
       } catch (e) {
-        console.warn("[applyBitrixReport] falha ao gravar bitrixEvents no Sheets:", e);
-        toast.warning("Logs detalhados salvos localmente, mas falhou ao espelhar no Google Sheets.");
+        console.warn("[applyBitrixReport] falha ao gravar bitrixEvents no Cloud:", e);
+        toast.warning("Logs salvos localmente, mas falhou ao espelhar no Cloud.");
+      }
+
+      if (datesWritten.length > 1) {
+        toast.success(`Logs distribuídos em ${datesWritten.length} datas: ${datesWritten.sort().map(d => d.split("-").reverse().slice(0,2).join("/")).join(", ")}`);
       }
     }
   };
