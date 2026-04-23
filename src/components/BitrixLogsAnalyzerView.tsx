@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { parseAndBuildBitrixReport, type BitrixReport } from "@/lib/bitrixLogs";
 import { cn } from "@/lib/utils";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
+import { runBitrixBackfillOnce } from "@/lib/bitrixBackfill";
 
 type TargetDateOption = "hoje" | "ontem" | "custom";
 
@@ -23,6 +24,11 @@ function normalizeHHMM(input: string) {
 
 export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Backfill único: redistribui bitrixEvents:* legados por data real.
+  useEffect(() => {
+    runBitrixBackfillOnce().catch(() => {});
+  }, []);
 
   const [targetDateOption, setTargetDateOption] = useState<TargetDateOption>("hoje");
   const [customDate, setCustomDate] = useState(getBusinessDate());
@@ -83,7 +89,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     }
     if (!negociosText.trim() || !leadsText.trim()) return;
 
-    const res = parseAndBuildBitrixReport({ currentHHMM: t, negociosText, leadsText });
+    const res = parseAndBuildBitrixReport({ currentHHMM: t, negociosText, leadsText, targetDateISO: resolvedTargetDate });
     if (res.ok === false) {
       toast.error(res.error);
       return;
