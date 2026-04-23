@@ -10,7 +10,6 @@ import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
-  parseCallsText,
   parseCallsTextDetailed,
   computeCallMetrics,
   aggregateMonthMetrics,
