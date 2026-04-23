@@ -3,17 +3,14 @@ import { canonicalizeCollaboratorNameForDate, collaboratorNameKey } from "./coll
 /**
  * Parser para dados de chamadas colados do Bitrix (aba Chamadas).
  *
- * Formato esperado (bloco repetido por chamada):
+ * Estratégia LOSSLESS: o texto é dividido em blocos delimitados pelo nome do
+ * colaborador. Dentro de cada bloco, identificamos os campos por padrão (não
+ * por posição), de modo que blocos com duração ausente, linha "-" ou ordem
+ * variável de contato/empresa NÃO sejam descartados.
  *
- *   Nome Sobrenome
- *   +55 XX XXXX-XXXX
- *   efetuadas
- *   [duração: "24 s" | "1 min, 12 s" | ausente para canceladas]
- *   DD/MM/AAAA HH:MM
- *   Status (Bem sucedida | Cancelada | Temporiamente indisponível | ...)
- *   Contato: ... | Empresa: ...
- *   Atividade
- *   [- (para canceladas, opcional)]
+ * Nenhuma chamada válida (com nome + telefone + data + status reconhecíveis)
+ * é descartada silenciosamente. Blocos que não puderem ser interpretados
+ * voltam como `unparsedBlocks` no diagnóstico para revisão.
  */
 
 export interface ParsedCall {
