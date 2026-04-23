@@ -358,83 +358,9 @@ export async function listDailyEvents(businessDate: string, beforeIso?: string):
 }
 
 // ---------- calls ----------
-
-import type { ParsedCall } from "./callsParse";
-
-/**
- * Salva chamadas de um mês específico no Google Sheets (aba 'calls_log').
- * Cada chamada é uma linha com name, phone, direction, duration, datetime, etc.
- */
-export async function saveCallsMonth(year: number, month: number, calls: ParsedCall[]) {
-  console.log('saveCallsMonth chamado com', calls.length, 'chamadas para', year, month);
-  await ensureInit();
-  
-  const rows = calls.map((call) => ({
-    year: String(year),
-    month: String(month).padStart(2, '0'),
-    name: call.name,
-    phone: call.phone,
-    direction: call.direction,
-    duration_seconds: String(call.durationSeconds),
-    date_iso: call.dateISO,
-    time_hhmm: call.timeHHMM,
-    date_time: call.dateTime.toISOString(),
-    status: call.status,
-    contact_info: call.contactInfo,
-    answered: call.answered ? 'sim' : 'nao',
-    updated_at: new Date().toISOString(),
-  }));
-  
-  if (rows.length === 0) return;
-  
-  const BATCH_SIZE = 100;
-  const DELAY_MS = 1000;
-  
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(rows.length / BATCH_SIZE);
-    console.log(`Salvando lote ${batchNum}/${totalBatches} (${batch.length} linhas)`);
-    
-    try {
-      await sheetsAppend('calls_log', batch);
-      console.log(`Lote ${batchNum} salvo com sucesso`);
-      
-      if (i + BATCH_SIZE < rows.length) {
-        console.log(`Aguardando ${DELAY_MS}ms antes do próximo lote...`);
-        await new Promise(r => setTimeout(r, DELAY_MS));
-      }
-    } catch (e) {
-      console.error(`Erro ao salvar lote ${batchNum}:`, e);
-      throw e;
-    }
-  }
-  
-  console.log('Todas as chamadas foram salvas com sucesso');
-}
-
-/**
- * Carrega chamadas de um mês do Google Sheets (aba 'calls_log').
- */
-export async function loadCallsMonth(year: number, month: number): Promise<ParsedCall[]> {
-  await ensureInit();
-  
-  const monthStr = String(month).padStart(2, '0');
-  const rows = await sheetsSelect("calls_log", { year: String(year), month: monthStr });
-  
-  return rows.map((r) => ({
-    name: String(r.name ?? ""),
-    phone: String(r.phone ?? ""),
-    direction: String(r.direction ?? "efetuadas"),
-    durationSeconds: num(r.duration_seconds, 0),
-    dateTime: new Date(String(r.date_time ?? "")),
-    dateISO: String(r.date_iso ?? ""),
-    timeHHMM: String(r.time_hhmm ?? ""),
-    status: String(r.status ?? ""),
-    contactInfo: String(r.contact_info ?? ""),
-    answered: String(r.answered ?? "nao") === "sim",
-  }));
-}
+// As chamadas agora são persistidas exclusivamente via `saveJson("calls:YYYY-MM", ...)`
+// no Lovable Cloud (tabela `app_data`). O caminho legado para Google Sheets foi
+// removido para evitar fontes paralelas e divergência de totais.
 
 // ---------- Reset diário e last activity ----------
 
