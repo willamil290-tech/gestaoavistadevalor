@@ -40,6 +40,7 @@ import { type BitrixReport, type PersonEventDetail } from "@/lib/bitrixLogs";
 import { pushKeyToSheetsNow } from "@/lib/sheetsSync";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import type { ExcelImportResult } from "@/lib/excelImport";
+import { restoreLegacyArchiveOnce } from "@/lib/legacyRecovery";
 
 function normalizeNameKeyLoose(name: string) {
   return collaboratorNameKey(name);
@@ -223,6 +224,13 @@ const Index = () => {
   const trendSyncWarnedRef = useRef(false);
 
   const [extrasHydrated, setExtrasHydrated] = useState(false);
+  const [legacyRecoveryDone, setLegacyRecoveryDone] = useState(false);
+
+  useEffect(() => {
+    restoreLegacyArchiveOnce()
+      .catch((e) => console.warn("[legacyRecovery] falha:", e))
+      .finally(() => setLegacyRecoveryDone(true));
+  }, []);
 
   // Persist tendência por hora (localStorage)
   useEffect(() => {
@@ -253,47 +261,47 @@ const Index = () => {
 
   // Persist extras with debounce
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(() => {
       remoteExtras.update({ commercials });
     }, 700);
     return () => clearTimeout(t);
-  }, [commercials, extrasHydrated]);
+  }, [commercials, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(() => {
       remoteExtras.update({ faixas: faixas as any });
     }, 700);
     return () => clearTimeout(t);
-  }, [faixas, extrasHydrated]);
+  }, [faixas, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(() => {
       remoteExtras.update({ clientes: clientes as any });
     }, 700);
     return () => clearTimeout(t);
-  }, [clientes, extrasHydrated]);
+  }, [clientes, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(() => {
       remoteExtras.update({ acionamentoDetalhado: acionamentoDetalhado as any });
     }, 700);
     return () => clearTimeout(t);
-  }, [acionamentoDetalhado, extrasHydrated]);
+  }, [acionamentoDetalhado, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(() => {
       remoteExtras.update({ agendadasMes: agendadasMes as any, agendadasDia: agendadasDia as any });
     }, 700);
     return () => clearTimeout(t);
-  }, [agendadasMes, agendadasDia, extrasHydrated]);
+  }, [agendadasMes, agendadasDia, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !extrasHydrated) return;
+    if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
     const t = setTimeout(async () => {
       try {
         await remoteExtras.updateAsync({ trendData: trendData as any });
@@ -307,7 +315,7 @@ const Index = () => {
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [trendData, extrasHydrated]);
+  }, [trendData, extrasHydrated, legacyRecoveryDone]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !remoteSettings.data) return;
