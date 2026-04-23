@@ -10,13 +10,12 @@ import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
-  parseCallsText,
+  parseCallsTextDetailed,
   computeCallMetrics,
   aggregateMonthMetrics,
   type ParsedCall,
   type PersonDayCallMetrics,
 } from "@/lib/callsParse";
-import { saveCallsMonth } from "@/lib/persistence";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -26,17 +25,7 @@ function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
 }
 
-function buildCallDedupKey(call: Pick<ParsedCall, "name" | "phone" | "dateTime" | "direction" | "durationSeconds" | "status" | "contactInfo">) {
-  return [
-    call.name,
-    call.phone,
-    call.dateTime.getTime(),
-    call.direction,
-    call.durationSeconds,
-    call.status.trim().toLowerCase(),
-    call.contactInfo.trim().toLowerCase(),
-  ].join("|");
-}
+type SaveMode = "append" | "replaceDay" | "replaceMonth";
 
 function formatTime(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds)) return "—";
@@ -121,6 +110,18 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Stored calls per month
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
+  // Modo de gravação durante a importação
+  const [saveMode, setSaveMode] = useState<SaveMode>("append");
+  // Diagnóstico do último parse (mostrado antes de salvar)
+  const [parsePreview, setParsePreview] = useState<{
+    calls: ParsedCall[];
+    unparsedBlocks: { lines: string[]; reason: string }[];
+    totalBlocks: number;
+    byMonth: Map<string, number>;
+    byPersonDay: Map<string, number>;
+    relativeDateUsed: boolean;
+  } | null>(null);
+
   // Load from localStorage on mount / month change
   useEffect(() => {
     const key = storageKey(selectedYear, selectedMonth);
@@ -148,96 +149,101 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     isIgnoredCommercial(name) || isMariaCollaboratorName(name);
 
   // Process pasted text
-  const handlePaste = () => {
+  // Etapa 1: analisa o texto e mostra prévia (sem salvar nada).
+  const handleAnalyze = () => {
     if (!pasteText.trim()) {
-      toast.error("Cole os dados de chamadas antes de aplicar.");
+      toast.error("Cole os dados de chamadas antes de analisar.");
+      return;
+    }
+    const result = parseCallsTextDetailed(pasteText);
+    if (result.totalBlocks === 0) {
+      toast.error("Nenhum bloco de chamada reconhecido no texto colado.");
       return;
     }
 
-    const parsed = parseCallsText(pasteText);
-    if (parsed.length === 0) {
-      toast.error("Nenhuma chamada reconhecida no texto colado.");
-      return;
+    const byMonth = new Map<string, number>();
+    const byPersonDay = new Map<string, number>();
+    for (const c of result.calls) {
+      const mk = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
+      byMonth.set(mk, (byMonth.get(mk) ?? 0) + 1);
+      const pdk = `${c.name}|${c.dateISO}`;
+      byPersonDay.set(pdk, (byPersonDay.get(pdk) ?? 0) + 1);
+    }
+    const relativeDateUsed = /\b(ontem|hoje|anteontem)\b/i.test(pasteText);
+
+    setParsePreview({
+      calls: result.calls,
+      unparsedBlocks: result.unparsedBlocks,
+      totalBlocks: result.totalBlocks,
+      byMonth,
+      byPersonDay,
+      relativeDateUsed,
+    });
+  };
+
+  // Etapa 2: confirma a gravação aplicando o modo escolhido.
+  // Nenhuma chamada é descartada por heurística — apenas substituímos períodos
+  // explicitamente quando o usuário pede.
+  const handleConfirmSave = () => {
+    if (!parsePreview) return;
+    const parsed = parsePreview.calls;
+
+    // Agrupa as chamadas parseadas por mês de origem.
+    const byMonth = new Map<string, ParsedCall[]>();
+    for (const c of parsed) {
+      const mk = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
+      if (!byMonth.has(mk)) byMonth.set(mk, []);
+      byMonth.get(mk)!.push(c);
     }
 
-    const existing = [...storedCalls];
-    const existingKeys = new Set(existing.map((c) => buildCallDedupKey(c)));
+    // Conjunto de dias importados (para o modo replaceDay).
+    const importedDays = new Set(parsed.map((c) => c.dateISO));
 
-    let added = 0;
-    for (const call of parsed) {
-      const key = buildCallDedupKey(call);
-      if (!existingKeys.has(key)) {
-        if (call.dateTime.getFullYear() === selectedYear && call.dateTime.getMonth() + 1 === selectedMonth) {
-          existing.push(call);
-          existingKeys.add(key);
-          added++;
-        }
-      }
-    }
-
-    // Handle calls from different months
-    const otherMonthCalls = parsed.filter(
-      (c) => c.dateTime.getFullYear() !== selectedYear || c.dateTime.getMonth() + 1 !== selectedMonth
-    );
-    const otherGroups = new Map<string, ParsedCall[]>();
-    for (const c of otherMonthCalls) {
-      const k = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
-      if (!otherGroups.has(k)) otherGroups.set(k, []);
-      otherGroups.get(k)!.push(c);
-    }
-    let otherAdded = 0;
-    for (const [monthKey, calls] of otherGroups) {
-      const existingOther = loadJson<any[]>(`calls:${monthKey}`, []).map((c: any) => ({
+    let totalSaved = 0;
+    for (const [monthKey, monthCalls] of byMonth) {
+      const [y, m] = monthKey.split("-").map(Number);
+      const key = `calls:${monthKey}`;
+      const existing = loadJson<any[]>(key, []).map((c: any) => ({
         ...c,
         name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
         dateTime: new Date(c.dateTime),
-      }));
-      const existingOtherKeys = new Set(existingOther.map((c: ParsedCall) => buildCallDedupKey(c)));
-      for (const call of calls) {
-        const k = buildCallDedupKey(call);
-        if (!existingOtherKeys.has(k)) {
-          existingOther.push(call);
-          existingOtherKeys.add(k);
-          otherAdded++;
-        }
+      })) as ParsedCall[];
+
+      let next: ParsedCall[];
+      if (saveMode === "replaceMonth") {
+        next = [...monthCalls];
+      } else if (saveMode === "replaceDay") {
+        next = [
+          ...existing.filter((c) => !importedDays.has(c.dateISO)),
+          ...monthCalls,
+        ];
+      } else {
+        // append: adiciona todas as chamadas sem qualquer dedupe
+        next = [...existing, ...monthCalls];
       }
-      saveJson(`calls:${monthKey}`, existingOther);
+
+      const normalized = next.map((c) => ({
+        ...c,
+        name: canonicalizeCollaboratorNameForDate(c.name, c.dateISO),
+      }));
+      saveJson(key, normalized);
+      totalSaved += monthCalls.length;
+
+      // Atualiza o estado local se for o mês exibido
+      if (y === selectedYear && m === selectedMonth) {
+        setStoredCalls(normalized);
+      }
     }
 
-    setStoredCalls(existing);
-    saveToStorage(existing);
     setPasteText("");
     setShowPaste(false);
+    setParsePreview(null);
 
-    const totalAdded = added + otherAdded;
-    toast.success(
-      `${totalAdded} chamada(s) importada(s) de ${parsed.length} reconhecida(s).` +
-        (otherAdded > 0 ? ` (${otherAdded} de outro(s) mês(es))` : "")
-    );
-    
-    // Sincronizar com Google Sheets
-    if (added > 0) {
-      console.log('Salvando', added, 'chamadas no Sheets para', selectedYear, selectedMonth);
-      saveCallsMonth(selectedYear, selectedMonth, existing)
-        .then(() => console.log('Chamadas salvas com sucesso no Sheets'))
-        .catch((e) => {
-          console.error('Erro ao salvar chamadas no Sheets:', e);
-          toast.error('Erro ao salvar no Google Sheets: ' + e.message);
-        });
-    }
-    if (otherAdded > 0) {
-      // Salvar chamadas de outros meses também
-      for (const [monthKey, calls] of otherGroups) {
-        const [y, m] = monthKey.split('-');
-        console.log('Salvando', calls.length, 'chamadas no Sheets para', y, m);
-        saveCallsMonth(Number(y), Number(m), calls)
-          .then(() => console.log('Chamadas de outro mês salvas com sucesso'))
-          .catch((e) => {
-            console.error('Erro ao salvar chamadas de outro mês:', e);
-            toast.error('Erro ao salvar no Google Sheets: ' + e.message);
-          });
-      }
-    }
+    const modeLabel =
+      saveMode === "replaceMonth" ? "substituindo o mês"
+      : saveMode === "replaceDay" ? "substituindo os dias importados"
+      : "adicionadas ao período existente";
+    toast.success(`${totalSaved} chamada(s) salvas (${modeLabel}).`);
   };
 
   const clearMonth = () => {
@@ -534,10 +540,97 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
             placeholder="Cole aqui os dados de chamadas..."
             className="min-h-[200px] font-mono text-xs"
           />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); }}>Cancelar</Button>
-            <Button onClick={handlePaste}>Aplicar</Button>
-          </div>
+          {!parsePreview && (
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
+              <Button onClick={handleAnalyze}>Analisar</Button>
+            </div>
+          )}
+
+          {parsePreview && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="text-sm space-y-1">
+                <div><strong>{parsePreview.totalBlocks}</strong> bloco(s) detectado(s) no texto.</div>
+                <div><strong className="text-green-600 dark:text-green-400">{parsePreview.calls.length}</strong> chamada(s) reconhecida(s) com sucesso.</div>
+                {parsePreview.unparsedBlocks.length > 0 && (
+                  <div className="text-amber-600 dark:text-amber-400">
+                    <strong>{parsePreview.unparsedBlocks.length}</strong> bloco(s) não pôde ser interpretado e ficará pendente — confira o texto.
+                  </div>
+                )}
+                {parsePreview.relativeDateUsed && (
+                  <div className="text-amber-600 dark:text-amber-400">
+                    ⚠ O texto contém datas relativas (<em>ontem</em>/<em>hoje</em>/<em>anteontem</em>) — elas são resolvidas com base na data atual.
+                  </div>
+                )}
+              </div>
+
+              {parsePreview.byMonth.size > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">Distribuição por mês:</strong>{" "}
+                  {Array.from(parsePreview.byMonth.entries())
+                    .sort()
+                    .map(([m, n]) => `${m}: ${n}`)
+                    .join(" • ")}
+                </div>
+              )}
+
+              {parsePreview.byPersonDay.size > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Ver contagem por colaborador e dia ({parsePreview.byPersonDay.size} linhas)
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-auto border border-border rounded p-2 font-mono text-[11px] space-y-0.5">
+                    {Array.from(parsePreview.byPersonDay.entries())
+                      .sort()
+                      .map(([k, n]) => {
+                        const [name, date] = k.split("|");
+                        return <div key={k}>{date} — {name}: <strong>{n}</strong></div>;
+                      })}
+                  </div>
+                </details>
+              )}
+
+              {parsePreview.unparsedBlocks.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-amber-600 dark:text-amber-400">
+                    Ver blocos não interpretados ({parsePreview.unparsedBlocks.length})
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-auto border border-border rounded p-2 font-mono text-[11px] space-y-2">
+                    {parsePreview.unparsedBlocks.map((b, i) => (
+                      <div key={i}>
+                        <div className="text-amber-600 dark:text-amber-400">⚠ {b.reason}</div>
+                        <pre className="whitespace-pre-wrap">{b.lines.join("\n")}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Modo de gravação:</div>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
+                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas novas (pode duplicar se você colar duas vezes).</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "replaceDay"} onChange={() => setSaveMode("replaceDay")} className="mt-1" />
+                    <span><strong>Substituir os dias importados</strong> — apaga apenas os dias presentes no texto e regrava com os dados novos.</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "replaceMonth"} onChange={() => setSaveMode("replaceMonth")} className="mt-1" />
+                    <span><strong>Substituir o(s) mês(es) inteiro(s)</strong> — recomendado para reparar históricos. Apaga todo o conteúdo do mês e grava só o que está no texto.</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setParsePreview(null)}>Voltar</Button>
+                <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
+                <Button onClick={handleConfirmSave}>Confirmar gravação</Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
