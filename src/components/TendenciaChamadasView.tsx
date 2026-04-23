@@ -477,7 +477,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
 
       {/* Ranking + setor */}
       {totalCalls > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
             <h3 className="font-semibold text-lg mb-3">Ranking por colaborador</h3>
             <div className="space-y-2 max-h-[360px] overflow-y-auto">
