@@ -23,7 +23,7 @@ export function ConfiguracoesView() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<{ key: string; size: number; updated_at: string }[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
-  const [busy, setBusy] = useState<null | "migrate" | "restore" | "update-existing" | "update-selected">(null);
+  const [busy, setBusy] = useState<null | "migrate" | "restore" | "update-existing" | "update-selected" | "cloud-push">(null);
   const [progress, setProgress] = useState<{ done: number; total: number; key: string } | null>(null);
 
   function refreshLocal() {
