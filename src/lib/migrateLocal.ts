@@ -212,6 +212,32 @@ export async function restoreArchiveToLocal(opts?: {
   return { restored, skipped };
 }
 
+export async function getArchivedLocalEntries(): Promise<Array<{ key: string; value: string }>> {
+  const rows = await sheetsSelect<Record<string, string>>("local_archive");
+  const chunks = new Map<string, { idx: number; value: string }[]>();
+  const flat = new Map<string, string>();
+
+  for (const r of rows) {
+    const k = String(r.key ?? "");
+    if (!k) continue;
+    const m = k.match(/^(.*)#(\d+)$/);
+    if (m) {
+      const arr = chunks.get(m[1]) ?? [];
+      arr.push({ idx: Number(m[2]), value: String(r.value ?? "") });
+      chunks.set(m[1], arr);
+    } else {
+      flat.set(k, String(r.value ?? ""));
+    }
+  }
+
+  for (const [base, parts] of chunks) {
+    parts.sort((a, b) => a.idx - b.idx);
+    flat.set(base, parts.map((p) => p.value).join(""));
+  }
+
+  return Array.from(flat, ([key, value]) => ({ key, value }));
+}
+
 export function humanBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
