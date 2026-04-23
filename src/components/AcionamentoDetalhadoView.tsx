@@ -135,6 +135,11 @@ export const AcionamentoDetalhadoView = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<ColaboradorAcionamento | null>(null);
 
+  // Backfill único: redistribui bitrixEvents:* legados por data real do evento.
+  useEffect(() => {
+    runBitrixBackfillOnce().catch(() => {});
+  }, []);
+
   // Drill-down dialog state
   const [detailDialog, setDetailDialog] = useState<{
     open: boolean;
