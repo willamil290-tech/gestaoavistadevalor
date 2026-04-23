@@ -9,6 +9,7 @@ import type { FaixaVencimento } from "@/components/FaixaVencimentoView";
 import { BorderoDiarioView, ClienteBordero } from "@/components/BorderoDiarioView";
 import { AgendadasRealizadasView, AgendadaRealizada } from "@/components/AgendadasRealizadasView";
 import { TendenciaDiaView } from "@/components/TendenciaDiaView";
+import { TendenciaChamadasView } from "@/components/TendenciaChamadasView";
 import { BulkPasteUpdater } from "@/components/BulkPasteUpdater";
 import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
 import { ChamadasView } from "@/components/ChamadasView";
