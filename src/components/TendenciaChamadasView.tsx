@@ -156,13 +156,16 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
     return days;
   }, [from, to]);
 
-  // Dados do gráfico — agregação por HORA DO DIA (0-23), consolidando todo o período
+  // Dados do gráfico — agregação por HORA DO EXPEDIENTE (08-18), consolidando o período
   const chartData = useMemo(() => {
-    // base: 24 linhas, uma por hora (0..23)
+    // base: 11 linhas, uma por hora (08..18)
+    const HOUR_START = 8;
+    const HOUR_END = 18; // inclusivo
     const rows: Record<string, any>[] = [];
-    for (let h = 0; h < 24; h++) {
+    for (let h = HOUR_START; h <= HOUR_END; h++) {
       rows.push({ hour: h, label: `${pad2(h)}h` });
     }
+    const idxOf = (h: number) => h - HOUR_START;
 
     const hourOf = (c: ParsedCall) => {
       // Prefere hora extraída do timeHHMM (mais confiável que dateTime após serialização)
@@ -176,27 +179,30 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
       for (const r of rows) r["Total"] = 0;
       for (const c of normalizedCalls) {
         const h = hourOf(c);
-        if (h < 0 || h > 23) continue;
-        rows[h]["Total"] = (rows[h]["Total"] ?? 0) + 1;
+        if (h < HOUR_START || h > HOUR_END) continue;
+        const i = idxOf(h);
+        rows[i]["Total"] = (rows[i]["Total"] ?? 0) + 1;
       }
     } else if (viewMode === "setor") {
       const groups = selectedGroup === "__ALL__" ? GROUP_ORDER : [selectedGroup];
       for (const r of rows) for (const g of groups) r[g] = 0;
       for (const c of normalizedCalls) {
         const h = hourOf(c);
-        if (h < 0 || h > 23) continue;
+        if (h < HOUR_START || h > HOUR_END) continue;
+        const i = idxOf(h);
         const g = getTeamGroup(c.name);
         if (!groups.includes(g)) continue;
-        rows[h][g] = (rows[h][g] ?? 0) + 1;
+        rows[i][g] = (rows[i][g] ?? 0) + 1;
       }
     } else {
       const people = selectedPerson === "__ALL__" ? allPeople : [selectedPerson];
       for (const r of rows) for (const p of people) r[p] = 0;
       for (const c of normalizedCalls) {
         const h = hourOf(c);
-        if (h < 0 || h > 23) continue;
+        if (h < HOUR_START || h > HOUR_END) continue;
+        const i = idxOf(h);
         if (!people.includes(c.name)) continue;
-        rows[h][c.name] = (rows[h][c.name] ?? 0) + 1;
+        rows[i][c.name] = (rows[i][c.name] ?? 0) + 1;
       }
     }
     return rows;
@@ -271,7 +277,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
         </h2>
       </div>
       <p className="text-sm text-muted-foreground -mt-3">
-        Distribuição das ligações por hora do dia (00–23h), consolidando todo o período selecionado.
+        Distribuição das ligações por hora do expediente (08–18h), consolidando todo o período selecionado.
       </p>
 
       {/* Controles */}
