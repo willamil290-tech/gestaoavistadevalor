@@ -262,7 +262,14 @@ export const AcionamentosView = ({
   // Load monthly data on month change
   useEffect(() => {
     const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
-    setGeralMonthData(normalizeGeralMonthData(loadJson<GeralMonthData>(key, {})));
+    const raw = loadJson<GeralMonthData>(key, {});
+    const { cleaned, removed } = sanitizeGeralMonthData(raw);
+    const normalized = normalizeGeralMonthData(cleaned);
+    if (removed > 0) {
+      saveJson(key, normalized);
+      toast.success(`Limpeza: ${removed} entrada(s) corrompida(s) removida(s).`);
+    }
+    setGeralMonthData(normalized);
   }, [geralYear, geralMonth]);
 
   // Auto-save geral data to monthly storage — only when the reference date is
