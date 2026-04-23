@@ -150,6 +150,43 @@ export function ConfiguracoesView() {
     }
   }
 
+  async function handleCloudPush() {
+    // Pega TODAS as chaves de negócio do localStorage e envia ao Lovable Cloud.
+    const keys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && isBusinessKey(k)) keys.push(k);
+      }
+    } catch (e) {
+      toast.error("Não foi possível ler o localStorage.");
+      return;
+    }
+    if (keys.length === 0) {
+      toast.info("Nenhum dado de negócio encontrado no navegador.");
+      return;
+    }
+    setBusy("cloud-push");
+    setProgress({ done: 0, total: keys.length, key: "" });
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      try {
+        await pushKeyToSheetsNow(k);
+        ok++;
+      } catch (e) {
+        console.warn("[cloud-push] falhou:", k, e);
+        fail++;
+      }
+      setProgress({ done: i + 1, total: keys.length, key: k });
+    }
+    setBusy(null);
+    setProgress(null);
+    if (fail === 0) toast.success(`✅ ${ok} chaves enviadas para a nuvem.`);
+    else toast.warning(`Enviadas: ${ok} • Falhas: ${fail}`);
+  }
+
   async function handleRestore() {
     if (archived.length === 0) {
       toast.info("Nada para restaurar — Sheets não tem arquivos.");
