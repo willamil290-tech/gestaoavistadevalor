@@ -277,7 +277,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
         </h2>
       </div>
       <p className="text-sm text-muted-foreground -mt-3">
-        Distribuição das ligações por hora do dia (00–23h), consolidando todo o período selecionado.
+        Distribuição das ligações por hora do expediente (08–18h), consolidando todo o período selecionado.
       </p>
 
       {/* Controles */}
