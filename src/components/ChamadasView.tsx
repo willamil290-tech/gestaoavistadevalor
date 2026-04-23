@@ -111,6 +111,18 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Stored calls per month
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
+  // Modo de gravação durante a importação
+  const [saveMode, setSaveMode] = useState<SaveMode>("append");
+  // Diagnóstico do último parse (mostrado antes de salvar)
+  const [parsePreview, setParsePreview] = useState<{
+    calls: ParsedCall[];
+    unparsedBlocks: { lines: string[]; reason: string }[];
+    totalBlocks: number;
+    byMonth: Map<string, number>;
+    byPersonDay: Map<string, number>;
+    relativeDateUsed: boolean;
+  } | null>(null);
+
   // Load from localStorage on mount / month change
   useEffect(() => {
     const key = storageKey(selectedYear, selectedMonth);
@@ -138,96 +150,101 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     isIgnoredCommercial(name) || isMariaCollaboratorName(name);
 
   // Process pasted text
-  const handlePaste = () => {
+  // Etapa 1: analisa o texto e mostra prévia (sem salvar nada).
+  const handleAnalyze = () => {
     if (!pasteText.trim()) {
-      toast.error("Cole os dados de chamadas antes de aplicar.");
+      toast.error("Cole os dados de chamadas antes de analisar.");
+      return;
+    }
+    const result = parseCallsTextDetailed(pasteText);
+    if (result.totalBlocks === 0) {
+      toast.error("Nenhum bloco de chamada reconhecido no texto colado.");
       return;
     }
 
-    const parsed = parseCallsText(pasteText);
-    if (parsed.length === 0) {
-      toast.error("Nenhuma chamada reconhecida no texto colado.");
-      return;
+    const byMonth = new Map<string, number>();
+    const byPersonDay = new Map<string, number>();
+    for (const c of result.calls) {
+      const mk = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
+      byMonth.set(mk, (byMonth.get(mk) ?? 0) + 1);
+      const pdk = `${c.name}|${c.dateISO}`;
+      byPersonDay.set(pdk, (byPersonDay.get(pdk) ?? 0) + 1);
+    }
+    const relativeDateUsed = /\b(ontem|hoje|anteontem)\b/i.test(pasteText);
+
+    setParsePreview({
+      calls: result.calls,
+      unparsedBlocks: result.unparsedBlocks,
+      totalBlocks: result.totalBlocks,
+      byMonth,
+      byPersonDay,
+      relativeDateUsed,
+    });
+  };
+
+  // Etapa 2: confirma a gravação aplicando o modo escolhido.
+  // Nenhuma chamada é descartada por heurística — apenas substituímos períodos
+  // explicitamente quando o usuário pede.
+  const handleConfirmSave = () => {
+    if (!parsePreview) return;
+    const parsed = parsePreview.calls;
+
+    // Agrupa as chamadas parseadas por mês de origem.
+    const byMonth = new Map<string, ParsedCall[]>();
+    for (const c of parsed) {
+      const mk = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
+      if (!byMonth.has(mk)) byMonth.set(mk, []);
+      byMonth.get(mk)!.push(c);
     }
 
-    const existing = [...storedCalls];
-    const existingKeys = new Set(existing.map((c) => buildCallDedupKey(c)));
+    // Conjunto de dias importados (para o modo replaceDay).
+    const importedDays = new Set(parsed.map((c) => c.dateISO));
 
-    let added = 0;
-    for (const call of parsed) {
-      const key = buildCallDedupKey(call);
-      if (!existingKeys.has(key)) {
-        if (call.dateTime.getFullYear() === selectedYear && call.dateTime.getMonth() + 1 === selectedMonth) {
-          existing.push(call);
-          existingKeys.add(key);
-          added++;
-        }
-      }
-    }
-
-    // Handle calls from different months
-    const otherMonthCalls = parsed.filter(
-      (c) => c.dateTime.getFullYear() !== selectedYear || c.dateTime.getMonth() + 1 !== selectedMonth
-    );
-    const otherGroups = new Map<string, ParsedCall[]>();
-    for (const c of otherMonthCalls) {
-      const k = `${c.dateTime.getFullYear()}-${pad2(c.dateTime.getMonth() + 1)}`;
-      if (!otherGroups.has(k)) otherGroups.set(k, []);
-      otherGroups.get(k)!.push(c);
-    }
-    let otherAdded = 0;
-    for (const [monthKey, calls] of otherGroups) {
-      const existingOther = loadJson<any[]>(`calls:${monthKey}`, []).map((c: any) => ({
+    let totalSaved = 0;
+    for (const [monthKey, monthCalls] of byMonth) {
+      const [y, m] = monthKey.split("-").map(Number);
+      const key = `calls:${monthKey}`;
+      const existing = loadJson<any[]>(key, []).map((c: any) => ({
         ...c,
         name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
         dateTime: new Date(c.dateTime),
-      }));
-      const existingOtherKeys = new Set(existingOther.map((c: ParsedCall) => buildCallDedupKey(c)));
-      for (const call of calls) {
-        const k = buildCallDedupKey(call);
-        if (!existingOtherKeys.has(k)) {
-          existingOther.push(call);
-          existingOtherKeys.add(k);
-          otherAdded++;
-        }
+      })) as ParsedCall[];
+
+      let next: ParsedCall[];
+      if (saveMode === "replaceMonth") {
+        next = [...monthCalls];
+      } else if (saveMode === "replaceDay") {
+        next = [
+          ...existing.filter((c) => !importedDays.has(c.dateISO)),
+          ...monthCalls,
+        ];
+      } else {
+        // append: adiciona todas as chamadas sem qualquer dedupe
+        next = [...existing, ...monthCalls];
       }
-      saveJson(`calls:${monthKey}`, existingOther);
+
+      const normalized = next.map((c) => ({
+        ...c,
+        name: canonicalizeCollaboratorNameForDate(c.name, c.dateISO),
+      }));
+      saveJson(key, normalized);
+      totalSaved += monthCalls.length;
+
+      // Atualiza o estado local se for o mês exibido
+      if (y === selectedYear && m === selectedMonth) {
+        setStoredCalls(normalized);
+      }
     }
 
-    setStoredCalls(existing);
-    saveToStorage(existing);
     setPasteText("");
     setShowPaste(false);
+    setParsePreview(null);
 
-    const totalAdded = added + otherAdded;
-    toast.success(
-      `${totalAdded} chamada(s) importada(s) de ${parsed.length} reconhecida(s).` +
-        (otherAdded > 0 ? ` (${otherAdded} de outro(s) mês(es))` : "")
-    );
-    
-    // Sincronizar com Google Sheets
-    if (added > 0) {
-      console.log('Salvando', added, 'chamadas no Sheets para', selectedYear, selectedMonth);
-      saveCallsMonth(selectedYear, selectedMonth, existing)
-        .then(() => console.log('Chamadas salvas com sucesso no Sheets'))
-        .catch((e) => {
-          console.error('Erro ao salvar chamadas no Sheets:', e);
-          toast.error('Erro ao salvar no Google Sheets: ' + e.message);
-        });
-    }
-    if (otherAdded > 0) {
-      // Salvar chamadas de outros meses também
-      for (const [monthKey, calls] of otherGroups) {
-        const [y, m] = monthKey.split('-');
-        console.log('Salvando', calls.length, 'chamadas no Sheets para', y, m);
-        saveCallsMonth(Number(y), Number(m), calls)
-          .then(() => console.log('Chamadas de outro mês salvas com sucesso'))
-          .catch((e) => {
-            console.error('Erro ao salvar chamadas de outro mês:', e);
-            toast.error('Erro ao salvar no Google Sheets: ' + e.message);
-          });
-      }
-    }
+    const modeLabel =
+      saveMode === "replaceMonth" ? "substituindo o mês"
+      : saveMode === "replaceDay" ? "substituindo os dias importados"
+      : "adicionadas ao período existente";
+    toast.success(`${totalSaved} chamada(s) salvas (${modeLabel}).`);
   };
 
   const clearMonth = () => {
