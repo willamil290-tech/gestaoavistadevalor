@@ -271,7 +271,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
         </h2>
       </div>
       <p className="text-sm text-muted-foreground -mt-3">
-        Visualize a evolução diária das ligações por colaborador, setor ou no total.
+        Distribuição das ligações por hora do dia (00–23h), consolidando todo o período selecionado.
       </p>
 
       {/* Controles */}
@@ -424,12 +424,12 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
       <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
         <div className="mb-4">
           <h3 className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>
-            Evolução diária ({format(from, "dd/MM", { locale: ptBR })} – {format(to, "dd/MM", { locale: ptBR })})
+            Tendência por hora ({format(from, "dd/MM", { locale: ptBR })} – {format(to, "dd/MM", { locale: ptBR })})
           </h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {viewMode === "total" && "Total de chamadas por dia."}
-            {viewMode === "setor" && (selectedGroup === "__ALL__" ? "Comparativo entre todos os setores." : `Setor: ${selectedGroup}`)}
-            {viewMode === "individual" && (selectedPerson === "__ALL__" ? "Todos os colaboradores." : `Colaborador: ${selectedPerson}`)}
+            {viewMode === "total" && "Total de chamadas por hora do dia (consolidado no período)."}
+            {viewMode === "setor" && (selectedGroup === "__ALL__" ? "Comparativo entre todos os setores, por hora do dia." : `Setor ${selectedGroup} — por hora do dia.`)}
+            {viewMode === "individual" && (selectedPerson === "__ALL__" ? "Todos os colaboradores — por hora do dia." : `Colaborador: ${selectedPerson} — por hora do dia.`)}
           </p>
         </div>
 
