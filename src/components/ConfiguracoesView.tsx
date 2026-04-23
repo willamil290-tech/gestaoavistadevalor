@@ -13,6 +13,7 @@ import {
   restoreArchiveToLocal,
   type LocalKeyPreview,
 } from "@/lib/migrateLocal";
+import { isBusinessKey, pushKeyToSheetsNow } from "@/lib/cloudSync";
 
 export function ConfiguracoesView() {
   const [includeUnknown, setIncludeUnknown] = useState(false);
@@ -22,7 +23,7 @@ export function ConfiguracoesView() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<{ key: string; size: number; updated_at: string }[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
-  const [busy, setBusy] = useState<null | "migrate" | "restore" | "update-existing" | "update-selected">(null);
+  const [busy, setBusy] = useState<null | "migrate" | "restore" | "update-existing" | "update-selected" | "cloud-push">(null);
   const [progress, setProgress] = useState<{ done: number; total: number; key: string } | null>(null);
 
   function refreshLocal() {
@@ -149,6 +150,43 @@ export function ConfiguracoesView() {
     }
   }
 
+  async function handleCloudPush() {
+    // Pega TODAS as chaves de negócio do localStorage e envia ao Lovable Cloud.
+    const keys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && isBusinessKey(k)) keys.push(k);
+      }
+    } catch (e) {
+      toast.error("Não foi possível ler o localStorage.");
+      return;
+    }
+    if (keys.length === 0) {
+      toast.info("Nenhum dado de negócio encontrado no navegador.");
+      return;
+    }
+    setBusy("cloud-push");
+    setProgress({ done: 0, total: keys.length, key: "" });
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      try {
+        await pushKeyToSheetsNow(k);
+        ok++;
+      } catch (e) {
+        console.warn("[cloud-push] falhou:", k, e);
+        fail++;
+      }
+      setProgress({ done: i + 1, total: keys.length, key: k });
+    }
+    setBusy(null);
+    setProgress(null);
+    if (fail === 0) toast.success(`✅ ${ok} chaves enviadas para a nuvem.`);
+    else toast.warning(`Enviadas: ${ok} • Falhas: ${fail}`);
+  }
+
   async function handleRestore() {
     if (archived.length === 0) {
       toast.info("Nada para restaurar — Sheets não tem arquivos.");
@@ -179,6 +217,33 @@ export function ConfiguracoesView() {
           Migre os dados antigos do navegador (localStorage) para o Google Sheets. Assim, mesmo que o histórico do navegador seja apagado, eles continuam salvos.
         </p>
       </div>
+
+      {/* === ENVIAR PARA LOVABLE CLOUD (Supabase) === */}
+      <Card className="p-5 space-y-3 border-primary/40 bg-primary/5">
+        <div className="flex items-start gap-3">
+          <Database className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-bold text-lg text-foreground">Enviar dados locais para a nuvem</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Envia todos os dados antigos deste navegador (acionamentos, detalhado, tendência, chamadas, eventos Bitrix, configurações) para o banco de dados na nuvem.
+              Use uma vez para resgatar o histórico anterior à migração.
+            </p>
+          </div>
+        </div>
+        <Button
+          className="w-full rounded-xl"
+          onClick={handleCloudPush}
+          disabled={busy !== null}
+        >
+          <CloudUpload className="w-4 h-4 mr-2" />
+          {busy === "cloud-push"
+            ? `Enviando ${progress?.done}/${progress?.total}...`
+            : "Enviar dados locais para a nuvem"}
+        </Button>
+        {busy === "cloud-push" && progress && (
+          <p className="text-xs text-muted-foreground font-mono truncate">{progress.key}</p>
+        )}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* === MIGRAR === */}
