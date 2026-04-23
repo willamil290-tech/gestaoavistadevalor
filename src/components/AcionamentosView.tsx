@@ -605,24 +605,6 @@ export const AcionamentosView = ({
     };
   }, [tvMode]);
 
-  const handleBulkPaste = async (text: string) => {
-    const isHistorical = effectiveSaveDate !== businessDate;
-
-    // Hourly trend (only relevant for today)
-    if (!isHistorical) {
-      const trendMatch = text.match(/Acionamentos por hora[^\n]*\n([\s\S]*?)(?=\(\d\)|$)/i);
-      if (trendMatch) {
-        const trendEntries = parseHourlyTrend(trendMatch[1]);
-        if (trendEntries.length > 0) {
-          setManualTrendData(trendEntries);
-          onTrendUpdate?.(trendEntries);
-        }
-      }
-    }
-
-    toast.info("Para importar acionamentos use a aba Bitrix Logs.");
-  };
-
   const showDailyEventsHint = isSupabaseConfigured && !isDailyEventsEnabled();
 
   return (
