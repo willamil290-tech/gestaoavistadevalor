@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSimpleAuth } from "@/hooks/useSimpleAuth";
 import { pullAllFromSheets } from "@/lib/cloudSync";
+import { restoreLegacyArchiveOnce } from "@/lib/legacyRecovery";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -18,7 +19,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      pullAllFromSheets()
+      restoreLegacyArchiveOnce()
+        .catch((e) => console.warn("[boot] Falha ao restaurar backup legado:", e))
+        .then(() => pullAllFromSheets())
         .then(({ restored }) => {
           if (restored > 0) console.log(`[boot] ${restored} chave(s) restauradas do banco.`);
         })
