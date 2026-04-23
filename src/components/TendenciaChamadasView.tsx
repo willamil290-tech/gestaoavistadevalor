@@ -156,45 +156,51 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
     return days;
   }, [from, to]);
 
-  // Dados do gráfico — formato amigável para LineChart com múltiplas séries
+  // Dados do gráfico — agregação por HORA DO DIA (0-23), consolidando todo o período
   const chartData = useMemo(() => {
-    // base: { day, label, [series]: count }
-    const rows = dayList.map((iso) => {
-      const [, m, d] = iso.split("-");
-      return { day: iso, label: `${d}/${m}` } as Record<string, any>;
-    });
-    const indexByDay = new Map(rows.map((r, i) => [r.day, i]));
+    // base: 24 linhas, uma por hora (0..23)
+    const rows: Record<string, any>[] = [];
+    for (let h = 0; h < 24; h++) {
+      rows.push({ hour: h, label: `${pad2(h)}h` });
+    }
+
+    const hourOf = (c: ParsedCall) => {
+      // Prefere hora extraída do timeHHMM (mais confiável que dateTime após serialização)
+      if (c.timeHHMM && /^\d{2}:\d{2}$/.test(c.timeHHMM)) {
+        return parseInt(c.timeHHMM.slice(0, 2), 10);
+      }
+      try { return new Date(c.dateTime).getHours(); } catch { return 0; }
+    };
 
     if (viewMode === "total") {
       for (const r of rows) r["Total"] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
-        rows[idx]["Total"] = (rows[idx]["Total"] ?? 0) + 1;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
+        rows[h]["Total"] = (rows[h]["Total"] ?? 0) + 1;
       }
     } else if (viewMode === "setor") {
       const groups = selectedGroup === "__ALL__" ? GROUP_ORDER : [selectedGroup];
       for (const r of rows) for (const g of groups) r[g] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
         const g = getTeamGroup(c.name);
         if (!groups.includes(g)) continue;
-        rows[idx][g] = (rows[idx][g] ?? 0) + 1;
+        rows[h][g] = (rows[h][g] ?? 0) + 1;
       }
     } else {
-      // individual
       const people = selectedPerson === "__ALL__" ? allPeople : [selectedPerson];
       for (const r of rows) for (const p of people) r[p] = 0;
       for (const c of normalizedCalls) {
-        const idx = indexByDay.get(c.dateISO);
-        if (idx == null) continue;
+        const h = hourOf(c);
+        if (h < 0 || h > 23) continue;
         if (!people.includes(c.name)) continue;
-        rows[idx][c.name] = (rows[idx][c.name] ?? 0) + 1;
+        rows[h][c.name] = (rows[h][c.name] ?? 0) + 1;
       }
     }
     return rows;
-  }, [dayList, normalizedCalls, viewMode, selectedGroup, selectedPerson, allPeople]);
+  }, [normalizedCalls, viewMode, selectedGroup, selectedPerson, allPeople]);
 
   // Séries (chaves do gráfico) e cores
   const series = useMemo(() => {
@@ -216,7 +222,21 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
   // Totais agregados
   const totalCalls = normalizedCalls.length;
   const totalDays = dayList.length;
-  const avgPerDay = totalDays > 0 ? Math.round((totalCalls / totalDays) * 10) / 10 : 0;
+
+  // Hora de pico: maior soma na grade horária (considerando a visão atual)
+  const peakHour = useMemo(() => {
+    let bestH = 0;
+    let bestV = -1;
+    for (const row of chartData) {
+      let sum = 0;
+      for (const k of Object.keys(row)) {
+        if (k === "hour" || k === "label") continue;
+        sum += Number(row[k] ?? 0);
+      }
+      if (sum > bestV) { bestV = sum; bestH = row.hour as number; }
+    }
+    return { hour: bestH, count: bestV < 0 ? 0 : bestV };
+  }, [chartData]);
 
   // Ranking por colaborador (no período)
   const ranking = useMemo(() => {
@@ -251,7 +271,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
         </h2>
       </div>
       <p className="text-sm text-muted-foreground -mt-3">
-        Visualize a evolução diária das ligações por colaborador, setor ou no total.
+        Distribuição das ligações por hora do dia (00–23h), consolidando todo o período selecionado.
       </p>
 
       {/* Controles */}
@@ -383,8 +403,10 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
             <TrendingUp className="w-5 h-5 text-accent" />
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Média por dia</div>
-            <div className="text-2xl font-bold tabular-nums">{avgPerDay.toLocaleString("pt-BR")}</div>
+            <div className="text-xs text-muted-foreground">Hora de pico</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {pad2(peakHour.hour)}h <span className="text-sm text-muted-foreground font-normal">({peakHour.count})</span>
+            </div>
           </div>
         </div>
         <div className="bg-card rounded-2xl p-4 border border-border flex items-center gap-3">
@@ -402,12 +424,12 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
       <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
         <div className="mb-4">
           <h3 className={cn("font-semibold", tvMode ? "text-xl" : "text-lg")}>
-            Evolução diária ({format(from, "dd/MM", { locale: ptBR })} – {format(to, "dd/MM", { locale: ptBR })})
+            Tendência por hora ({format(from, "dd/MM", { locale: ptBR })} – {format(to, "dd/MM", { locale: ptBR })})
           </h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {viewMode === "total" && "Total de chamadas por dia."}
-            {viewMode === "setor" && (selectedGroup === "__ALL__" ? "Comparativo entre todos os setores." : `Setor: ${selectedGroup}`)}
-            {viewMode === "individual" && (selectedPerson === "__ALL__" ? "Todos os colaboradores." : `Colaborador: ${selectedPerson}`)}
+            {viewMode === "total" && "Total de chamadas por hora do dia (consolidado no período)."}
+            {viewMode === "setor" && (selectedGroup === "__ALL__" ? "Comparativo entre todos os setores, por hora do dia." : `Setor ${selectedGroup} — por hora do dia.`)}
+            {viewMode === "individual" && (selectedPerson === "__ALL__" ? "Todos os colaboradores — por hora do dia." : `Colaborador: ${selectedPerson} — por hora do dia.`)}
           </p>
         </div>
 
@@ -455,7 +477,7 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
 
       {/* Ranking + setor */}
       {totalCalls > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="bg-card rounded-2xl p-4 md:p-6 border border-border">
             <h3 className="font-semibold text-lg mb-3">Ranking por colaborador</h3>
             <div className="space-y-2 max-h-[360px] overflow-y-auto">
