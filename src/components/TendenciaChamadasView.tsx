@@ -222,7 +222,21 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
   // Totais agregados
   const totalCalls = normalizedCalls.length;
   const totalDays = dayList.length;
-  const avgPerDay = totalDays > 0 ? Math.round((totalCalls / totalDays) * 10) / 10 : 0;
+
+  // Hora de pico: maior soma na grade horária (considerando a visão atual)
+  const peakHour = useMemo(() => {
+    let bestH = 0;
+    let bestV = -1;
+    for (const row of chartData) {
+      let sum = 0;
+      for (const k of Object.keys(row)) {
+        if (k === "hour" || k === "label") continue;
+        sum += Number(row[k] ?? 0);
+      }
+      if (sum > bestV) { bestV = sum; bestH = row.hour as number; }
+    }
+    return { hour: bestH, count: bestV < 0 ? 0 : bestV };
+  }, [chartData]);
 
   // Ranking por colaborador (no período)
   const ranking = useMemo(() => {
