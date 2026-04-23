@@ -117,15 +117,6 @@ export const AcionamentosView = ({
   const tabIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [manualTrendData, setManualTrendData] = useState<HourlyTrend[]>([]);
 
-  // Estado do diálogo de confirmação multi-data
-  type AcionSaveMode = "replaceDay" | "append";
-  const [pasteConfirm, setPasteConfirm] = useState<{
-    open: boolean;
-    parsed: MultiDateParseResult | null;
-    mode: AcionSaveMode;
-    rawText: string;
-  }>({ open: false, parsed: null, mode: "replaceDay", rawText: "" });
-
   const analytics = useQuery({
     queryKey: ["daily-analytics", "08h"],
     enabled: isSupabaseConfigured && isDailyEventsEnabled(),
