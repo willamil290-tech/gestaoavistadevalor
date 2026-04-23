@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { parseAndBuildBitrixReport, type BitrixReport } from "@/lib/bitrixLogs";
 import { cn } from "@/lib/utils";
 import { getBusinessDate, getYesterdayBusinessDate } from "@/lib/businessDate";
+import { runBitrixBackfillOnce } from "@/lib/bitrixBackfill";
 
 type TargetDateOption = "hoje" | "ontem" | "custom";
 
@@ -24,6 +25,11 @@ function normalizeHHMM(input: string) {
 export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
+  // Backfill único: redistribui bitrixEvents:* legados por data real.
+  useEffect(() => {
+    runBitrixBackfillOnce().catch(() => {});
+  }, []);
+
   const [targetDateOption, setTargetDateOption] = useState<TargetDateOption>("hoje");
   const [customDate, setCustomDate] = useState(getBusinessDate());
   const [currentTime, setCurrentTime] = useState("");
@@ -32,6 +38,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
 
   const [report, setReport] = useState<string>("");
   const [eventsCount, setEventsCount] = useState<number>(0);
+  const [detectedDates, setDetectedDates] = useState<string[]>([]);
   const [applied, setApplied] = useState(false);
 
   const canGoStep2 = useMemo(() => normalizeHHMM(currentTime) !== null, [currentTime]);
@@ -53,6 +60,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     setLeadsText("");
     setReport("");
     setEventsCount(0);
+    setDetectedDates([]);
     setApplied(false);
   };
 
@@ -83,7 +91,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     }
     if (!negociosText.trim() || !leadsText.trim()) return;
 
-    const res = parseAndBuildBitrixReport({ currentHHMM: t, negociosText, leadsText });
+    const res = parseAndBuildBitrixReport({ currentHHMM: t, negociosText, leadsText, targetDateISO: resolvedTargetDate });
     if (res.ok === false) {
       toast.error(res.error);
       return;
@@ -91,6 +99,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
 
     setReport(res.reportText);
     setEventsCount(res.eventsCount);
+    setDetectedDates(res.report.detectedDates ?? []);
     setApplied(false);
 
     // Aplica automaticamente no dashboard, se estiver disponível
@@ -258,6 +267,15 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
           {eventsCount > 0 && <span className="text-xs text-muted-foreground">{eventsCount} eventos válidos</span>}
           {report && applied && <span className="text-xs text-muted-foreground">• aplicado</span>}
         </div>
+        {detectedDates.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Datas detectadas:</span>{" "}
+            {detectedDates
+              .map((d) => d.split("-").reverse().slice(0, 2).join("/"))
+              .join(", ")}
+            {" — "}logs serão distribuídos automaticamente; a data de destino vale apenas para entradas sem data explícita.
+          </p>
+        )}
       </div>
 
       {/* RESULTADO */}
@@ -276,7 +294,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
                   onClick={async () => {
                     const t2 = normalizeHHMM(currentTime);
                     if (!t2) return;
-                    const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText });
+                    const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText, targetDateISO: resolvedTargetDate });
                     if (res2.ok === false) {
                       toast.error(res2.error);
                       return;

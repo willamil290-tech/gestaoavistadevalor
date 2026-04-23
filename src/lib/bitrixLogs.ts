@@ -19,6 +19,10 @@ export type BitrixEvent = {
   hour: number; // 0-23
   ageSeconds: number; // usado para desempate (maior = mais antigo)
   idx: number; // ordem no texto (para desempate final)
+  /** Texto bruto da linha de tempo (ex.: "ontem, 14:32", "há 9 dias", "13/04/2025 10:05"). Útil para reprocessamento posterior. */
+  timeText?: string;
+  /** Data real do evento em YYYY-MM-DD (calculada a partir do texto + targetDate). */
+  dateISO?: string;
 };
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -55,7 +59,7 @@ function parseCurrentTimeHHMM(hhmm: string): { ok: true; seconds: number; normal
 }
 
 type TimeParse =
-  | { ok: true; secondsOfDay: number; ageSeconds: number; hhmm: string }
+  | { ok: true; secondsOfDay: number; ageSeconds: number; hhmm: string; dayOffset: number; absoluteISO?: string; rawText: string }
   | { ok: false };
 
 function wrapSeconds(sec: number) {
@@ -70,8 +74,34 @@ function secondsToHHMM(sec: number) {
   return `${pad2(hh)}:${pad2(mm)}`;
 }
 
+const PT_MONTHS: Record<string, number> = {
+  "janeiro": 1, "jan": 1,
+  "fevereiro": 2, "fev": 2,
+  "marco": 3, "março": 3, "mar": 3,
+  "abril": 4, "abr": 4,
+  "maio": 5, "mai": 5,
+  "junho": 6, "jun": 6,
+  "julho": 7, "jul": 7,
+  "agosto": 8, "ago": 8,
+  "setembro": 9, "set": 9,
+  "outubro": 10, "out": 10,
+  "novembro": 11, "nov": 11,
+  "dezembro": 12, "dez": 12,
+};
+
+function pad(n: number) { return String(n).padStart(2, "0"); }
+
+/** Adiciona N dias ao YYYY-MM-DD (negativo = subtrai). */
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
 function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
   const line = lineRaw.trim();
+  const rawText = line;
 
   // hoje, HH:MM
   const hoje = line.match(/\bhoje\b\s*,?\s*(\d{1,2}:\d{2})/i);
@@ -82,7 +112,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const sec = cur.seconds;
     let age = currentSeconds - sec;
     if (age < 0) age += DAY_SECONDS;
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X minutos atrás
@@ -92,7 +122,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x * 60;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X segundos atrás
@@ -102,7 +132,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X horas atrás
@@ -112,7 +142,23 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x * 3600;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
+  }
+
+  // X dias atrás  /  há X dias  /  há X dias, HH:MM
+  const diasAtras = line.match(/(?:\bh[aá]\s+)?(\d+)\s*dias?\s*atr[aá]s(?:\s*,?\s*(\d{1,2}:\d{2}))?/i)
+    || line.match(/\bh[aá]\s+(\d+)\s*dias?\s*,?\s*(\d{1,2}:\d{2})?/i);
+  if (diasAtras) {
+    const x = Number(diasAtras[1]);
+    if (!Number.isFinite(x) || x <= 0) return { ok: false };
+    const t = diasAtras[2];
+    let sec = 0;
+    if (t) {
+      const cur = parseCurrentTimeHHMM(t);
+      if (cur.ok) sec = cur.seconds;
+    }
+    const age = x * DAY_SECONDS + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: -x, rawText };
   }
 
   // ontem, HH:MM
@@ -124,7 +170,18 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const sec = cur.seconds;
     // age = time since yesterday at that hour
     const age = DAY_SECONDS + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: -1, rawText };
+  }
+
+  // anteontem, HH:MM
+  const anteontem = line.match(/\banteontem\b\s*,?\s*(\d{1,2}:\d{2})/i);
+  if (anteontem) {
+    const t = anteontem[1];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    const age = 2 * DAY_SECONDS + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: -2, rawText };
   }
 
   // DD.MM.YYYY HH:MM  or  DD/MM/YYYY HH:MM  or  DD.MM.YYYY, HH:MM (absolute date)
@@ -134,20 +191,29 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
-    // We don't compute real age across days, just put a large ageSeconds based on date diff estimate
+    const dd = Number(absDate[1]); const mm = Number(absDate[2]); const yyyy = Number(absDate[3]);
+    const absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   // DD de mês, HH:MM  or  DD de mês HH:MM  (e.g. "15 de fevereiro, 14:30")
-  const absBR = line.match(/\b(\d{1,2})\s+de\s+\w+\s*,?\s*(\d{1,2}:\d{2})/i);
+  const absBR = line.match(/\b(\d{1,2})\s+de\s+([a-zçãéíóú]+)(?:\s+de\s+(\d{4}))?\s*,?\s*(\d{1,2}:\d{2})/i);
   if (absBR) {
-    const t = absBR[2];
+    const t = absBR[4];
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
+    const dd = Number(absBR[1]);
+    const monthName = removeDiacritics(absBR[2]).toLowerCase();
+    const mm = PT_MONTHS[monthName];
+    let absoluteISO: string | undefined;
+    if (mm) {
+      const yyyy = absBR[3] ? Number(absBR[3]) : new Date().getFullYear();
+      absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
+    }
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   // DD/MM HH:MM  or  DD.MM, HH:MM (without year)
@@ -157,8 +223,11 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
+    const dd = Number(absShort[1]); const mm = Number(absShort[2]);
+    const yyyy = new Date().getFullYear();
+    const absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   return { ok: false };
@@ -183,7 +252,8 @@ export function classifyAction(actionLineRaw: string): BitrixActionCategory {
 export function parseBitrixTextToEvents(
   text: string,
   currentHHMM: string,
-  startIdxOffset = 0
+  startIdxOffset = 0,
+  targetDateISO?: string
 ): { ok: true; events: BitrixEvent[]; normalizedCurrentTime: string } | { ok: false; error: string } {
   const cur = parseCurrentTimeHHMM(currentHHMM);
   if (!cur.ok) return { ok: false, error: "Horário inválido. Use HH:MM (24h)." };
@@ -206,6 +276,13 @@ export function parseBitrixTextToEvents(
         const comercial = lines[i + 3].trim();
         const actionLine = lines[i + 4].trim();
 
+        let dateISO: string | undefined;
+        if (t.absoluteISO) {
+          dateISO = t.absoluteISO;
+        } else if (targetDateISO) {
+          dateISO = addDaysISO(targetDateISO, t.dayOffset ?? 0);
+        }
+
         out.push({
           entityType: entity,
           empresa,
@@ -216,6 +293,8 @@ export function parseBitrixTextToEvents(
           hour: Number(t.hhmm.slice(0, 2)),
           ageSeconds: t.ageSeconds,
           idx,
+          timeText: t.rawText,
+          dateISO,
         });
 
         idx += 1;
@@ -261,6 +340,10 @@ export type BitrixReport = {
   }>;
   personCallMetrics: PersonCallMetrics[];
   personEventDetails: PersonEventDetail[];
+  /** Eventos agrupados por data ISO (YYYY-MM-DD). Inclui apenas eventos com dateISO definido. */
+  eventsByDate: Record<string, BitrixEvent[]>;
+  /** Datas detectadas no texto, ordenadas. */
+  detectedDates: string[];
 };
 
 function compareCommercial(a: string, b: string) {
@@ -469,7 +552,16 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
     });
   }
 
-  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics, personEventDetails };
+  // Group events by date for multi-day distribution
+  const eventsByDate: Record<string, BitrixEvent[]> = {};
+  for (const e of filteredEvents) {
+    if (!e.dateISO) continue;
+    if (!eventsByDate[e.dateISO]) eventsByDate[e.dateISO] = [];
+    eventsByDate[e.dateISO].push(e);
+  }
+  const detectedDates = Object.keys(eventsByDate).sort();
+
+  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics, personEventDetails, eventsByDate, detectedDates };
 }
 
 export function formatBitrixReport(report: BitrixReport): string {
@@ -520,12 +612,13 @@ export function parseAndBuildBitrixReport(params: {
   currentHHMM: string;
   negociosText: string;
   leadsText: string;
+  targetDateISO?: string;
 }):
   | { ok: true; reportText: string; eventsCount: number; report: BitrixReport }
   | { ok: false; error: string } {
-  const a = parseBitrixTextToEvents(params.negociosText, params.currentHHMM, 0);
+  const a = parseBitrixTextToEvents(params.negociosText, params.currentHHMM, 0, params.targetDateISO);
   if (a.ok === false) return { ok: false, error: a.error };
-  const b = parseBitrixTextToEvents(params.leadsText, params.currentHHMM, a.events.length);
+  const b = parseBitrixTextToEvents(params.leadsText, params.currentHHMM, a.events.length, params.targetDateISO);
   if (b.ok === false) return { ok: false, error: b.error };
   const all = [...a.events, ...b.events];
   const filtered = all.filter((e) => !isIgnoredCommercial(e.comercial));
