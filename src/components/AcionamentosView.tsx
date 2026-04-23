@@ -88,6 +88,40 @@ function shouldHideAcionamentoName(name: string) {
   return isIgnoredCommercial(name) || isMariaCollaboratorName(name) || firstName === "filipe";
 }
 
+// Reconhece "lixo" salvo por importações antigas (cabeçalhos da tabela mensal,
+// rótulos como "Lead", "Negócio", "hoje", "ontem", números puros, etc.).
+function isCorruptedAcionamentoName(name: string) {
+  const raw = (name ?? "").trim();
+  if (!raw) return true;
+  if (/^\d+$/.test(raw)) return true; // só dígitos (ex: "1", "23", "47")
+  const norm = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Tokens conhecidos que vazaram como "nome" (cabeçalhos do parser antigo).
+  const noise = new Set([
+    "lead", "leads", "negocio", "negocios", "negócio", "negócios", "nego", "negó",
+    "empresa", "empresas", "hoje", "ontem", "contato", "the", "total", "dia",
+    "data", "resumo",
+  ]);
+  if (noise.has(norm)) return true;
+  // Sem nenhuma letra real ou letra única só (ex: "a", "x").
+  const letters = norm.replace(/[^a-z]/g, "");
+  if (letters.length < 3) return true;
+  return false;
+}
+
+function sanitizeGeralMonthData(data: GeralMonthData): { cleaned: GeralMonthData; removed: number } {
+  let removed = 0;
+  const cleaned: GeralMonthData = {};
+  for (const [date, dayData] of Object.entries(data ?? {})) {
+    const kept: GeralDayPerson[] = [];
+    for (const p of dayData ?? []) {
+      if (isCorruptedAcionamentoName(p.name)) { removed++; continue; }
+      kept.push(p);
+    }
+    cleaned[date] = kept;
+  }
+  return { cleaned, removed };
+}
+
 interface AcionamentosViewProps {
   tvMode?: boolean;
   trendData?: HourlyTrend[];
