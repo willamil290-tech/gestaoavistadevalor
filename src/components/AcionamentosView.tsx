@@ -1069,6 +1069,69 @@ export const AcionamentosView = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmação multi-data */}
+      <AlertDialog open={pasteConfirm.open} onOpenChange={(o) => setPasteConfirm(p => ({ ...p, open: o }))}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar importação de acionamentos</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {pasteConfirm.parsed && (
+                  <>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1">
+                      <span><strong>{pasteConfirm.parsed.datesFound.length}</strong> data(s) detectada(s)</span>
+                      <span><strong>{pasteConfirm.parsed.totalBasicEntries}</strong> entradas básicas</span>
+                      <span><strong>{pasteConfirm.parsed.totalDetailedEntries}</strong> detalhadas</span>
+                    </div>
+                    {pasteConfirm.parsed.usedFallbackDate && (
+                      <p className="text-xs text-amber-500">
+                        ⚠ Nenhuma data identificada no texto — será usada a data de referência ({effectiveSaveDate.split("-").reverse().join("/")}).
+                      </p>
+                    )}
+                    <div className="max-h-[180px] overflow-y-auto rounded border border-border p-2 bg-muted/20 space-y-1">
+                      {Array.from(pasteConfirm.parsed.basicByDateTipo.values())
+                        .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
+                        .map((seg, i) => {
+                          const total = seg.entries.reduce((s, e) => s + (e.morning ?? 0) + (e.afternoon ?? 0), 0);
+                          const tipoLabel = seg.tipo === "lead" ? "Leads" : seg.tipo === "negocio" ? "Negócios" : "Geral";
+                          return (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span>{seg.dateISO.split("-").reverse().join("/")} — <strong>{tipoLabel}</strong> ({seg.entries.length} pessoas)</span>
+                              <span className="tabular-nums font-medium">{total}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    <div className="pt-2">
+                      <RadioGroup value={pasteConfirm.mode} onValueChange={(v) => setPasteConfirm(p => ({ ...p, mode: v as any }))}>
+                        <div className="flex items-start gap-2">
+                          <RadioGroupItem value="replaceDay" id="acion-mode-replace" className="mt-0.5" />
+                          <Label htmlFor="acion-mode-replace" className="cursor-pointer">
+                            <strong>Substituir os dias importados</strong>
+                            <p className="text-xs text-muted-foreground font-normal">Recomendado. Sobrescreve cada data presente no texto.</p>
+                          </Label>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <RadioGroupItem value="append" id="acion-mode-append" className="mt-0.5" />
+                          <Label htmlFor="acion-mode-append" className="cursor-pointer">
+                            <strong>Adicionar ao existente</strong>
+                            <p className="text-xs text-muted-foreground font-normal">Soma com o que já está salvo. Pode duplicar se reimportar o mesmo dia.</p>
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={applyMultiDateImport}>Confirmar importação</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
