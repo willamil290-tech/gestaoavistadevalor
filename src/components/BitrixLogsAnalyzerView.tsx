@@ -267,6 +267,15 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
           {eventsCount > 0 && <span className="text-xs text-muted-foreground">{eventsCount} eventos válidos</span>}
           {report && applied && <span className="text-xs text-muted-foreground">• aplicado</span>}
         </div>
+        {detectedDates.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Datas detectadas:</span>{" "}
+            {detectedDates
+              .map((d) => d.split("-").reverse().slice(0, 2).join("/"))
+              .join(", ")}
+            {" — "}logs serão distribuídos automaticamente; a data de destino vale apenas para entradas sem data explícita.
+          </p>
+        )}
       </div>
 
       {/* RESULTADO */}
