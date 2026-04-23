@@ -252,7 +252,8 @@ export function classifyAction(actionLineRaw: string): BitrixActionCategory {
 export function parseBitrixTextToEvents(
   text: string,
   currentHHMM: string,
-  startIdxOffset = 0
+  startIdxOffset = 0,
+  targetDateISO?: string
 ): { ok: true; events: BitrixEvent[]; normalizedCurrentTime: string } | { ok: false; error: string } {
   const cur = parseCurrentTimeHHMM(currentHHMM);
   if (!cur.ok) return { ok: false, error: "Horário inválido. Use HH:MM (24h)." };
@@ -275,6 +276,13 @@ export function parseBitrixTextToEvents(
         const comercial = lines[i + 3].trim();
         const actionLine = lines[i + 4].trim();
 
+        let dateISO: string | undefined;
+        if (t.absoluteISO) {
+          dateISO = t.absoluteISO;
+        } else if (targetDateISO) {
+          dateISO = addDaysISO(targetDateISO, t.dayOffset ?? 0);
+        }
+
         out.push({
           entityType: entity,
           empresa,
@@ -285,6 +293,8 @@ export function parseBitrixTextToEvents(
           hour: Number(t.hhmm.slice(0, 2)),
           ageSeconds: t.ageSeconds,
           idx,
+          timeText: t.rawText,
+          dateISO,
         });
 
         idx += 1;
