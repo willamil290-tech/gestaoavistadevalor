@@ -110,8 +110,10 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Stored calls per month
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
-  // Modo de gravação durante a importação
-  const [saveMode, setSaveMode] = useState<SaveMode>("append");
+  // Modo de gravação durante a importação.
+  // Padrão = "replaceDay": ao reimportar o mesmo dia, os dados anteriores
+  // daquele dia são substituídos (evita duplicação silenciosa).
+  const [saveMode, setSaveMode] = useState<SaveMode>("replaceDay");
   // Diagnóstico do último parse (mostrado antes de salvar)
   const [parsePreview, setParsePreview] = useState<{
     calls: ParsedCall[];
