@@ -541,10 +541,97 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
             placeholder="Cole aqui os dados de chamadas..."
             className="min-h-[200px] font-mono text-xs"
           />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); }}>Cancelar</Button>
-            <Button onClick={handlePaste}>Aplicar</Button>
-          </div>
+          {!parsePreview && (
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
+              <Button onClick={handleAnalyze}>Analisar</Button>
+            </div>
+          )}
+
+          {parsePreview && (
+            <div className="space-y-3 border-t border-border pt-3">
+              <div className="text-sm space-y-1">
+                <div><strong>{parsePreview.totalBlocks}</strong> bloco(s) detectado(s) no texto.</div>
+                <div><strong className="text-green-600 dark:text-green-400">{parsePreview.calls.length}</strong> chamada(s) reconhecida(s) com sucesso.</div>
+                {parsePreview.unparsedBlocks.length > 0 && (
+                  <div className="text-amber-600 dark:text-amber-400">
+                    <strong>{parsePreview.unparsedBlocks.length}</strong> bloco(s) não pôde ser interpretado e ficará pendente — confira o texto.
+                  </div>
+                )}
+                {parsePreview.relativeDateUsed && (
+                  <div className="text-amber-600 dark:text-amber-400">
+                    ⚠ O texto contém datas relativas (<em>ontem</em>/<em>hoje</em>/<em>anteontem</em>) — elas são resolvidas com base na data atual.
+                  </div>
+                )}
+              </div>
+
+              {parsePreview.byMonth.size > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">Distribuição por mês:</strong>{" "}
+                  {Array.from(parsePreview.byMonth.entries())
+                    .sort()
+                    .map(([m, n]) => `${m}: ${n}`)
+                    .join(" • ")}
+                </div>
+              )}
+
+              {parsePreview.byPersonDay.size > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    Ver contagem por colaborador e dia ({parsePreview.byPersonDay.size} linhas)
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-auto border border-border rounded p-2 font-mono text-[11px] space-y-0.5">
+                    {Array.from(parsePreview.byPersonDay.entries())
+                      .sort()
+                      .map(([k, n]) => {
+                        const [name, date] = k.split("|");
+                        return <div key={k}>{date} — {name}: <strong>{n}</strong></div>;
+                      })}
+                  </div>
+                </details>
+              )}
+
+              {parsePreview.unparsedBlocks.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-amber-600 dark:text-amber-400">
+                    Ver blocos não interpretados ({parsePreview.unparsedBlocks.length})
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-auto border border-border rounded p-2 font-mono text-[11px] space-y-2">
+                    {parsePreview.unparsedBlocks.map((b, i) => (
+                      <div key={i}>
+                        <div className="text-amber-600 dark:text-amber-400">⚠ {b.reason}</div>
+                        <pre className="whitespace-pre-wrap">{b.lines.join("\n")}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Modo de gravação:</div>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
+                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas novas (pode duplicar se você colar duas vezes).</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "replaceDay"} onChange={() => setSaveMode("replaceDay")} className="mt-1" />
+                    <span><strong>Substituir os dias importados</strong> — apaga apenas os dias presentes no texto e regrava com os dados novos.</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "replaceMonth"} onChange={() => setSaveMode("replaceMonth")} className="mt-1" />
+                    <span><strong>Substituir o(s) mês(es) inteiro(s)</strong> — recomendado para reparar históricos. Apaga todo o conteúdo do mês e grava só o que está no texto.</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setParsePreview(null)}>Voltar</Button>
+                <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
+                <Button onClick={handleConfirmSave}>Confirmar gravação</Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
