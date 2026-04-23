@@ -110,8 +110,10 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Stored calls per month
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
-  // Modo de gravação durante a importação
-  const [saveMode, setSaveMode] = useState<SaveMode>("append");
+  // Modo de gravação durante a importação.
+  // Padrão = "replaceDay": ao reimportar o mesmo dia, os dados anteriores
+  // daquele dia são substituídos (evita duplicação silenciosa).
+  const [saveMode, setSaveMode] = useState<SaveMode>("replaceDay");
   // Diagnóstico do último parse (mostrado antes de salvar)
   const [parsePreview, setParsePreview] = useState<{
     calls: ParsedCall[];
@@ -610,16 +612,16 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                 <div className="text-sm font-medium">Modo de gravação:</div>
                 <div className="flex flex-col gap-1.5 text-sm">
                   <label className="flex items-start gap-2 cursor-pointer">
-                    <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
-                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas novas (pode duplicar se você colar duas vezes).</span>
-                  </label>
-                  <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceDay"} onChange={() => setSaveMode("replaceDay")} className="mt-1" />
-                    <span><strong>Substituir os dias importados</strong> — apaga apenas os dias presentes no texto e regrava com os dados novos.</span>
+                    <span><strong>Substituir os dias importados</strong> (recomendado) — apaga apenas os dias presentes no texto e regrava com os dados novos. Use ao reimportar um relatório do mesmo dia.</span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceMonth"} onChange={() => setSaveMode("replaceMonth")} className="mt-1" />
-                    <span><strong>Substituir o(s) mês(es) inteiro(s)</strong> — recomendado para reparar históricos. Apaga todo o conteúdo do mês e grava só o que está no texto.</span>
+                    <span><strong>Substituir o(s) mês(es) inteiro(s)</strong> — apaga todo o conteúdo do mês e grava só o que está no texto. Use para reparar totais históricos.</span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
+                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas sem apagar nada. ⚠ Pode duplicar se você colar o mesmo dia duas vezes.</span>
                   </label>
                 </div>
               </div>
