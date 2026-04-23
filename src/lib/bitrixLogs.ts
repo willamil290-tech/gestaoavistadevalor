@@ -59,7 +59,7 @@ function parseCurrentTimeHHMM(hhmm: string): { ok: true; seconds: number; normal
 }
 
 type TimeParse =
-  | { ok: true; secondsOfDay: number; ageSeconds: number; hhmm: string }
+  | { ok: true; secondsOfDay: number; ageSeconds: number; hhmm: string; dayOffset: number; absoluteISO?: string; rawText: string }
   | { ok: false };
 
 function wrapSeconds(sec: number) {
@@ -72,6 +72,31 @@ function secondsToHHMM(sec: number) {
   const hh = Math.floor(sec / 3600);
   const mm = Math.floor((sec % 3600) / 60);
   return `${pad2(hh)}:${pad2(mm)}`;
+}
+
+const PT_MONTHS: Record<string, number> = {
+  "janeiro": 1, "jan": 1,
+  "fevereiro": 2, "fev": 2,
+  "marco": 3, "março": 3, "mar": 3,
+  "abril": 4, "abr": 4,
+  "maio": 5, "mai": 5,
+  "junho": 6, "jun": 6,
+  "julho": 7, "jul": 7,
+  "agosto": 8, "ago": 8,
+  "setembro": 9, "set": 9,
+  "outubro": 10, "out": 10,
+  "novembro": 11, "nov": 11,
+  "dezembro": 12, "dez": 12,
+};
+
+function pad(n: number) { return String(n).padStart(2, "0"); }
+
+/** Adiciona N dias ao YYYY-MM-DD (negativo = subtrai). */
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
 function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
