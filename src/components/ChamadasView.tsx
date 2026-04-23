@@ -26,6 +26,18 @@ function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
 }
 
+function buildCallDedupKey(call: Pick<ParsedCall, "name" | "phone" | "dateTime" | "direction" | "durationSeconds" | "status" | "contactInfo">) {
+  return [
+    call.name,
+    call.phone,
+    call.dateTime.getTime(),
+    call.direction,
+    call.durationSeconds,
+    call.status.trim().toLowerCase(),
+    call.contactInfo.trim().toLowerCase(),
+  ].join("|");
+}
+
 function formatTime(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds)) return "—";
   const s = Math.round(seconds);
@@ -149,13 +161,11 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     }
 
     const existing = [...storedCalls];
-    const existingKeys = new Set(
-      existing.map((c) => `${c.name}|${c.phone}|${c.dateTime.getTime()}`)
-    );
+    const existingKeys = new Set(existing.map((c) => buildCallDedupKey(c)));
 
     let added = 0;
     for (const call of parsed) {
-      const key = `${call.name}|${call.phone}|${call.dateTime.getTime()}`;
+      const key = buildCallDedupKey(call);
       if (!existingKeys.has(key)) {
         if (call.dateTime.getFullYear() === selectedYear && call.dateTime.getMonth() + 1 === selectedMonth) {
           existing.push(call);
@@ -182,11 +192,9 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
         name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
         dateTime: new Date(c.dateTime),
       }));
-      const existingOtherKeys = new Set(
-        existingOther.map((c: any) => `${c.name}|${c.phone}|${c.dateTime.getTime()}`)
-      );
+      const existingOtherKeys = new Set(existingOther.map((c: ParsedCall) => buildCallDedupKey(c)));
       for (const call of calls) {
-        const k = `${call.name}|${call.phone}|${call.dateTime.getTime()}`;
+        const k = buildCallDedupKey(call);
         if (!existingOtherKeys.has(k)) {
           existingOther.push(call);
           existingOtherKeys.add(k);
