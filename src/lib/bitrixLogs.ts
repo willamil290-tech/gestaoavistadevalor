@@ -552,7 +552,16 @@ export function buildBitrixReport(events: BitrixEvent[]): BitrixReport {
     });
   }
 
-  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics, personEventDetails };
+  // Group events by date for multi-day distribution
+  const eventsByDate: Record<string, BitrixEvent[]> = {};
+  for (const e of filteredEvents) {
+    if (!e.dateISO) continue;
+    if (!eventsByDate[e.dateISO]) eventsByDate[e.dateISO] = [];
+    eventsByDate[e.dateISO].push(e);
+  }
+  const detectedDates = Object.keys(eventsByDate).sort();
+
+  return { hourlyCounts, uniqueResumo, actionResumo, personCallMetrics, personEventDetails, eventsByDate, detectedDates };
 }
 
 export function formatBitrixReport(report: BitrixReport): string {
