@@ -48,26 +48,9 @@ export async function runBitrixBackfillOnce(): Promise<void> {
       if (months.includes(ym)) candidateKeys.push(k);
     }
 
-    // 2) Tenta puxar do Sheets também (caso este cliente não tenha cache local).
-    //    Best-effort, ignora falhas.
-    for (const ym of months) {
-      // Não temos lista remota; vamos tentar os 31 dias do mês.
-      const [y, m] = ym.split("-").map(Number);
-      const lastDay = new Date(y, m, 0).getDate();
-      for (let d = 1; d <= lastDay; d++) {
-        const k = `bitrixEvents:${ym}-${pad2(d)}`;
-        if (candidateKeys.includes(k)) continue;
-        try {
-          const remote = await pullKeyFromSheets(k);
-          if (Array.isArray(remote) && remote.length > 0) {
-            saveJson(k, remote);
-            candidateKeys.push(k);
-          }
-        } catch {
-          // ignora
-        }
-      }
-    }
+    // (Removido: varredura de 90+ chaves no Sheets era cara. Backfill processa
+    // apenas chaves já presentes no localStorage. Quando o usuário abre uma
+    // data específica, o fluxo normal puxa do Cloud sob demanda.)
 
     // 3) Para cada chave, redistribui eventos com dateISO != chave.
     const movedByDate: Record<string, number> = {};
