@@ -634,46 +634,122 @@ export const AcionamentosView = ({
       }
     }
 
-    // Basic entries (morning/afternoon)
-    const basicMatch = text.match(/RESUMO NUMÉRICO[^\n]*\n([\s\S]*?)(?=\(\d\)\s+RESUMO|$)/i);
-    const basicEntries = parseBulkTeamText(basicMatch ? basicMatch[1] : text);
+    // Parser multi-data: detecta automaticamente datas e tipos (Lead/Negócio)
+    const parsed = parseMultiDateAcionamento(text, effectiveSaveDate);
 
-    if (basicEntries.length > 0) {
-      if (isHistorical) {
-        const { y, m, stored } = saveGeralForDate(effectiveSaveDate, basicEntries);
-        if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
-          setGeralMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
-        }
-      } else {
-        onBulkUpdate?.(basicEntries);
-      }
-    }
-
-    // Detailed entries
-    const detailedMatch = text.match(/RESUMO DETALHADO[^\n]*\n([\s\S]*?)$/i);
-    if (detailedMatch) {
-      const detailedEntries = parseDetailedAcionamento(detailedMatch[1]);
-      if (detailedEntries.length > 0) {
-        if (isHistorical) {
-          saveDetForDate(effectiveSaveDate, detailedEntries);
-        } else {
-          onDetailedUpdate?.(detailedEntries);
-        }
-      }
-    }
-
-    const savedBasic = basicEntries.length > 0;
-    const savedDetailed = detailedMatch ? parseDetailedAcionamento(detailedMatch[1]).length > 0 : false;
-
-    if (!savedBasic && !savedDetailed) {
-      toast.error("Nenhum dado encontrado no texto colado. Verifique o formato.");
+    if (parsed.totalBasicEntries === 0 && parsed.totalDetailedEntries === 0) {
+      toast.error("Nenhum dado de acionamento encontrado no texto colado.");
       return;
     }
 
+    // Abre diálogo de confirmação para o usuário escolher como gravar.
+    setPasteConfirm({ open: true, parsed, mode: "replaceDay", rawText: text });
+  };
+
+  // Aplica a importação multi-data segundo o modo escolhido (substituir ou somar).
+  const applyMultiDateImport = () => {
+    const { parsed, mode } = pasteConfirm;
+    if (!parsed) return;
+
+    let savedBasic = 0;
+    let savedDetailed = 0;
+
+    // Por (data, tipo) -> entradas
+    // Estratégia: agrupar por data e somar empresas/leads conforme o tipo declarado.
+    type DayBuilder = Map<string, { name: string; empresas: number; leads: number }>;
+    const buildersByDate = new Map<string, DayBuilder>();
+
+    for (const { dateISO, tipo, entries } of parsed.basicByDateTipo.values()) {
+      if (!buildersByDate.has(dateISO)) buildersByDate.set(dateISO, new Map());
+      const builder = buildersByDate.get(dateISO)!;
+      for (const e of entries) {
+        const totalEntry = (e.morning ?? 0) + (e.afternoon ?? 0);
+        const cur = builder.get(e.name) ?? { name: e.name, empresas: 0, leads: 0 };
+        if (tipo === "lead") cur.leads += totalEntry;
+        else if (tipo === "negocio") cur.empresas += totalEntry;
+        else {
+          // misto/não declarado: assume empresas + leads conforme parseBulkTeamText (manhã/tarde)
+          cur.empresas += e.morning ?? 0;
+          cur.leads += e.afternoon ?? 0;
+        }
+        builder.set(e.name, cur);
+        savedBasic++;
+      }
+    }
+
+    // Persiste cada data
+    for (const [dateISO, builder] of buildersByDate) {
+      const [y, m] = dateISO.split("-");
+      const key = `acionGeral:${y}-${m}`;
+      const stored = loadJson<GeralMonthData>(key, {});
+      const incoming = Array.from(builder.values());
+
+      if (mode === "replaceDay") {
+        stored[dateISO] = incoming;
+      } else {
+        // append: soma com o existente por nome
+        const existing = stored[dateISO] ?? [];
+        const map = new Map<string, GeralDayPerson>();
+        for (const p of existing) map.set(p.name, { ...p });
+        for (const p of incoming) {
+          const cur = map.get(p.name);
+          if (cur) { cur.empresas += p.empresas; cur.leads += p.leads; }
+          else map.set(p.name, { ...p });
+        }
+        stored[dateISO] = Array.from(map.values());
+      }
+      saveJson(key, stored);
+      if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
+        setGeralMonthData(prev => ({ ...prev, [dateISO]: stored[dateISO] }));
+      }
+    }
+
+    // Detailed por data
+    for (const [dateISO, detailed] of parsed.detailedByDate) {
+      const [y, m] = dateISO.split("-");
+      const detKey = `acionDet:${y}-${m}`;
+      const detStored = loadJson<Record<string, any[]>>(detKey, {});
+      const incomingDet = detailed.map(e => ({
+        name: canonicalizeCollaboratorNameForDate(e.name, dateISO),
+        total: e.total,
+        categorias: [
+          { tipo: "ETAPA_ALTERADA", quantidade: e.etapaAlterada },
+          { tipo: "ATIVIDADE_CRIADA", quantidade: e.atividadeCriada },
+          { tipo: "STATUS_ATIVIDADE_ALTERADA", quantidade: e.statusAlterada },
+          { tipo: "CHAMADA_TELEFONICA", quantidade: e.chamadaTelefonica },
+          { tipo: "OUTROS", quantidade: e.outros },
+        ],
+      }));
+      if (mode === "replaceDay") {
+        detStored[dateISO] = incomingDet;
+      } else {
+        const existing = detStored[dateISO] ?? [];
+        const map = new Map<string, any>();
+        for (const p of existing) map.set(p.name, { ...p, categorias: [...(p.categorias ?? [])] });
+        for (const p of incomingDet) {
+          const cur = map.get(p.name);
+          if (cur) {
+            cur.total += p.total;
+            for (const c of p.categorias) {
+              const existCat = cur.categorias.find((x: any) => x.tipo === c.tipo);
+              if (existCat) existCat.quantidade += c.quantidade;
+              else cur.categorias.push({ ...c });
+            }
+          } else map.set(p.name, p);
+        }
+        detStored[dateISO] = Array.from(map.values());
+      }
+      saveJson(detKey, detStored);
+      savedDetailed += detailed.length;
+    }
+
+    setPasteConfirm({ open: false, parsed: null, mode: "replaceDay", rawText: "" });
+
+    const dates = parsed.datesFound.length;
     toast.success(
-      isHistorical
-        ? `Dados históricos salvos para ${effectiveSaveDate.split("-").reverse().join("/")}!`
-        : "Dados de acionamento atualizados!"
+      `Importado: ${savedBasic} entradas em ${dates} dia(s)` +
+      (savedDetailed > 0 ? ` + ${savedDetailed} detalhadas` : "") +
+      ` (${mode === "replaceDay" ? "substituindo" : "somando"}).`
     );
   };
 
