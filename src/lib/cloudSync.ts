@@ -27,6 +27,14 @@ export function isBusinessKey(key: string): boolean {
   return BUSINESS_PATTERNS.some((re) => re.test(key));
 }
 
+function hasMeaningfulValue(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+  return true;
+}
+
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 const DEBOUNCE_MS = 800;
 
@@ -98,6 +106,10 @@ export async function pullAllFromSheets(opts?: {
   for (let i = 0; i < all.length; i++) {
     const { key, value } = all[i];
     if (!isBusinessKey(key)) continue;
+    if (!hasMeaningfulValue(value)) {
+      opts?.onProgress?.(i + 1, all.length);
+      continue;
+    }
     try {
       const serialized = typeof value === "string" ? value : JSON.stringify(value);
       bootstrapKeys.add(key);
@@ -125,6 +137,7 @@ export async function pullKeyFromSheets(key: string): Promise<boolean> {
   if (!data) return false;
   try {
     const v = (data as { value: unknown }).value;
+    if (!hasMeaningfulValue(v)) return false;
     const serialized = typeof v === "string" ? v : JSON.stringify(v);
     bootstrapKeys.add(key);
     localStorage.setItem(key, serialized);
