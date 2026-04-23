@@ -38,6 +38,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
 
   const [report, setReport] = useState<string>("");
   const [eventsCount, setEventsCount] = useState<number>(0);
+  const [detectedDates, setDetectedDates] = useState<string[]>([]);
   const [applied, setApplied] = useState(false);
 
   const canGoStep2 = useMemo(() => normalizeHHMM(currentTime) !== null, [currentTime]);
@@ -59,6 +60,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
     setLeadsText("");
     setReport("");
     setEventsCount(0);
+    setDetectedDates([]);
     setApplied(false);
   };
 
@@ -97,6 +99,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
 
     setReport(res.reportText);
     setEventsCount(res.eventsCount);
+    setDetectedDates(res.report.detectedDates ?? []);
     setApplied(false);
 
     // Aplica automaticamente no dashboard, se estiver disponível
@@ -282,7 +285,7 @@ export function BitrixLogsAnalyzerView({ tvMode, onApplyToDashboard }: Props) {
                   onClick={async () => {
                     const t2 = normalizeHHMM(currentTime);
                     if (!t2) return;
-                    const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText });
+                    const res2 = parseAndBuildBitrixReport({ currentHHMM: t2, negociosText, leadsText, targetDateISO: resolvedTargetDate });
                     if (res2.ok === false) {
                       toast.error(res2.error);
                       return;
