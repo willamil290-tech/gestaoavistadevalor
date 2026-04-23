@@ -10,12 +10,7 @@ import { cn } from "@/lib/utils";
 import { EmpresasView } from "./EmpresasView";
 import { LeadsView } from "./LeadsView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BulkPasteUpdater } from "./BulkPasteUpdater";
 import { parseBulkTeamText, parseHourlyTrend, parseDetailedAcionamento, type BulkEntry, type HourlyTrend, type DetailedEntry } from "@/lib/bulkParse";
-import { parseMultiDateAcionamento, type MultiDateParseResult } from "@/lib/multiDateParse";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { loadJson, saveJson } from "@/lib/localStore";
@@ -93,6 +88,40 @@ function shouldHideAcionamentoName(name: string) {
   return isIgnoredCommercial(name) || isMariaCollaboratorName(name) || firstName === "filipe";
 }
 
+// Reconhece "lixo" salvo por importações antigas (cabeçalhos da tabela mensal,
+// rótulos como "Lead", "Negócio", "hoje", "ontem", números puros, etc.).
+function isCorruptedAcionamentoName(name: string) {
+  const raw = (name ?? "").trim();
+  if (!raw) return true;
+  if (/^\d+$/.test(raw)) return true; // só dígitos (ex: "1", "23", "47")
+  const norm = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Tokens conhecidos que vazaram como "nome" (cabeçalhos do parser antigo).
+  const noise = new Set([
+    "lead", "leads", "negocio", "negocios", "negócio", "negócios", "nego", "negó",
+    "empresa", "empresas", "hoje", "ontem", "contato", "the", "total", "dia",
+    "data", "resumo",
+  ]);
+  if (noise.has(norm)) return true;
+  // Sem nenhuma letra real ou letra única só (ex: "a", "x").
+  const letters = norm.replace(/[^a-z]/g, "");
+  if (letters.length < 3) return true;
+  return false;
+}
+
+function sanitizeGeralMonthData(data: GeralMonthData): { cleaned: GeralMonthData; removed: number } {
+  let removed = 0;
+  const cleaned: GeralMonthData = {};
+  for (const [date, dayData] of Object.entries(data ?? {})) {
+    const kept: GeralDayPerson[] = [];
+    for (const p of dayData ?? []) {
+      if (isCorruptedAcionamentoName(p.name)) { removed++; continue; }
+      kept.push(p);
+    }
+    cleaned[date] = kept;
+  }
+  return { cleaned, removed };
+}
+
 interface AcionamentosViewProps {
   tvMode?: boolean;
   trendData?: HourlyTrend[];
@@ -121,15 +150,6 @@ export const AcionamentosView = ({
   const [activeSubTab, setActiveSubTab] = useState<"geral" | "empresas" | "leads">("geral");
   const tabIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [manualTrendData, setManualTrendData] = useState<HourlyTrend[]>([]);
-
-  // Estado do diálogo de confirmação multi-data
-  type AcionSaveMode = "replaceDay" | "append";
-  const [pasteConfirm, setPasteConfirm] = useState<{
-    open: boolean;
-    parsed: MultiDateParseResult | null;
-    mode: AcionSaveMode;
-    rawText: string;
-  }>({ open: false, parsed: null, mode: "replaceDay", rawText: "" });
 
   const analytics = useQuery({
     queryKey: ["daily-analytics", "08h"],
@@ -242,7 +262,14 @@ export const AcionamentosView = ({
   // Load monthly data on month change
   useEffect(() => {
     const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
-    setGeralMonthData(normalizeGeralMonthData(loadJson<GeralMonthData>(key, {})));
+    const raw = loadJson<GeralMonthData>(key, {});
+    const { cleaned, removed } = sanitizeGeralMonthData(raw);
+    const normalized = normalizeGeralMonthData(cleaned);
+    if (removed > 0) {
+      saveJson(key, normalized);
+      toast.success(`Limpeza: ${removed} entrada(s) corrompida(s) removida(s).`);
+    }
+    setGeralMonthData(normalized);
   }, [geralYear, geralMonth]);
 
   // Auto-save geral data to monthly storage — only when the reference date is
@@ -619,140 +646,6 @@ export const AcionamentosView = ({
     };
   }, [tvMode]);
 
-  const handleBulkPaste = async (text: string) => {
-    const isHistorical = effectiveSaveDate !== businessDate;
-
-    // Hourly trend (only relevant for today)
-    if (!isHistorical) {
-      const trendMatch = text.match(/Acionamentos por hora[^\n]*\n([\s\S]*?)(?=\(\d\)|$)/i);
-      if (trendMatch) {
-        const trendEntries = parseHourlyTrend(trendMatch[1]);
-        if (trendEntries.length > 0) {
-          setManualTrendData(trendEntries);
-          onTrendUpdate?.(trendEntries);
-        }
-      }
-    }
-
-    // Parser multi-data: detecta automaticamente datas e tipos (Lead/Negócio)
-    const parsed = parseMultiDateAcionamento(text, effectiveSaveDate);
-
-    if (parsed.totalBasicEntries === 0 && parsed.totalDetailedEntries === 0) {
-      toast.error("Nenhum dado de acionamento encontrado no texto colado.");
-      return;
-    }
-
-    // Abre diálogo de confirmação para o usuário escolher como gravar.
-    setPasteConfirm({ open: true, parsed, mode: "replaceDay", rawText: text });
-  };
-
-  // Aplica a importação multi-data segundo o modo escolhido (substituir ou somar).
-  const applyMultiDateImport = () => {
-    const { parsed, mode } = pasteConfirm;
-    if (!parsed) return;
-
-    let savedBasic = 0;
-    let savedDetailed = 0;
-
-    // Por (data, tipo) -> entradas
-    // Estratégia: agrupar por data e somar empresas/leads conforme o tipo declarado.
-    type DayBuilder = Map<string, { name: string; empresas: number; leads: number }>;
-    const buildersByDate = new Map<string, DayBuilder>();
-
-    for (const { dateISO, tipo, entries } of parsed.basicByDateTipo.values()) {
-      if (!buildersByDate.has(dateISO)) buildersByDate.set(dateISO, new Map());
-      const builder = buildersByDate.get(dateISO)!;
-      for (const e of entries) {
-        const totalEntry = (e.morning ?? 0) + (e.afternoon ?? 0);
-        const cur = builder.get(e.name) ?? { name: e.name, empresas: 0, leads: 0 };
-        if (tipo === "lead") cur.leads += totalEntry;
-        else if (tipo === "negocio") cur.empresas += totalEntry;
-        else {
-          // misto/não declarado: assume empresas + leads conforme parseBulkTeamText (manhã/tarde)
-          cur.empresas += e.morning ?? 0;
-          cur.leads += e.afternoon ?? 0;
-        }
-        builder.set(e.name, cur);
-        savedBasic++;
-      }
-    }
-
-    // Persiste cada data
-    for (const [dateISO, builder] of buildersByDate) {
-      const [y, m] = dateISO.split("-");
-      const key = `acionGeral:${y}-${m}`;
-      const stored = loadJson<GeralMonthData>(key, {});
-      const incoming = Array.from(builder.values());
-
-      if (mode === "replaceDay") {
-        stored[dateISO] = incoming;
-      } else {
-        // append: soma com o existente por nome
-        const existing = stored[dateISO] ?? [];
-        const map = new Map<string, GeralDayPerson>();
-        for (const p of existing) map.set(p.name, { ...p });
-        for (const p of incoming) {
-          const cur = map.get(p.name);
-          if (cur) { cur.empresas += p.empresas; cur.leads += p.leads; }
-          else map.set(p.name, { ...p });
-        }
-        stored[dateISO] = Array.from(map.values());
-      }
-      saveJson(key, stored);
-      if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
-        setGeralMonthData(prev => ({ ...prev, [dateISO]: stored[dateISO] }));
-      }
-    }
-
-    // Detailed por data
-    for (const [dateISO, detailed] of parsed.detailedByDate) {
-      const [y, m] = dateISO.split("-");
-      const detKey = `acionDet:${y}-${m}`;
-      const detStored = loadJson<Record<string, any[]>>(detKey, {});
-      const incomingDet = detailed.map(e => ({
-        name: canonicalizeCollaboratorNameForDate(e.name, dateISO),
-        total: e.total,
-        categorias: [
-          { tipo: "ETAPA_ALTERADA", quantidade: e.etapaAlterada },
-          { tipo: "ATIVIDADE_CRIADA", quantidade: e.atividadeCriada },
-          { tipo: "STATUS_ATIVIDADE_ALTERADA", quantidade: e.statusAlterada },
-          { tipo: "CHAMADA_TELEFONICA", quantidade: e.chamadaTelefonica },
-          { tipo: "OUTROS", quantidade: e.outros },
-        ],
-      }));
-      if (mode === "replaceDay") {
-        detStored[dateISO] = incomingDet;
-      } else {
-        const existing = detStored[dateISO] ?? [];
-        const map = new Map<string, any>();
-        for (const p of existing) map.set(p.name, { ...p, categorias: [...(p.categorias ?? [])] });
-        for (const p of incomingDet) {
-          const cur = map.get(p.name);
-          if (cur) {
-            cur.total += p.total;
-            for (const c of p.categorias) {
-              const existCat = cur.categorias.find((x: any) => x.tipo === c.tipo);
-              if (existCat) existCat.quantidade += c.quantidade;
-              else cur.categorias.push({ ...c });
-            }
-          } else map.set(p.name, p);
-        }
-        detStored[dateISO] = Array.from(map.values());
-      }
-      saveJson(detKey, detStored);
-      savedDetailed += detailed.length;
-    }
-
-    setPasteConfirm({ open: false, parsed: null, mode: "replaceDay", rawText: "" });
-
-    const dates = parsed.datesFound.length;
-    toast.success(
-      `Importado: ${savedBasic} entradas em ${dates} dia(s)` +
-      (savedDetailed > 0 ? ` + ${savedDetailed} detalhadas` : "") +
-      ` (${mode === "replaceDay" ? "substituindo" : "somando"}).`
-    );
-  };
-
   const showDailyEventsHint = isSupabaseConfigured && !isDailyEventsEnabled();
 
   return (
@@ -789,15 +682,6 @@ export const AcionamentosView = ({
             </span>
           )}
         </div>
-      )}
-
-      {/* Bulk paste for updating */}
-      {!tvMode && (
-        <BulkPasteUpdater
-          title="Atualizar Acionamentos (Leads + Negócios + várias datas)"
-          subtitle="Cole tudo de uma vez — Leads, Negócios e múltiplos dias no mesmo texto. O sistema detecta automaticamente cada data (DD/MM/AAAA, “Data:”, “Dia DD/MM”) e separa o que é Lead do que é Negócio. Aceita também os blocos Resumo Numérico, Resumo Detalhado e Acionamentos por hora."
-          onApply={handleBulkPaste}
-        />
       )}
 
       {/* Abas Geral / Empresas / Leads */}
@@ -1069,69 +953,6 @@ export const AcionamentosView = ({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Diálogo de confirmação multi-data */}
-      <AlertDialog open={pasteConfirm.open} onOpenChange={(o) => setPasteConfirm(p => ({ ...p, open: o }))}>
-        <AlertDialogContent className="max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar importação de acionamentos</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                {pasteConfirm.parsed && (
-                  <>
-                    <div className="flex flex-wrap gap-x-6 gap-y-1">
-                      <span><strong>{pasteConfirm.parsed.datesFound.length}</strong> data(s) detectada(s)</span>
-                      <span><strong>{pasteConfirm.parsed.totalBasicEntries}</strong> entradas básicas</span>
-                      <span><strong>{pasteConfirm.parsed.totalDetailedEntries}</strong> detalhadas</span>
-                    </div>
-                    {pasteConfirm.parsed.usedFallbackDate && (
-                      <p className="text-xs text-amber-500">
-                        ⚠ Nenhuma data identificada no texto — será usada a data de referência ({effectiveSaveDate.split("-").reverse().join("/")}).
-                      </p>
-                    )}
-                    <div className="max-h-[180px] overflow-y-auto rounded border border-border p-2 bg-muted/20 space-y-1">
-                      {Array.from(pasteConfirm.parsed.basicByDateTipo.values())
-                        .sort((a, b) => a.dateISO.localeCompare(b.dateISO))
-                        .map((seg, i) => {
-                          const total = seg.entries.reduce((s, e) => s + (e.morning ?? 0) + (e.afternoon ?? 0), 0);
-                          const tipoLabel = seg.tipo === "lead" ? "Leads" : seg.tipo === "negocio" ? "Negócios" : "Geral";
-                          return (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span>{seg.dateISO.split("-").reverse().join("/")} — <strong>{tipoLabel}</strong> ({seg.entries.length} pessoas)</span>
-                              <span className="tabular-nums font-medium">{total}</span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                    <div className="pt-2">
-                      <RadioGroup value={pasteConfirm.mode} onValueChange={(v) => setPasteConfirm(p => ({ ...p, mode: v as any }))}>
-                        <div className="flex items-start gap-2">
-                          <RadioGroupItem value="replaceDay" id="acion-mode-replace" className="mt-0.5" />
-                          <Label htmlFor="acion-mode-replace" className="cursor-pointer">
-                            <strong>Substituir os dias importados</strong>
-                            <p className="text-xs text-muted-foreground font-normal">Recomendado. Sobrescreve cada data presente no texto.</p>
-                          </Label>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <RadioGroupItem value="append" id="acion-mode-append" className="mt-0.5" />
-                          <Label htmlFor="acion-mode-append" className="cursor-pointer">
-                            <strong>Adicionar ao existente</strong>
-                            <p className="text-xs text-muted-foreground font-normal">Soma com o que já está salvo. Pode duplicar se reimportar o mesmo dia.</p>
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={applyMultiDateImport}>Confirmar importação</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
