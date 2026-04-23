@@ -403,8 +403,10 @@ export const TendenciaChamadasView = ({ tvMode = false }: TendenciaChamadasViewP
             <TrendingUp className="w-5 h-5 text-accent" />
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Média por dia</div>
-            <div className="text-2xl font-bold tabular-nums">{avgPerDay.toLocaleString("pt-BR")}</div>
+            <div className="text-xs text-muted-foreground">Hora de pico</div>
+            <div className="text-2xl font-bold tabular-nums">
+              {pad2(peakHour.hour)}h <span className="text-sm text-muted-foreground font-normal">({peakHour.count})</span>
+            </div>
           </div>
         </div>
         <div className="bg-card rounded-2xl p-4 border border-border flex items-center gap-3">
