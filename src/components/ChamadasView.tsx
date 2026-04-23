@@ -11,12 +11,12 @@ import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_G
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
   parseCallsText,
+  parseCallsTextDetailed,
   computeCallMetrics,
   aggregateMonthMetrics,
   type ParsedCall,
   type PersonDayCallMetrics,
 } from "@/lib/callsParse";
-import { saveCallsMonth } from "@/lib/persistence";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -26,17 +26,7 @@ function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
 }
 
-function buildCallDedupKey(call: Pick<ParsedCall, "name" | "phone" | "dateTime" | "direction" | "durationSeconds" | "status" | "contactInfo">) {
-  return [
-    call.name,
-    call.phone,
-    call.dateTime.getTime(),
-    call.direction,
-    call.durationSeconds,
-    call.status.trim().toLowerCase(),
-    call.contactInfo.trim().toLowerCase(),
-  ].join("|");
-}
+type SaveMode = "append" | "replaceDay" | "replaceMonth";
 
 function formatTime(seconds: number | null | undefined): string {
   if (seconds == null || !Number.isFinite(seconds)) return "—";
