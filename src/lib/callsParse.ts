@@ -102,12 +102,22 @@ function isStatusLine(line: string): boolean {
     l === "ocupado" ||
     l === "número inválido" ||
     l === "numero invalido" ||
+    l === "recusada" ||
+    l === "indefinido" ||
+    l === "não atendida" ||
+    l === "nao atendida" ||
+    l === "falha" ||
     l.startsWith("bem sucedida") ||
     l.startsWith("cancelad") ||
     l.startsWith("sem resposta") ||
     l.startsWith("ocupad") ||
     l.startsWith("número inválido") ||
     l.startsWith("numero invalido") ||
+    l.startsWith("recusad") ||
+    l.startsWith("indefinid") ||
+    l.startsWith("não atend") ||
+    l.startsWith("nao atend") ||
+    l.startsWith("falha") ||
     l.startsWith("esta rota") ||
     l.startsWith("rota indisponível") ||
     l.startsWith("rota indisponivel")
