@@ -13,6 +13,7 @@ import {
   restoreArchiveToLocal,
   type LocalKeyPreview,
 } from "@/lib/migrateLocal";
+import { isBusinessKey, pushKeyToSheetsNow } from "@/lib/cloudSync";
 
 export function ConfiguracoesView() {
   const [includeUnknown, setIncludeUnknown] = useState(false);
