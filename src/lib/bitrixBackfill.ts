@@ -1,5 +1,5 @@
 import { loadJson, saveJson } from "@/lib/localStore";
-import { pullKeyFromSheets, pushKeyToSheetsNow } from "@/lib/sheetsSync";
+import { pushKeyToSheetsNow } from "@/lib/sheetsSync";
 import type { BitrixEvent, PersonEventDetail } from "@/lib/bitrixLogs";
 
 const FLAG_KEY = "bitrixBackfill:v1:done";
