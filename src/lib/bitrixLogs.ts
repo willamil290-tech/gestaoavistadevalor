@@ -101,6 +101,7 @@ function addDaysISO(iso: string, days: number): string {
 
 function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
   const line = lineRaw.trim();
+  const rawText = line;
 
   // hoje, HH:MM
   const hoje = line.match(/\bhoje\b\s*,?\s*(\d{1,2}:\d{2})/i);
@@ -111,7 +112,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const sec = cur.seconds;
     let age = currentSeconds - sec;
     if (age < 0) age += DAY_SECONDS;
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X minutos atrás
@@ -121,7 +122,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x * 60;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X segundos atrás
@@ -131,7 +132,7 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
   }
 
   // X horas atrás
@@ -141,7 +142,23 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     if (!Number.isFinite(x)) return { ok: false };
     const age = x * 3600;
     const sec = wrapSeconds(currentSeconds - age);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: 0, rawText };
+  }
+
+  // X dias atrás  /  há X dias  /  há X dias, HH:MM
+  const diasAtras = line.match(/(?:\bh[aá]\s+)?(\d+)\s*dias?\s*atr[aá]s(?:\s*,?\s*(\d{1,2}:\d{2}))?/i)
+    || line.match(/\bh[aá]\s+(\d+)\s*dias?\s*,?\s*(\d{1,2}:\d{2})?/i);
+  if (diasAtras) {
+    const x = Number(diasAtras[1]);
+    if (!Number.isFinite(x) || x <= 0) return { ok: false };
+    const t = diasAtras[2];
+    let sec = 0;
+    if (t) {
+      const cur = parseCurrentTimeHHMM(t);
+      if (cur.ok) sec = cur.seconds;
+    }
+    const age = x * DAY_SECONDS + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: -x, rawText };
   }
 
   // ontem, HH:MM
@@ -153,7 +170,18 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const sec = cur.seconds;
     // age = time since yesterday at that hour
     const age = DAY_SECONDS + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: age, hhmm: secondsToHHMM(sec), dayOffset: -1, rawText };
+  }
+
+  // anteontem, HH:MM
+  const anteontem = line.match(/\banteontem\b\s*,?\s*(\d{1,2}:\d{2})/i);
+  if (anteontem) {
+    const t = anteontem[1];
+    const cur = parseCurrentTimeHHMM(t);
+    if (!cur.ok) return { ok: false };
+    const sec = cur.seconds;
+    const age = 2 * DAY_SECONDS + (currentSeconds - sec);
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: -2, rawText };
   }
 
   // DD.MM.YYYY HH:MM  or  DD/MM/YYYY HH:MM  or  DD.MM.YYYY, HH:MM (absolute date)
@@ -163,20 +191,29 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
-    // We don't compute real age across days, just put a large ageSeconds based on date diff estimate
+    const dd = Number(absDate[1]); const mm = Number(absDate[2]); const yyyy = Number(absDate[3]);
+    const absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   // DD de mês, HH:MM  or  DD de mês HH:MM  (e.g. "15 de fevereiro, 14:30")
-  const absBR = line.match(/\b(\d{1,2})\s+de\s+\w+\s*,?\s*(\d{1,2}:\d{2})/i);
+  const absBR = line.match(/\b(\d{1,2})\s+de\s+([a-zçãéíóú]+)(?:\s+de\s+(\d{4}))?\s*,?\s*(\d{1,2}:\d{2})/i);
   if (absBR) {
-    const t = absBR[2];
+    const t = absBR[4];
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
+    const dd = Number(absBR[1]);
+    const monthName = removeDiacritics(absBR[2]).toLowerCase();
+    const mm = PT_MONTHS[monthName];
+    let absoluteISO: string | undefined;
+    if (mm) {
+      const yyyy = absBR[3] ? Number(absBR[3]) : new Date().getFullYear();
+      absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
+    }
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   // DD/MM HH:MM  or  DD.MM, HH:MM (without year)
@@ -186,8 +223,11 @@ function parseTimelineLine(lineRaw: string, currentSeconds: number): TimeParse {
     const cur = parseCurrentTimeHHMM(t);
     if (!cur.ok) return { ok: false };
     const sec = cur.seconds;
+    const dd = Number(absShort[1]); const mm = Number(absShort[2]);
+    const yyyy = new Date().getFullYear();
+    const absoluteISO = `${yyyy}-${pad(mm)}-${pad(dd)}`;
     const age = DAY_SECONDS * 2 + (currentSeconds - sec);
-    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec) };
+    return { ok: true, secondsOfDay: sec, ageSeconds: Math.max(age, 0), hhmm: secondsToHHMM(sec), dayOffset: 0, absoluteISO, rawText };
   }
 
   return { ok: false };
