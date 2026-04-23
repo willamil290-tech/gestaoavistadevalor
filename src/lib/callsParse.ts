@@ -191,83 +191,103 @@ function isNameLine(line: string): boolean {
  * Faz o parse de um texto colado de chamadas do Bitrix.
  * Retorna a lista de chamadas parseadas.
  */
-export function parseCallsText(text: string): ParsedCall[] {
-  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-  const calls: ParsedCall[] = [];
 
-  let i = 0;
-  while (i < lines.length) {
-    // Pular linhas de cabeçalho/filtro/lixo
-    if (
-      lines[i] === "Chamadas" ||
-      lines[i] === "Filtro" ||
-      lines[i] === "Atividade" ||
-      lines[i] === "-" ||
-      lines[i].startsWith("Padrão") ||
-      lines[i].startsWith("Aplicar") ||
-      lines[i].startsWith("Selecionar") ||
-      /^Padr.o\s+Aplicar/i.test(lines[i])
-    ) {
-      i++;
+/** Lixo de cabeçalho/UI do Bitrix que aparece no copia-e-cola. */
+function isJunkLine(line: string): boolean {
+  const l = line.trim();
+  if (!l) return true;
+  if (l === "Chamadas" || l === "Filtro" || l === "Atividade" || l === "-") return true;
+  if (l.startsWith("Padrão") || l.startsWith("Aplicar") || l.startsWith("Selecionar")) return true;
+  if (/^Padr.o\s+Aplicar/i.test(l)) return true;
+  return false;
+}
+
+/** Resultado detalhado do parsing, sem descarte silencioso. */
+export interface ParseCallsResult {
+  calls: ParsedCall[];
+  /** Blocos identificados como uma chamada mas que não puderam ser totalmente interpretados. */
+  unparsedBlocks: { lines: string[]; reason: string }[];
+  /** Total de blocos detectados (parseados + não parseados). */
+  totalBlocks: number;
+}
+
+/**
+ * Divide o texto em blocos. Cada bloco começa numa linha que parece ser um
+ * nome de colaborador e termina logo antes do próximo nome (ou no fim do texto).
+ * Linhas de lixo são ignoradas no processo de detecção, mas o conteúdo
+ * intermediário é preservado dentro do bloco.
+ */
+function splitIntoBlocks(text: string): string[][] {
+  const lines = text.split("\n").map((l) => l.trim());
+  const blocks: string[][] = [];
+  let current: string[] | null = null;
+
+  for (const line of lines) {
+    if (!line) continue;
+    if (isJunkLine(line)) continue;
+    if (isNameLine(line)) {
+      if (current && current.length > 0) blocks.push(current);
+      current = [line];
+    } else if (current) {
+      current.push(line);
+    }
+    // Linhas antes do primeiro nome são descartadas (cabeçalho).
+  }
+  if (current && current.length > 0) blocks.push(current);
+  return blocks;
+}
+
+/**
+ * Interpreta um único bloco. Identifica campos por padrão, não por posição.
+ * Retorna a chamada parseada ou um motivo de falha.
+ */
+function parseBlock(block: string[]): { call: ParsedCall } | { error: string } {
+  if (block.length === 0) return { error: "bloco vazio" };
+
+  const rawName = block[0];
+  let phone = "";
+  let direction = "";
+  let durationSeconds = 0;
+  let dateLine = "";
+  let status = "";
+  let contactInfo = "";
+
+  // Varre as linhas restantes classificando por padrão.
+  for (let i = 1; i < block.length; i++) {
+    const l = block[i];
+    if (!l || l === "-" || l === "Atividade") continue;
+    if (!phone && isPhoneLine(l)) { phone = l; continue; }
+    if (!direction && isDirectionLine(l)) { direction = l.toLowerCase(); continue; }
+    if (isDurationLine(l) && durationSeconds === 0) {
+      durationSeconds = parseDuration(l);
       continue;
     }
-
-    // Tentar encontrar início de um bloco de chamada (nome)
-    if (!isNameLine(lines[i])) {
-      i++;
+    if (!dateLine && isDateLine(l)) { dateLine = l; continue; }
+    if (!contactInfo && isContactLine(l)) { contactInfo = l; continue; }
+    if (!status && isStatusLine(l)) { status = l; continue; }
+    // Se nada bateu mas ainda não temos status, e a linha não é nada conhecido,
+    // assumimos que é o status (variação não catalogada). Isso evita perder
+    // chamadas com status novo/desconhecido.
+    if (!status && !isPhoneLine(l) && !isDirectionLine(l) && !isDurationLine(l) && !isDateLine(l) && !isContactLine(l)) {
+      status = l;
       continue;
     }
+  }
 
-    const rawName = lines[i];
-    i++;
+  if (!phone) return { error: `telefone ausente em "${rawName}"` };
+  if (!dateLine) return { error: `data ausente em "${rawName}"` };
+  if (!direction) direction = "efetuadas";
+  if (!status) status = "Indefinido";
 
-    // Telefone
-    if (i >= lines.length || !isPhoneLine(lines[i])) continue;
-    const phone = lines[i];
-    i++;
+  const dateTime = parseDate(dateLine);
+  const dateISO = `${dateTime.getFullYear()}-${pad2(dateTime.getMonth() + 1)}-${pad2(dateTime.getDate())}`;
+  const timeHHMM = `${pad2(dateTime.getHours())}:${pad2(dateTime.getMinutes())}`;
+  const name = canonicalizeCollaboratorNameForDate(rawName, dateISO);
+  const answered =
+    status.toLowerCase() === "bem sucedida" || status.toLowerCase().startsWith("bem sucedida");
 
-    // Direção
-    if (i >= lines.length || !isDirectionLine(lines[i])) continue;
-    const direction = lines[i].toLowerCase();
-    i++;
-
-    // Duração (opcional) ou data
-    let durationSeconds = 0;
-    if (i < lines.length && isDurationLine(lines[i])) {
-      durationSeconds = parseDuration(lines[i]);
-      i++;
-    }
-
-    // Data
-    if (i >= lines.length || !isDateLine(lines[i])) continue;
-    const dateTime = parseDate(lines[i]);
-    const dateISO = `${dateTime.getFullYear()}-${pad2(dateTime.getMonth() + 1)}-${pad2(dateTime.getDate())}`;
-    const timeHHMM = `${pad2(dateTime.getHours())}:${pad2(dateTime.getMinutes())}`;
-    i++;
-
-    // Status
-    if (i >= lines.length) continue;
-    const status = lines[i];
-    i++;
-
-    // Contato/Empresa
-    let contactInfo = "";
-    if (i < lines.length && isContactLine(lines[i])) {
-      contactInfo = lines[i];
-      i++;
-    }
-
-    // Pular "Atividade" e "-"
-    while (i < lines.length && (lines[i] === "Atividade" || lines[i] === "-")) {
-      i++;
-    }
-
-    const name = canonicalizeCollaboratorNameForDate(rawName, dateISO);
-
-    const answered =
-      status.toLowerCase() === "bem sucedida" || status.toLowerCase().startsWith("bem sucedida");
-
-    calls.push({
+  return {
+    call: {
       name,
       phone,
       direction,
@@ -278,10 +298,32 @@ export function parseCallsText(text: string): ParsedCall[] {
       status,
       contactInfo,
       answered,
-    });
+    },
+  };
+}
+
+/**
+ * Versão detalhada: retorna chamadas + blocos não parseados, sem descarte silencioso.
+ */
+export function parseCallsTextDetailed(text: string): ParseCallsResult {
+  const blocks = splitIntoBlocks(text);
+  const calls: ParsedCall[] = [];
+  const unparsedBlocks: { lines: string[]; reason: string }[] = [];
+
+  for (const block of blocks) {
+    const result = parseBlock(block);
+    if ("call" in result) calls.push(result.call);
+    else unparsedBlocks.push({ lines: block, reason: result.error });
   }
 
-  return calls;
+  return { calls, unparsedBlocks, totalBlocks: blocks.length };
+}
+
+/**
+ * Compatibilidade: retorna apenas as chamadas reconhecidas.
+ */
+export function parseCallsText(text: string): ParsedCall[] {
+  return parseCallsTextDetailed(text).calls;
 }
 
 /**
