@@ -139,6 +139,13 @@ let settingsRowCache: Record<string, unknown> | null = null;
 // eventual consistency / cache do Google Sheets API).
 let settingsCacheUntil = 0;
 const CACHE_PRIORITY_MS = 30_000;
+let settingsWriteQueue: Promise<void> = Promise.resolve();
+
+function enqueueSettingsWrite<T>(work: () => Promise<T>): Promise<T> {
+  const run = settingsWriteQueue.then(work, work);
+  settingsWriteQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
 
 // ---------- Bootstrap ----------
 // Garante que as abas/headers da planilha existam. Roda uma vez por sessão.
@@ -243,20 +250,22 @@ export async function getDashboardSettings(): Promise<DashboardSettings> {
 }
 
 export async function updateDashboardSettings(patch: Partial<DashboardSettings>) {
-  const row = await ensureSettingsRow();
-  const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
-  if (typeof patch.metaMes === "number") merged.meta_mes = patch.metaMes;
-  if (typeof patch.ajusteMes === "number") merged.ajuste_mes = patch.ajusteMes;
-  if (typeof patch.metaDia === "number") merged.meta_dia = patch.metaDia;
-  if (typeof patch.ajusteDia === "number") merged.ajuste_dia = patch.ajusteDia;
-  if (typeof patch.atingidoMes === "number") merged.atingido_mes = patch.atingidoMes;
-  if (typeof patch.atingidoDia === "number") merged.atingido_dia = patch.atingidoDia;
-  merged.updated_at = new Date().toISOString();
-  await sheetsUpsert("dashboard_settings", [merged], "key");
-  // Atualiza cache imediatamente — próxima escrita não vai regredir esses campos
-  // mesmo que o Sheets ainda não tenha propagado a leitura.
-  settingsRowCache = { ...merged };
-  settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
+  return enqueueSettingsWrite(async () => {
+    const row = await ensureSettingsRow();
+    const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
+    if (typeof patch.metaMes === "number") merged.meta_mes = patch.metaMes;
+    if (typeof patch.ajusteMes === "number") merged.ajuste_mes = patch.ajusteMes;
+    if (typeof patch.metaDia === "number") merged.meta_dia = patch.metaDia;
+    if (typeof patch.ajusteDia === "number") merged.ajuste_dia = patch.ajusteDia;
+    if (typeof patch.atingidoMes === "number") merged.atingido_mes = patch.atingidoMes;
+    if (typeof patch.atingidoDia === "number") merged.atingido_dia = patch.atingidoDia;
+    merged.updated_at = new Date().toISOString();
+    // Cache otimista antes da rede: evita que uma leitura/persistência concorrente
+    // use o valor antigo enquanto o Sheets ainda está gravando.
+    settingsRowCache = { ...merged };
+    settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
+    await sheetsUpsert("dashboard_settings", [merged], "key");
+  });
 }
 
 export async function getDashboardExtras(): Promise<DashboardExtras> {
@@ -266,19 +275,21 @@ export async function getDashboardExtras(): Promise<DashboardExtras> {
 }
 
 export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
-  const row = await ensureSettingsRow();
-  const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
-  if (hasMeaningfulPatchValue(patch.commercials)) merged.commercials = patch.commercials;
-  if (hasMeaningfulPatchValue(patch.faixas)) merged.faixas = patch.faixas;
-  if (hasMeaningfulPatchValue(patch.clientes)) merged.clientes = patch.clientes;
-  if (hasMeaningfulPatchValue(patch.acionamentoDetalhado)) merged.acionamento_detalhado = patch.acionamentoDetalhado;
-  if (hasMeaningfulPatchValue(patch.agendadasMes)) merged.agendadas_mes = patch.agendadasMes;
-  if (hasMeaningfulPatchValue(patch.agendadasDia)) merged.agendadas_dia = patch.agendadasDia;
-  if (hasMeaningfulPatchValue(patch.trendData)) merged.trend_data = patch.trendData;
-  merged.updated_at = new Date().toISOString();
-  await sheetsUpsert("dashboard_settings", [merged], "key");
-  settingsRowCache = { ...merged };
-  settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
+  return enqueueSettingsWrite(async () => {
+    const row = await ensureSettingsRow();
+    const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
+    if (hasMeaningfulPatchValue(patch.commercials)) merged.commercials = patch.commercials;
+    if (hasMeaningfulPatchValue(patch.faixas)) merged.faixas = patch.faixas;
+    if (hasMeaningfulPatchValue(patch.clientes)) merged.clientes = patch.clientes;
+    if (hasMeaningfulPatchValue(patch.acionamentoDetalhado)) merged.acionamento_detalhado = patch.acionamentoDetalhado;
+    if (hasMeaningfulPatchValue(patch.agendadasMes)) merged.agendadas_mes = patch.agendadasMes;
+    if (hasMeaningfulPatchValue(patch.agendadasDia)) merged.agendadas_dia = patch.agendadasDia;
+    if (hasMeaningfulPatchValue(patch.trendData)) merged.trend_data = patch.trendData;
+    merged.updated_at = new Date().toISOString();
+    settingsRowCache = { ...merged };
+    settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
+    await sheetsUpsert("dashboard_settings", [merged], "key");
+  });
 }
 
 // ---------- team_members ----------
