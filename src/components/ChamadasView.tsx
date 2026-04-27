@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { getKeyFromSheets } from "@/lib/cloudSync";
 import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
@@ -23,6 +24,39 @@ function pad2(n: number) {
 
 function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
+}
+
+function normalizeStoredCall(c: any): ParsedCall {
+  return {
+    ...c,
+    name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
+    dateTime: new Date(c.dateTime),
+  } as ParsedCall;
+}
+
+function callIdentityKey(call: ParsedCall) {
+  return [
+    collaboratorNameKey(call.name, call.dateISO),
+    call.dateISO,
+    call.timeHHMM,
+    String(call.phone ?? "").replace(/\D/g, ""),
+    String(call.direction ?? "").toLowerCase(),
+    String(call.status ?? "").toLowerCase(),
+    String(call.durationSeconds ?? 0),
+    String(call.contactInfo ?? "").trim().toLowerCase(),
+  ].join("|");
+}
+
+function mergeUniqueCalls(existing: ParsedCall[], incoming: ParsedCall[]) {
+  const seen = new Set<string>();
+  const merged: ParsedCall[] = [];
+  for (const call of [...existing, ...incoming]) {
+    const key = callIdentityKey(call);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(call);
+  }
+  return merged;
 }
 
 type SaveMode = "append" | "replaceDay" | "replaceMonth";
@@ -186,7 +220,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Etapa 2: confirma a gravação aplicando o modo escolhido.
   // Nenhuma chamada é descartada por heurística — apenas substituímos períodos
   // explicitamente quando o usuário pede.
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     if (!parsePreview) return;
     const parsed = parsePreview.calls;
 
@@ -211,11 +245,12 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
       const key = `calls:${monthKey}`;
-      const existing = loadJson<any[]>(key, []).map((c: any) => ({
-        ...c,
-        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
-        dateTime: new Date(c.dateTime),
-      })) as ParsedCall[];
+      const localExisting = loadJson<any[]>(key, []).map(normalizeStoredCall);
+      const remoteExisting = ((await getKeyFromSheets<any[]>(key).catch((e) => {
+        console.warn(`[Chamadas] Não foi possível conferir o banco antes de salvar '${key}':`, e);
+        return [];
+      })) ?? []).map(normalizeStoredCall);
+      const existing = mergeUniqueCalls(remoteExisting, localExisting);
 
       let next: ParsedCall[];
       if (saveMode === "replaceMonth") {
@@ -231,8 +266,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
           ...monthCalls,
         ];
       } else {
-        // append: adiciona todas as chamadas sem qualquer dedupe
-        next = [...existing, ...monthCalls];
+        // append: adiciona ao consolidado mais recente sem apagar ninguém.
+        next = mergeUniqueCalls(existing, monthCalls);
       }
 
       const normalized = next.map((c) => ({
@@ -640,7 +675,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setParsePreview(null)}>Voltar</Button>
                 <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
-                <Button onClick={handleConfirmSave}>Confirmar gravação</Button>
+                <Button onClick={() => void handleConfirmSave()}>Confirmar gravação</Button>
               </div>
             </div>
           )}

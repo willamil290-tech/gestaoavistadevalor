@@ -147,6 +147,26 @@ export async function pullKeyFromSheets(key: string): Promise<boolean> {
   }
 }
 
+/** Lê UMA chave do Cloud sem alterar o localStorage. Útil para mesclar antes de salvar. */
+export async function getKeyFromSheets<T = unknown>(key: string): Promise<T | null> {
+  const { data, error } = await supabase
+    .from("app_data")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const value = (data as { value: unknown }).value;
+  if (!hasMeaningfulValue(value)) return null;
+
+  if (typeof value === "string") {
+    try { return JSON.parse(value) as T; }
+    catch { return value as T; }
+  }
+  return value as T;
+}
+
 /** Aguarda todos os pushes debounced finalizarem. */
 export async function flushPendingPushes(): Promise<void> {
   const keys = Array.from(pending.keys());
