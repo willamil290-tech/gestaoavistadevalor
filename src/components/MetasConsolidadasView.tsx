@@ -92,72 +92,6 @@ function fmtValueByUnit(v: number, unit: ColabUnit): string {
   return `${v.toLocaleString("pt-BR")} RR`;
 }
 
-type GeralDayPerson = { name: string; empresas: number; leads: number };
-type GeralMonthData = Record<string, GeralDayPerson[]>;
-
-function useMonthCalls(year: number, month: number) {
-  const [calls, setCalls] = useState<ParsedCall[]>([]);
-
-  useEffect(() => {
-    const key = `calls:${year}-${pad2(month)}`;
-    const raw = loadJson<any[]>(key, []);
-    const parsed = raw.map((c) => ({ ...c, dateTime: new Date(c.dateTime) })) as ParsedCall[];
-    setCalls(parsed);
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === key) {
-        const updated = loadJson<any[]>(key, []);
-        setCalls(updated.map((c) => ({ ...c, dateTime: new Date(c.dateTime) })) as ParsedCall[]);
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => {
-      const updated = loadJson<any[]>(key, []);
-      setCalls(updated.map((c) => ({ ...c, dateTime: new Date(c.dateTime) })) as ParsedCall[]);
-    }, 15_000);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
-    };
-  }, [year, month]);
-
-  return calls;
-}
-
-function useMonthGeral(year: number, month: number) {
-  const [data, setData] = useState<GeralMonthData>({});
-  useEffect(() => {
-    const key = `acionGeral:${year}-${pad2(month)}`;
-    setData(loadJson<GeralMonthData>(key, {}));
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === key) setData(loadJson<GeralMonthData>(key, {}));
-    };
-    window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => setData(loadJson<GeralMonthData>(key, {})), 15_000);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
-    };
-  }, [year, month]);
-  return data;
-}
-
-function firstName(name: string) {
-  return (name ?? "").trim().split(/\s+/)[0] ?? name;
-}
-
-// Paleta vibrante (HSL) consistente com tokens
-const COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--accent))",
-  "hsl(var(--secondary))",
-  "hsl(217 91% 60%)",
-  "hsl(280 85% 60%)",
-  "hsl(160 80% 45%)",
-  "hsl(35 95% 55%)",
-  "hsl(340 85% 55%)",
-  "hsl(190 90% 50%)",
-];
 
 export function MetasConsolidadasView({
   tvMode,
@@ -171,8 +105,6 @@ export function MetasConsolidadasView({
   const today = getBusinessDate();
   const [y, m, d] = today.split("-").map(Number);
 
-  const calls = useMonthCalls(y, m);
-  const geral = useMonthGeral(y, m);
 
   // ── Metas por colaborador (persistidas por mês) ──
   const colabKey = colabGoalsKey(y, m);
@@ -230,64 +162,6 @@ export function MetasConsolidadasView({
     return sum;
   };
 
-  // ── SDRs: chamadas consolidadas do mês (filtradas) ──
-  const sdrChartData = useMemo(() => {
-    const byPerson = new Map<string, { name: string; chamadas: number; atendidas: number }>();
-    for (const c of calls) {
-      if (!c.name || isIgnoredCommercial(c.name)) continue;
-      if (getTeamGroup(c.name) !== "SDRs") continue;
-      const fn = firstName(c.name);
-      const cur = byPerson.get(fn) ?? { name: fn, chamadas: 0, atendidas: 0 };
-      cur.chamadas += 1;
-      if (c.answered) cur.atendidas += 1;
-      byPerson.set(fn, cur);
-    }
-    return Array.from(byPerson.values()).sort((a, b) => b.chamadas - a.chamadas);
-  }, [calls]);
-
-  const sdrTotalChamadas = sdrChartData.reduce((s, x) => s + x.chamadas, 0);
-  const sdrTotalAtendidas = sdrChartData.reduce((s, x) => s + x.atendidas, 0);
-
-  // ── Acionamentos consolidados do mês (Executivos + Closers + CS), excluindo ignorados ──
-  const acionChartData = useMemo(() => {
-    const byPerson = new Map<string, { name: string; group: string; empresas: number; leads: number; total: number }>();
-    for (const dayList of Object.values(geral)) {
-      for (const p of dayList) {
-        if (!p.name || isIgnoredCommercial(p.name)) continue;
-        const g = getTeamGroup(p.name);
-        if (g === "SDRs") continue; // SDRs vão no gráfico de chamadas
-        const fn = firstName(p.name);
-        const cur = byPerson.get(fn) ?? { name: fn, group: g, empresas: 0, leads: 0, total: 0 };
-        cur.empresas += Number(p.empresas ?? 0);
-        cur.leads += Number(p.leads ?? 0);
-        cur.total = cur.empresas + cur.leads;
-        byPerson.set(fn, cur);
-      }
-    }
-    return Array.from(byPerson.values()).sort((a, b) => b.total - a.total);
-  }, [geral]);
-
-  const acionTotal = acionChartData.reduce((s, x) => s + x.total, 0);
-
-  // ── Distribuição por grupo (Pie) ──
-  const groupPie = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of acionChartData) {
-      map.set(a.group, (map.get(a.group) ?? 0) + a.total);
-    }
-    return Array.from(map, ([name, value]) => ({ name, value }));
-  }, [acionChartData]);
-
-  // ── Metas ──
-  const metaMesAjustada = Math.max(0, metaMes - (ajusteMes ?? 0));
-  const metaDiaAjustada = Math.max(0, metaDia - (ajusteDia ?? 0));
-  const faltaMes = Math.max(0, metaMesAjustada - atingidoMes);
-  const faltaDia = Math.max(0, metaDiaAjustada - atingidoDia);
-  const pctMes = metaMesAjustada > 0 ? Math.min(100, (atingidoMes / metaMesAjustada) * 100) : 0;
-  const pctDia = metaDiaAjustada > 0 ? Math.min(100, (atingidoDia / metaDiaAjustada) * 100) : 0;
-
-  const radialMes = [{ name: "Mês", value: pctMes, fill: "hsl(var(--primary))" }];
-  const radialDia = [{ name: "Dia", value: pctDia, fill: "hsl(var(--accent))" }];
 
   const titleClass = cn(
     "font-bold text-foreground",
