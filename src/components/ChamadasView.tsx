@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { getKeyFromSheets } from "@/lib/cloudSync";
 import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
@@ -23,6 +24,39 @@ function pad2(n: number) {
 
 function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
+}
+
+function normalizeStoredCall(c: any): ParsedCall {
+  return {
+    ...c,
+    name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
+    dateTime: new Date(c.dateTime),
+  } as ParsedCall;
+}
+
+function callIdentityKey(call: ParsedCall) {
+  return [
+    collaboratorNameKey(call.name, call.dateISO),
+    call.dateISO,
+    call.timeHHMM,
+    String(call.phone ?? "").replace(/\D/g, ""),
+    String(call.direction ?? "").toLowerCase(),
+    String(call.status ?? "").toLowerCase(),
+    String(call.durationSeconds ?? 0),
+    String(call.contactInfo ?? "").trim().toLowerCase(),
+  ].join("|");
+}
+
+function mergeUniqueCalls(existing: ParsedCall[], incoming: ParsedCall[]) {
+  const seen = new Set<string>();
+  const merged: ParsedCall[] = [];
+  for (const call of [...existing, ...incoming]) {
+    const key = callIdentityKey(call);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(call);
+  }
+  return merged;
 }
 
 type SaveMode = "append" | "replaceDay" | "replaceMonth";
