@@ -15,6 +15,8 @@ export type ExcelImportResult = {
   borderoMonth: number;
   borderoDay: number;
   clientsDay: ExcelImportClient[];
+  /** Borderô líquido do mês agrupado por comercial (chave = nome cru da planilha) */
+  borderoMonthByComercial: Record<string, number>;
   rowsRead: number;
 };
 
@@ -146,6 +148,7 @@ export async function importBorderoFromExcel(file: File, referenceDate = new Dat
   let indevidoDay = 0;
 
   const clientMap = new Map<string, { cliente: string; comercial: string; valor: number }>();
+  const monthByComercial = new Map<string, number>();
 
   for (const row of rows) {
     const d = parseExcelDate(row[dtKey]);
@@ -164,6 +167,13 @@ export async function importBorderoFromExcel(file: File, referenceDate = new Dat
     if (inMonth) {
       grossMonth += v;
       if (indevido) indevidoMonth += v;
+      // Acumula líquido por comercial no mês
+      if (!indevido && comercialKey) {
+        const comercial = String(row[comercialKey] ?? "").trim();
+        if (comercial) {
+          monthByComercial.set(comercial, (monthByComercial.get(comercial) ?? 0) + v);
+        }
+      }
     }
 
     if (inDay) {
@@ -195,6 +205,9 @@ export async function importBorderoFromExcel(file: File, referenceDate = new Dat
     .filter((c) => Number.isFinite(c.valor) && c.valor !== 0)
     .sort((a, b) => b.valor - a.valor);
 
+  const borderoMonthByComercial: Record<string, number> = {};
+  for (const [k, v] of monthByComercial) borderoMonthByComercial[k] = v;
+
   return {
     referenceDate,
     grossMonth,
@@ -204,6 +217,7 @@ export async function importBorderoFromExcel(file: File, referenceDate = new Dat
     borderoMonth,
     borderoDay,
     clientsDay,
+    borderoMonthByComercial,
     rowsRead: rows.length,
   };
 }
