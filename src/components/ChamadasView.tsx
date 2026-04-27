@@ -220,7 +220,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   // Etapa 2: confirma a gravação aplicando o modo escolhido.
   // Nenhuma chamada é descartada por heurística — apenas substituímos períodos
   // explicitamente quando o usuário pede.
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     if (!parsePreview) return;
     const parsed = parsePreview.calls;
 
@@ -245,11 +245,12 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
       const key = `calls:${monthKey}`;
-      const existing = loadJson<any[]>(key, []).map((c: any) => ({
-        ...c,
-        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
-        dateTime: new Date(c.dateTime),
-      })) as ParsedCall[];
+      const localExisting = loadJson<any[]>(key, []).map(normalizeStoredCall);
+      const remoteExisting = ((await getKeyFromSheets<any[]>(key).catch((e) => {
+        console.warn(`[Chamadas] Não foi possível conferir o banco antes de salvar '${key}':`, e);
+        return [];
+      })) ?? []).map(normalizeStoredCall);
+      const existing = mergeUniqueCalls(remoteExisting, localExisting);
 
       let next: ParsedCall[];
       if (saveMode === "replaceMonth") {
@@ -265,8 +266,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
           ...monthCalls,
         ];
       } else {
-        // append: adiciona todas as chamadas sem qualquer dedupe
-        next = [...existing, ...monthCalls];
+        // append: adiciona ao consolidado mais recente sem apagar ninguém.
+        next = mergeUniqueCalls(existing, monthCalls);
       }
 
       const normalized = next.map((c) => ({
