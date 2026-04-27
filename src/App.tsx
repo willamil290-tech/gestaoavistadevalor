@@ -30,6 +30,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isAuthenticated]);
 
+  // Polling: re-sincroniza periodicamente todas as chaves de negócio do Cloud
+  // para que outros usuários vejam as atualizações em tempo quase real.
+  useEffect(() => {
+    if (!isAuthenticated || !bootstrapped) return;
+    const interval = setInterval(() => {
+      pullAllFromSheets().catch((e) => console.warn("[sync] Falha no polling:", e));
+    }, 10_000);
+    const onFocus = () => {
+      pullAllFromSheets().catch(() => undefined);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isAuthenticated, bootstrapped]);
+
   if (isAuthenticated === null) {
     return <div className="min-h-screen bg-background flex items-center justify-center">Carregando...</div>;
   }

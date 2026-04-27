@@ -142,9 +142,21 @@ export async function pullAllFromSheets(opts?: {
     }
     try {
       const serialized = typeof value === "string" ? value : JSON.stringify(value);
-      bootstrapKeys.add(key);
-      localStorage.setItem(key, serialized);
-      restored++;
+      const oldValue = localStorage.getItem(key);
+      if (oldValue !== serialized) {
+        bootstrapKeys.add(key);
+        localStorage.setItem(key, serialized);
+        // Notifica componentes que escutam StorageEvent (mesma aba não recebe nativo).
+        try {
+          window.dispatchEvent(new StorageEvent("storage", {
+            key,
+            oldValue,
+            newValue: serialized,
+            storageArea: localStorage,
+          }));
+        } catch { /* ignora */ }
+        restored++;
+      }
     } catch {
       /* quota — ignora */
     }
@@ -169,8 +181,16 @@ export async function pullKeyFromSheets(key: string): Promise<boolean> {
     const v = (data as { value: unknown }).value;
     if (!hasMeaningfulValue(v)) return false;
     const serialized = typeof v === "string" ? v : JSON.stringify(v);
-    bootstrapKeys.add(key);
-    localStorage.setItem(key, serialized);
+    const oldValue = localStorage.getItem(key);
+    if (oldValue !== serialized) {
+      bootstrapKeys.add(key);
+      localStorage.setItem(key, serialized);
+      try {
+        window.dispatchEvent(new StorageEvent("storage", {
+          key, oldValue, newValue: serialized, storageArea: localStorage,
+        }));
+      } catch { /* ignora */ }
+    }
     return true;
   } catch {
     return false;
