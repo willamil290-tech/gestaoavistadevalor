@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/lib/collaboratorNames";
+import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
