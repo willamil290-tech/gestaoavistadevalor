@@ -259,17 +259,37 @@ export const AcionamentosView = ({
     );
   }, [geralMonthData]);
 
-  // Load monthly data on month change
+  // Load monthly data on month change.
+  // Também busca do Cloud para garantir consistência entre computadores.
   useEffect(() => {
     const key = `acionGeral:${geralYear}-${pad2(geralMonth)}`;
-    const raw = loadJson<GeralMonthData>(key, {});
-    const { cleaned, removed } = sanitizeGeralMonthData(raw);
-    const normalized = normalizeGeralMonthData(cleaned);
-    if (removed > 0) {
-      saveJson(key, normalized);
-      toast.success(`Limpeza: ${removed} entrada(s) corrompida(s) removida(s).`);
-    }
-    setGeralMonthData(normalized);
+    const detKey = `acionDet:${geralYear}-${pad2(geralMonth)}`;
+
+    const readFromLocal = () => {
+      const raw = loadJson<GeralMonthData>(key, {});
+      const { cleaned, removed } = sanitizeGeralMonthData(raw);
+      const normalized = normalizeGeralMonthData(cleaned);
+      if (removed > 0) {
+        saveJson(key, normalized);
+        toast.success(`Limpeza: ${removed} entrada(s) corrompida(s) removida(s).`);
+      }
+      setGeralMonthData(normalized);
+    };
+
+    readFromLocal();
+
+    // Pull explícito do Cloud para o mês visível.
+    Promise.all([
+      pullKeyFromSheets(key).catch((e) => { console.warn("[AcionamentosView] pull acionGeral falhou:", e); return false; }),
+      pullKeyFromSheets(detKey).catch((e) => { console.warn("[AcionamentosView] pull acionDet falhou:", e); return false; }),
+    ]).then(([okGeral]) => { if (okGeral) readFromLocal(); });
+
+    // Reage a updates vindas do polling de cloudSync.
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === key) readFromLocal();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [geralYear, geralMonth]);
 
   // Auto-save geral data to monthly storage — only when the reference date is
