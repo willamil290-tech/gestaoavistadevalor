@@ -134,6 +134,11 @@ const SETTINGS_KEY = "default";
 // Evita que escritas concorrentes (ex: atingido + clientes logo em seguida)
 // percam dados por conta da eventual consistency do Google Sheets.
 let settingsRowCache: Record<string, unknown> | null = null;
+// Timestamp da última escrita local. Enquanto recente, preferimos o cache
+// sobre leituras "frescas" do Sheets (que podem estar atrasadas devido a
+// eventual consistency / cache do Google Sheets API).
+let settingsCacheUntil = 0;
+const CACHE_PRIORITY_MS = 30_000;
 
 // ---------- Bootstrap ----------
 // Garante que as abas/headers da planilha existam. Roda uma vez por sessão.
@@ -192,12 +197,16 @@ async function fetchSettingsRow(): Promise<Record<string, string> | undefined> {
   await ensureInit();
   const rows = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
   const row = rows[0];
-  if (row) {
-    // Sempre que a leitura "fresca" tem mais informação que o cache, atualiza o cache.
-    // Se o cache tem campos mais novos (escrita recente ainda não propagada no Sheets),
-    // mantemos os valores do cache para esses campos.
-    settingsRowCache = { ...row, ...(settingsRowCache ?? {}) };
+  if (!row) return row;
+  // Se ainda estamos na janela de prioridade do cache (escrita local recente),
+  // mesclamos com o cache vencendo nos campos cacheados.
+  if (settingsRowCache && Date.now() < settingsCacheUntil) {
+    const merged = { ...row, ...settingsRowCache };
+    settingsRowCache = merged;
+    return merged as Record<string, string>;
   }
+  // Janela expirou — leitura fresca passa a ser a verdade.
+  settingsRowCache = { ...row };
   return row;
 }
 
@@ -223,6 +232,7 @@ async function ensureSettingsRow(): Promise<Record<string, string>> {
   };
   await sheetsUpsert("dashboard_settings", [seed], "key");
   settingsRowCache = { ...seed };
+  settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
   return (await fetchSettingsRow()) ?? (settingsRowCache as Record<string, string>);
 }
 
@@ -246,6 +256,7 @@ export async function updateDashboardSettings(patch: Partial<DashboardSettings>)
   // Atualiza cache imediatamente — próxima escrita não vai regredir esses campos
   // mesmo que o Sheets ainda não tenha propagado a leitura.
   settingsRowCache = { ...merged };
+  settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
 }
 
 export async function getDashboardExtras(): Promise<DashboardExtras> {
@@ -267,6 +278,7 @@ export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
   merged.updated_at = new Date().toISOString();
   await sheetsUpsert("dashboard_settings", [merged], "key");
   settingsRowCache = { ...merged };
+  settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
 }
 
 // ---------- team_members ----------
