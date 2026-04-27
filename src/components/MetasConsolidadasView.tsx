@@ -383,7 +383,9 @@ export function MetasConsolidadasView({
 
           <div className={cn("space-y-3", tvMode && "space-y-4")}>
             {colabGoals.map((g) => {
-              const pct = g.meta > 0 ? (g.atingido / g.meta) * 100 : 0;
+              // BRL: vem da planilha (coluna Comercial). RR: manual.
+              const atingidoEffective = g.unit === "BRL" ? atingidoBRLForFirstName(g.name) : g.atingido;
+              const pct = g.meta > 0 ? (atingidoEffective / g.meta) * 100 : 0;
               const visualPct = Math.min(pct, 130); // cap visual em 130%
               const widthPct = (visualPct / 130) * 100;
               const color = colorForPct(pct);
@@ -395,6 +397,8 @@ export function MetasConsolidadasView({
                 setEditing({ name: g.name, field });
                 setTempVal(String(field === "meta" ? g.meta : g.atingido));
               };
+              // RR é manualmente editável; BRL não (vem da planilha).
+              const canEditAtingido = g.unit === "RR";
               const commit = () => {
                 if (!editing) return;
                 const num = Number(String(tempVal).replace(/\./g, "").replace(",", "."));
@@ -429,7 +433,7 @@ export function MetasConsolidadasView({
                     </div>
                     <div className="flex items-center gap-2 text-right shrink-0">
                       {/* Atingido (editável) */}
-                      {isEditingAt ? (
+                      {isEditingAt && canEditAtingido ? (
                         <div className="flex items-center gap-1">
                           <Input
                             autoFocus
@@ -444,15 +448,16 @@ export function MetasConsolidadasView({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => startEdit("atingido")}
+                          onClick={() => { if (canEditAtingido) startEdit("atingido"); }}
                           className={cn(
                             "font-extrabold tabular-nums hover:underline cursor-pointer",
-                            tvMode ? "text-2xl" : "text-base"
+                            tvMode ? "text-2xl" : "text-base",
+                            !canEditAtingido && "cursor-default hover:no-underline"
                           )}
                           style={{ color }}
-                          title="Clique para editar atingido"
+                          title={canEditAtingido ? "Clique para editar atingido" : "Atualizado pela planilha (coluna Comercial)"}
                         >
-                          {fmtValueByUnit(g.atingido, g.unit)}
+                          {fmtValueByUnit(atingidoEffective, g.unit)}
                         </button>
                       )}
                       <span className={cn("text-muted-foreground", tvMode ? "text-lg" : "text-xs")}>/</span>
