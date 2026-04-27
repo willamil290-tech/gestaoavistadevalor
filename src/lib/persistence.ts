@@ -175,6 +175,14 @@ function rowToExtras(row: Record<string, string> | undefined): DashboardExtras {
   };
 }
 
+function hasMeaningfulPatchValue(value: unknown): boolean {
+  if (value == null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
+
 async function fetchSettingsRow(): Promise<Record<string, string> | undefined> {
   await ensureInit();
   const rows = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
@@ -233,13 +241,13 @@ export async function getDashboardExtras(): Promise<DashboardExtras> {
 export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
   const row = await ensureSettingsRow();
   const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
-  if (patch.commercials) merged.commercials = patch.commercials;
-  if (patch.faixas) merged.faixas = patch.faixas;
-  if (patch.clientes) merged.clientes = patch.clientes;
-  if (patch.acionamentoDetalhado) merged.acionamento_detalhado = patch.acionamentoDetalhado;
-  if (patch.agendadasMes) merged.agendadas_mes = patch.agendadasMes;
-  if (patch.agendadasDia) merged.agendadas_dia = patch.agendadasDia;
-  if (patch.trendData !== undefined) merged.trend_data = patch.trendData;
+  if (hasMeaningfulPatchValue(patch.commercials)) merged.commercials = patch.commercials;
+  if (hasMeaningfulPatchValue(patch.faixas)) merged.faixas = patch.faixas;
+  if (hasMeaningfulPatchValue(patch.clientes)) merged.clientes = patch.clientes;
+  if (hasMeaningfulPatchValue(patch.acionamentoDetalhado)) merged.acionamento_detalhado = patch.acionamentoDetalhado;
+  if (hasMeaningfulPatchValue(patch.agendadasMes)) merged.agendadas_mes = patch.agendadasMes;
+  if (hasMeaningfulPatchValue(patch.agendadasDia)) merged.agendadas_dia = patch.agendadasDia;
+  if (hasMeaningfulPatchValue(patch.trendData)) merged.trend_data = patch.trendData;
   merged.updated_at = new Date().toISOString();
   await sheetsUpsert("dashboard_settings", [merged], "key");
 }

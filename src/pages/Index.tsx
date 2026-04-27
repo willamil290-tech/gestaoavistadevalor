@@ -234,8 +234,9 @@ const Index = () => {
 
   // Persist tendência por hora (localStorage)
   useEffect(() => {
+    if (tvMode && trendData.length === 0) return;
     saveJson(trendStorageKey, trendData);
-  }, [trendData, trendStorageKey]);
+  }, [trendData, trendStorageKey, tvMode]);
 
   // Hydrate extras once (avoid overwriting local edits on every poll)
   useEffect(() => {
@@ -302,6 +303,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!isSupabaseConfigured || !extrasHydrated || !legacyRecoveryDone) return;
+    if (tvMode && trendData.length === 0) return;
     const t = setTimeout(async () => {
       try {
         await remoteExtras.updateAsync({ trendData: trendData as any });
@@ -315,7 +317,7 @@ const Index = () => {
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [trendData, extrasHydrated, legacyRecoveryDone]);
+  }, [trendData, extrasHydrated, legacyRecoveryDone, tvMode]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !remoteSettings.data) return;

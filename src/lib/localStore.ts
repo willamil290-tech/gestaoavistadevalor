@@ -1,5 +1,5 @@
 // Fallback em memória quando localStorage falhar
-import { pushKeyToSheets, wasJustBootstrapped } from "@/lib/sheetsSync";
+import { deleteKeyFromSheetsNow, pushKeyToSheets, wasJustBootstrapped } from "@/lib/sheetsSync";
 
 const memoryStore = new Map<string, string>();
 let localStorageAvailable = true;
@@ -66,7 +66,9 @@ export function removeKey(key: string): void {
       localStorage.removeItem(key);
     }
     memoryStore.delete(key);
-    pushKeyToSheets(key); // valor vazio dispara delete no Sheets
+    deleteKeyFromSheetsNow(key).catch((e) => {
+      console.warn(`[LocalStore] Falha ao remover '${key}' do Cloud:`, e);
+    });
   } catch (e) {
     console.error(`[LocalStore] Erro ao remover '${key}':`, e);
   }

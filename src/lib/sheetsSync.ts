@@ -5,6 +5,7 @@ export {
   wasJustBootstrapped,
   pushKeyToSheets,
   pushKeyToSheetsNow,
+  deleteKeyFromSheetsNow,
   pullAllFromSheets,
   pullKeyFromSheets,
   flushPendingPushes,

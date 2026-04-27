@@ -281,6 +281,7 @@ export const AcionamentoDetalhadoView = ({
   }, [detYear, detMonth]);
 
   useEffect(() => {
+    if (tvMode || readOnly) return;
     if (sortedColaboradores.length === 0) return;
     const hasNonZero = sortedColaboradores.some(c => c.total > 0);
     if (!hasNonZero) return;
@@ -296,7 +297,7 @@ export const AcionamentoDetalhadoView = ({
     if (parseInt(y) === detYear && parseInt(m) === detMonth) {
       setDetMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
     }
-  }, [sortedColaboradores, effectiveSaveDate]);
+  }, [sortedColaboradores, effectiveSaveDate, tvMode, readOnly]);
 
   const prevDetMonth = () => {
     if (detMonth === 1) { setDetMonth(12); setDetYear(y => y - 1); }
