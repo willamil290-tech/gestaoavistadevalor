@@ -8,11 +8,15 @@ const IGNORED_FULL = new Set([
   "william",
   "rodrigo mariani",
   "rodrigo mariani ferreira",
+  "daniele",
+  "daniele marketing",
+  "marketing",
+  "raissa",
 ]);
 
 // Em alguns pontos do app o nome pode virar apenas o primeiro nome.
 // Para manter o comportamento consistente, ignoramos tambem pelo primeiro token.
-const IGNORED_FIRST = new Set(["caio", "rafael", "willami", "william", "rodrigo"]);
+const IGNORED_FIRST = new Set(["caio", "rafael", "willami", "william", "rodrigo", "daniele", "marketing", "raissa"]);
 
 function stripDiacritics(input: string) {
   return (input ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
