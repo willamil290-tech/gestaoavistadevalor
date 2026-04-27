@@ -675,7 +675,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setParsePreview(null)}>Voltar</Button>
                 <Button variant="ghost" onClick={() => { setShowPaste(false); setPasteText(""); setParsePreview(null); }}>Cancelar</Button>
-                <Button onClick={handleConfirmSave}>Confirmar gravação</Button>
+                <Button onClick={() => void handleConfirmSave()}>Confirmar gravação</Button>
               </div>
             </div>
           )}
