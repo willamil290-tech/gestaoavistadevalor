@@ -1,11 +1,11 @@
 // Sincronização entre localStorage e Lovable Cloud (tabela public.app_data).
-// Substitui o uso do Google Sheets como fonte da verdade.
+// Lovable Cloud é a única fonte remota da verdade.
 //
-// API equivalente ao antigo sheetsSync para minimizar mudanças nos consumidores:
-// - pushKeyToSheets(key)        -> debounced push
-// - pushKeyToSheetsNow(key)     -> push imediato
-// - pullAllFromSheets()         -> baixa todas as chaves de negócio
-// - pullKeyFromSheets(key)      -> baixa uma chave específica
+// API mantém nomes legados para minimizar mudanças nos consumidores:
+// - pushKeyToSheets(key)        -> debounced push para Cloud
+// - pushKeyToSheetsNow(key)     -> push imediato para Cloud
+// - pullAllFromSheets()         -> baixa todas as chaves de negócio da Cloud
+// - pullKeyFromSheets(key)      -> baixa uma chave específica da Cloud
 // - flushPendingPushes()        -> aguarda debounces pendentes
 // - wasJustBootstrapped(key)    -> evita ping-pong logo após restore
 // - isBusinessKey(key)          -> filtra chaves que vão pro cloud
@@ -21,6 +21,8 @@ const BUSINESS_PATTERNS: RegExp[] = [
   /^dashSettings/,
   /^teamMembers/,
   /^dashExtras/,
+  /^borderoComercial:/,
+  /^metasColab:/,
 ];
 
 export function isBusinessKey(key: string): boolean {
