@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { canonicalizeCollaboratorNameForDate, isMariaCollaboratorName } from "@/lib/collaboratorNames";
+import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
 import {
@@ -200,6 +200,12 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
 
     // Conjunto de dias importados (para o modo replaceDay).
     const importedDays = new Set(parsed.map((c) => c.dateISO));
+    // Conjunto de combinações pessoa+dia importadas (para replaceDay seguro:
+    // só apaga as chamadas das pessoas que estão sendo reimportadas, preservando
+    // os demais colaboradores do mesmo dia).
+    const importedPersonDays = new Set(
+      parsed.map((c) => `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`)
+    );
 
     let totalSaved = 0;
     for (const [monthKey, monthCalls] of byMonth) {
@@ -215,8 +221,13 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       if (saveMode === "replaceMonth") {
         next = [...monthCalls];
       } else if (saveMode === "replaceDay") {
+        // Preserva chamadas de outras pessoas no mesmo dia. Só remove as
+        // chamadas cuja combinação (pessoa, dia) está no relatório importado.
         next = [
-          ...existing.filter((c) => !importedDays.has(c.dateISO)),
+          ...existing.filter((c) => {
+            const k = `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`;
+            return !importedPersonDays.has(k);
+          }),
           ...monthCalls,
         ];
       } else {
