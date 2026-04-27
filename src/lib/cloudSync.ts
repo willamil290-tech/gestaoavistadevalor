@@ -40,13 +40,16 @@ export function hasMeaningfulValue(value: unknown): boolean {
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 const DEBOUNCE_MS = 800;
 
-const bootstrapKeys = new Set<string>();
-export function wasJustBootstrapped(key: string): boolean {
-  if (bootstrapKeys.has(key)) {
-    bootstrapKeys.delete(key);
-    return true;
-  }
-  return false;
+const bootstrapKeys = new Map<string, string>();
+export function wasJustBootstrapped(key: string, nextSerializedValue?: string): boolean {
+  if (!bootstrapKeys.has(key)) return false;
+
+  const bootstrappedValue = bootstrapKeys.get(key);
+  bootstrapKeys.delete(key);
+
+  // Só bloqueia o push automático quando o save é apenas a regravação do valor
+  // recém-baixado da nuvem. Se o usuário editou a meta/RR, o valor muda e deve subir.
+  return nextSerializedValue === undefined || bootstrappedValue === nextSerializedValue;
 }
 
 function readLocal(key: string): string {
@@ -144,7 +147,7 @@ export async function pullAllFromSheets(opts?: {
       const serialized = typeof value === "string" ? value : JSON.stringify(value);
       const oldValue = localStorage.getItem(key);
       if (oldValue !== serialized) {
-        bootstrapKeys.add(key);
+        bootstrapKeys.set(key, serialized);
         localStorage.setItem(key, serialized);
         // Notifica componentes que escutam StorageEvent (mesma aba não recebe nativo).
         try {
@@ -183,7 +186,7 @@ export async function pullKeyFromSheets(key: string): Promise<boolean> {
     const serialized = typeof v === "string" ? v : JSON.stringify(v);
     const oldValue = localStorage.getItem(key);
     if (oldValue !== serialized) {
-      bootstrapKeys.add(key);
+      bootstrapKeys.set(key, serialized);
       localStorage.setItem(key, serialized);
       try {
         window.dispatchEvent(new StorageEvent("storage", {

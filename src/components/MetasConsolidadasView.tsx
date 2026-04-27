@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Target, Trophy, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { loadJson, saveJson } from "@/lib/localStore";
+import { getKeyFromSheets } from "@/lib/sheetsSync";
 import { getBusinessDate } from "@/lib/businessDate";
 import { CircularProgress } from "./CircularProgress";
 import { Input } from "@/components/ui/input";
@@ -121,6 +122,11 @@ export function MetasConsolidadasView({
   );
   useEffect(() => {
     setColabGoals(mergeWithDefaults(loadJson<ColabGoal[]>(colabKey, DEFAULT_COLAB_GOALS)));
+    getKeyFromSheets<ColabGoal[]>(colabKey)
+      .then((remote) => {
+        if (Array.isArray(remote)) setColabGoals(mergeWithDefaults(remote));
+      })
+      .catch(() => undefined);
     const onStorage = (e: StorageEvent) => {
       if (e.key === colabKey) setColabGoals(mergeWithDefaults(loadJson<ColabGoal[]>(colabKey, DEFAULT_COLAB_GOALS)));
     };
