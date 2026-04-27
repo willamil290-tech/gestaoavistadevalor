@@ -1,27 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Target, TrendingUp, PhoneCall, Activity, Trophy, Pencil, Check, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Target, Trophy, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { loadJson, saveJson } from "@/lib/localStore";
 import { getBusinessDate } from "@/lib/businessDate";
-import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
-import { getTeamGroup } from "@/lib/teamGroups";
-import type { ParsedCall } from "@/lib/callsParse";
 import { CircularProgress } from "./CircularProgress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
