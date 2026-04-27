@@ -512,6 +512,14 @@ const Index = () => {
     }));
     setClientes(newClientes);
 
+    // Persiste o borderô do mês agrupado por comercial para a aba Metas Consolidadas.
+    try {
+      const ref = result.referenceDate ?? new Date();
+      const y = ref.getFullYear();
+      const m = String(ref.getMonth() + 1).padStart(2, "0");
+      saveJson(`borderoComercial:${y}-${m}`, result.borderoMonthByComercial ?? {});
+    } catch {}
+
     if (isSupabaseConfigured) {
       try {
         await remoteSettings.updateAsync({ atingidoMes: result.borderoMonth, atingidoDia: result.borderoDay });
