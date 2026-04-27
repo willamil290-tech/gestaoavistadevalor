@@ -45,8 +45,8 @@ export function saveJson(key: string, value: unknown): void {
     if (checkLocalStorage()) {
       try {
         localStorage.setItem(key, serialized);
-        // Auto-mirror para Google Sheets (debounced, só chaves de negócio).
-        if (!wasJustBootstrapped(key)) pushKeyToSheets(key);
+        // Auto-mirror para Lovable Cloud (debounced, só chaves de negócio).
+        if (!wasJustBootstrapped(key, serialized)) pushKeyToSheets(key);
         return;
       } catch (e) {
         console.warn("[LocalStore] Erro ao salvar no localStorage, usando memória como fallback:", e);
@@ -54,7 +54,7 @@ export function saveJson(key: string, value: unknown): void {
     }
 
     memoryStore.set(key, serialized);
-    if (!wasJustBootstrapped(key)) pushKeyToSheets(key);
+    if (!wasJustBootstrapped(key, serialized)) pushKeyToSheets(key);
   } catch (e) {
     console.error(`[LocalStore] Erro ao serializar '${key}':`, e);
   }
