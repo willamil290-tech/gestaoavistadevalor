@@ -27,7 +27,7 @@ export function isBusinessKey(key: string): boolean {
   return BUSINESS_PATTERNS.some((re) => re.test(key));
 }
 
-function hasMeaningfulValue(value: unknown): boolean {
+export function hasMeaningfulValue(value: unknown): boolean {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
   if (Array.isArray(value)) return value.length > 0;
@@ -51,20 +51,48 @@ function readLocal(key: string): string {
   try { return localStorage.getItem(key) ?? ""; } catch { return ""; }
 }
 
+async function remoteHasMeaningfulValue(key: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("app_data")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (error || !data) return false;
+  return hasMeaningfulValue((data as { value: unknown }).value);
+}
+
 /** Push imediato de uma chave para o Cloud. */
-export async function pushKeyToSheetsNow(key: string): Promise<void> {
+export async function pushKeyToSheetsNow(key: string, opts?: { allowEmptyOverwrite?: boolean; allowDelete?: boolean }): Promise<void> {
   if (!isBusinessKey(key)) return;
   const raw = readLocal(key);
   if (raw.length === 0) {
+    if (!opts?.allowDelete && await remoteHasMeaningfulValue(key)) {
+      console.warn(`[cloudSync] Bloqueado delete vazio de '${key}' para preservar dados existentes.`);
+      return;
+    }
+    if (!opts?.allowDelete) return;
     const { error } = await supabase.from("app_data").delete().eq("key", key);
     if (error) throw error;
     return;
   }
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+  if (!opts?.allowEmptyOverwrite && !hasMeaningfulValue(parsed)) {
+    if (await remoteHasMeaningfulValue(key)) {
+      console.warn(`[cloudSync] Bloqueado overwrite vazio de '${key}' para preservar dados existentes.`);
+    }
+    return;
+  }
   const { error } = await supabase
     .from("app_data")
     .upsert({ key, value: parsed as never }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+/** Delete explícito: usado apenas quando o usuário realmente remove/resetta uma chave. */
+export async function deleteKeyFromSheetsNow(key: string): Promise<void> {
+  if (!isBusinessKey(key)) return;
+  const { error } = await supabase.from("app_data").delete().eq("key", key);
   if (error) throw error;
 }
 
