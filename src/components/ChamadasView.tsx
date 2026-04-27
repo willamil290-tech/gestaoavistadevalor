@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { getKeyFromSheets } from "@/lib/cloudSync";
+import { getKeyFromSheets, pullKeyFromSheets } from "@/lib/cloudSync";
 import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
@@ -158,16 +158,37 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     relativeDateUsed: boolean;
   } | null>(null);
 
-  // Load from localStorage on mount / month change
+  // Load from localStorage on mount / month change.
+  // Também busca do Cloud (Lovable Cloud) para garantir que outros computadores
+  // enxerguem os dados importados em qualquer máquina.
   useEffect(() => {
     const key = storageKey(selectedYear, selectedMonth);
-    const raw = loadJson<any[]>(key, []);
-    const calls: ParsedCall[] = raw.map((c: any) => ({
-      ...c,
-      name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
-      dateTime: new Date(c.dateTime),
-    }));
-    setStoredCalls(calls);
+
+    const readFromLocal = () => {
+      const raw = loadJson<any[]>(key, []);
+      const calls: ParsedCall[] = raw.map((c: any) => ({
+        ...c,
+        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
+        dateTime: new Date(c.dateTime),
+      }));
+      setStoredCalls(calls);
+    };
+
+    readFromLocal();
+
+    // Pull explícito do Cloud para o mês visível (sobrescreve local se houver
+    // versão mais recente no servidor).
+    pullKeyFromSheets(key)
+      .then((ok) => { if (ok) readFromLocal(); })
+      .catch((e) => console.warn("[ChamadasView] pullKeyFromSheets falhou:", e));
+
+    // Escuta atualizações vindas do polling de cloudSync (StorageEvent é
+    // disparado quando o pull baixa uma versão diferente da local).
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === key) readFromLocal();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [selectedYear, selectedMonth]);
 
   const saveToStorage = useCallback(
