@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Phone, PhoneCall, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, LineChart as LineChartIcon, Settings2, Cog } from "lucide-react";
+import { LayoutDashboard, Phone, PhoneCall, FileText, BarChart3, Play, Pause, Tv2, RotateCcw, List, TrendingUp, LineChart as LineChartIcon, Settings2, Cog, Target } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { DashboardView } from "@/components/DashboardView";
 import { AcionamentosView } from "@/components/AcionamentosView";
@@ -15,6 +15,7 @@ import { BitrixLogsAnalyzerView } from "@/components/BitrixLogsAnalyzerView";
 import { ChamadasView } from "@/components/ChamadasView";
 import { ExcelBorderoImporter } from "@/components/ExcelBorderoImporter";
 import { ConfiguracoesView } from "@/components/ConfiguracoesView";
+import { MetasConsolidadasView } from "@/components/MetasConsolidadasView";
 import { Commercial } from "@/components/CommercialProgressView";
 import { cn } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -50,11 +51,11 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "tendencia-chamadas" | "bordero-diario" | "bitrix" | "chamadas" | "configuracoes";
+type TabType = "dashboard" | "acionamentos" | "acionamento-detalhado" | "tendencia" | "tendencia-chamadas" | "bordero-diario" | "bitrix" | "chamadas" | "metas-consolidadas" | "configuracoes";
 
 const TV_TABS_STORAGE_KEY = "tvTabs";
-const DEFAULT_TV_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
-const DEFAULT_ROTATE_TABS: TabType[] = ["dashboard", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+const DEFAULT_TV_TABS: TabType[] = ["dashboard", "metas-consolidadas", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
+const DEFAULT_ROTATE_TABS: TabType[] = ["dashboard", "metas-consolidadas", "acionamentos", "acionamento-detalhado", "tendencia", "bordero-diario"];
 
 const pollInterval = Number(import.meta.env.VITE_SYNC_POLL_INTERVAL ?? 5000);
 
@@ -795,6 +796,7 @@ const Index = () => {
     { id: "tendencia-chamadas" as const, label: "Tend. Chamadas", icon: LineChartIcon, color: "bg-blue-500" },
     { id: "bitrix" as const, label: "Bitrix", icon: BarChart3, color: "bg-primary" },
     { id: "bordero-diario" as const, label: "Borderô", icon: FileText, color: "bg-primary" },
+    { id: "metas-consolidadas" as const, label: "Metas Consolidadas", icon: Target, color: "bg-accent" },
     { id: "configuracoes" as const, label: "Configurações", icon: Cog, color: "bg-muted-foreground" },
   ];
 
@@ -960,6 +962,17 @@ const Index = () => {
           )}
           {activeTab === "configuracoes" && (
             <ConfiguracoesView />
+          )}
+          {activeTab === "metas-consolidadas" && (
+            <MetasConsolidadasView
+              tvMode={tvMode}
+              metaMes={metaMes}
+              metaDia={metaDia}
+              ajusteMes={ajusteMes}
+              ajusteDia={ajusteDia}
+              atingidoMes={atingidoMes}
+              atingidoDia={atingidoDia}
+            />
           )}
         </div>
 
