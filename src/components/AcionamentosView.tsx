@@ -276,6 +276,7 @@ export const AcionamentosView = ({
   // today's business date so that viewing historical dates never overwrites past data
   // with the current live values.
   useEffect(() => {
+    if (tvMode) return;
     if (geralData.length === 0) return;
     if (effectiveSaveDate !== businessDate) return; // ← guard: historical dates are read-only for auto-save
     const hasNonZero = geralData.some(g => g.total > 0);
@@ -288,7 +289,7 @@ export const AcionamentosView = ({
     if (parseInt(y) === geralYear && parseInt(m) === geralMonth) {
       setGeralMonthData(prev => ({ ...prev, [effectiveSaveDate]: stored[effectiveSaveDate] }));
     }
-  }, [geralData, effectiveSaveDate, businessDate]);
+  }, [geralData, effectiveSaveDate, businessDate, tvMode]);
 
   const prevGeralMonth = () => {
     if (geralMonth === 1) { setGeralMonth(12); setGeralYear(y => y - 1); }
