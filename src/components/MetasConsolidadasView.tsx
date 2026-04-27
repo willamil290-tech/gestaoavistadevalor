@@ -92,18 +92,26 @@ function fmtValueByUnit(v: number, unit: ColabUnit): string {
   return `${v.toLocaleString("pt-BR")} RR`;
 }
 
+function firstName(name: string) {
+  return (name ?? "").trim().split(/\s+/)[0] ?? name;
+}
 
 export function MetasConsolidadasView({
   tvMode,
   metaMes,
   metaDia,
   ajusteMes = 0,
-  ajusteDia = 0,
+  ajusteDia: _ajusteDia = 0,
   atingidoMes,
-  atingidoDia,
+  atingidoDia: _atingidoDia,
 }: Props) {
   const today = getBusinessDate();
-  const [y, m, d] = today.split("-").map(Number);
+  const [y, m] = today.split("-").map(Number);
+
+  // ── Metas (mês) ──
+  const metaMesAjustada = Math.max(0, metaMes - (ajusteMes ?? 0));
+  const faltaMes = Math.max(0, metaMesAjustada - atingidoMes);
+  const pctMes = metaMesAjustada > 0 ? Math.min(100, (atingidoMes / metaMesAjustada) * 100) : 0;
 
 
   // ── Metas por colaborador (persistidas por mês) ──
