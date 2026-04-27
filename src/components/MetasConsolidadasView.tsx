@@ -216,6 +216,39 @@ export function MetasConsolidadasView({
   const [editing, setEditing] = useState<{ name: string; field: "meta" | "atingido" } | null>(null);
   const [tempVal, setTempVal] = useState<string>("");
 
+  // ── Borderô do mês por comercial (vindo do Excel importado) ──
+  const borderoComercialKey = `borderoComercial:${y}-${pad2(m)}`;
+  const [borderoByComercial, setBorderoByComercial] = useState<Record<string, number>>(() =>
+    loadJson<Record<string, number>>(borderoComercialKey, {})
+  );
+  useEffect(() => {
+    setBorderoByComercial(loadJson<Record<string, number>>(borderoComercialKey, {}));
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === borderoComercialKey) {
+        setBorderoByComercial(loadJson<Record<string, number>>(borderoComercialKey, {}));
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    const interval = setInterval(() => {
+      setBorderoByComercial(loadJson<Record<string, number>>(borderoComercialKey, {}));
+    }, 15_000);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      clearInterval(interval);
+    };
+  }, [borderoComercialKey]);
+
+  // Soma valores do mapa "Comercial -> valor" cujo primeiro nome bate com `targetFirstName`.
+  const atingidoBRLForFirstName = (targetFirstName: string): number => {
+    const target = targetFirstName.trim().toLowerCase();
+    let sum = 0;
+    for (const [name, value] of Object.entries(borderoByComercial)) {
+      const fn = firstName(name).toLowerCase();
+      if (fn === target) sum += Number(value) || 0;
+    }
+    return sum;
+  };
+
   // ── SDRs: chamadas consolidadas do mês (filtradas) ──
   const sdrChartData = useMemo(() => {
     const byPerson = new Map<string, { name: string; chamadas: number; atendidas: number }>();
