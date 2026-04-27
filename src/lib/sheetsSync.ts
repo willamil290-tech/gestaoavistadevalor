@@ -8,5 +8,6 @@ export {
   deleteKeyFromSheetsNow,
   pullAllFromSheets,
   pullKeyFromSheets,
+  getKeyFromSheets,
   flushPendingPushes,
 } from "@/lib/cloudSync";
