@@ -1,21 +1,9 @@
-// Persistência baseada em Google Sheets via Edge Function `sheets-sync`.
-// O Lovable Cloud (Supabase) é usado APENAS como proxy seguro — nenhum dado
-// de negócio é salvo em tabelas Postgres. Cada "tabela" lógica abaixo
-// (dashboard_settings, team_members, daily_events) corresponde a uma aba na
-// planilha do Google.
-//
-// API pública mantém os mesmos nomes/assinaturas usados nos hooks e componentes.
+// Persistência baseada no banco de dados do Lovable Cloud (tabela public.app_data).
+// A API pública mantém os mesmos nomes/assinaturas usados nos hooks e componentes.
 
 import { canonicalizeActiveCollaboratorName } from "@/lib/collaboratorNames";
-import {
-  jsonField,
-  num,
-  sheetsAppend,
-  sheetsDelete,
-  sheetsInit,
-  sheetsSelect,
-  sheetsUpsert,
-} from "@/lib/sheetsClient";
+import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 // ---------- Tipos ----------
 
@@ -128,18 +116,14 @@ export const DEFAULT_LEADS: TeamMember[] = [
   { id: "l4", category: "leads", name: "Alana Silveira", morning: 16, afternoon: 0 },
 ];
 
-const SETTINGS_KEY = "default";
-
-// Cache em memória do row de settings.
-// Evita que escritas concorrentes (ex: atingido + clientes logo em seguida)
-// percam dados por conta da eventual consistency do Google Sheets.
-let settingsRowCache: Record<string, unknown> | null = null;
-// Timestamp da última escrita local. Enquanto recente, preferimos o cache
-// sobre leituras "frescas" do Sheets (que podem estar atrasadas devido a
-// eventual consistency / cache do Google Sheets API).
-let settingsCacheUntil = 0;
+const SETTINGS_DATA_KEY = "dashboard_settings:default";
 const CACHE_PRIORITY_MS = 30_000;
+
+let settingsRowCache: Record<string, unknown> | null = null;
+let settingsCacheUntil = 0;
 let settingsWriteQueue: Promise<void> = Promise.resolve();
+const teamWriteQueues = new Map<TeamCategory, Promise<void>>();
+const dailyEventQueues = new Map<string, Promise<void>>();
 
 function enqueueSettingsWrite<T>(work: () => Promise<T>): Promise<T> {
   const run = settingsWriteQueue.then(work, work);
@@ -147,81 +131,113 @@ function enqueueSettingsWrite<T>(work: () => Promise<T>): Promise<T> {
   return run;
 }
 
-// ---------- Bootstrap ----------
-// Garante que as abas/headers da planilha existam. Roda uma vez por sessão.
+function enqueueByKey<T>(queues: Map<string, Promise<void>>, key: string, work: () => Promise<T>): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve();
+  const run = previous.then(work, work);
+  queues.set(key, run.then(() => undefined, () => undefined));
+  return run;
+}
 
-let initPromise: Promise<void> | null = null;
-function ensureInit(): Promise<void> {
-  if (!initPromise) {
-    initPromise = sheetsInit().catch((e) => {
-      initPromise = null;
-      throw e;
-    });
+function num(v: unknown, fallback = 0): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : fallback;
   }
-  return initPromise;
+  return fallback;
+}
+
+function jsonField<T>(v: unknown, fallback: T): T {
+  if (Array.isArray(v) || (v && typeof v === "object")) return v as T;
+  if (typeof v !== "string" || v.length === 0) return fallback;
+  try { return JSON.parse(v) as T; } catch { return fallback; }
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+async function getAppValue<T = unknown>(key: string): Promise<T | null> {
+  const { data, error } = await supabase
+    .from("app_data")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? (data.value as T) : null;
+}
+
+async function upsertAppValue(key: string, value: unknown): Promise<void> {
+  const { error } = await supabase
+    .from("app_data")
+    .upsert({ key, value: value as Json, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+async function deleteAppValue(key: string): Promise<void> {
+  const { error } = await supabase.from("app_data").delete().eq("key", key);
+  if (error) throw error;
+}
+
+function teamMembersKey(category: TeamCategory) {
+  return `team_members:${category}`;
+}
+
+function dailyEventsKey(businessDate: string) {
+  return `daily_events:${businessDate}`;
 }
 
 // Sempre habilitado neste modo — mantemos os flags por compat.
 export const isDailyEventsEnabled = () => true;
 export const isDashboardExtrasEnabled = () => true;
 
-// ---------- dashboard_settings (linha única, key='default') ----------
+// ---------- dashboard_settings (registro único em app_data) ----------
 
-function rowToSettings(row: Record<string, string> | undefined): DashboardSettings {
+function rowToSettings(row: Record<string, unknown> | undefined): DashboardSettings {
   if (!row) return DEFAULT_SETTINGS;
   return {
-    metaMes: num(row.meta_mes, DEFAULT_SETTINGS.metaMes),
-    ajusteMes: num(row.ajuste_mes, 0),
-    metaDia: num(row.meta_dia, DEFAULT_SETTINGS.metaDia),
-    ajusteDia: num(row.ajuste_dia, 0),
-    atingidoMes: num(row.atingido_mes, 0),
-    atingidoDia: num(row.atingido_dia, 0),
+    metaMes: num(row.meta_mes ?? row.metaMes, DEFAULT_SETTINGS.metaMes),
+    ajusteMes: num(row.ajuste_mes ?? row.ajusteMes, 0),
+    metaDia: num(row.meta_dia ?? row.metaDia, DEFAULT_SETTINGS.metaDia),
+    ajusteDia: num(row.ajuste_dia ?? row.ajusteDia, 0),
+    atingidoMes: num(row.atingido_mes ?? row.atingidoMes, DEFAULT_SETTINGS.atingidoMes),
+    atingidoDia: num(row.atingido_dia ?? row.atingidoDia, DEFAULT_SETTINGS.atingidoDia),
   };
 }
 
-function rowToExtras(row: Record<string, string> | undefined): DashboardExtras {
+function rowToExtras(row: Record<string, unknown> | undefined): DashboardExtras {
   if (!row) return DEFAULT_EXTRAS;
   return {
     commercials: jsonField<CommercialProgress[]>(row.commercials, []),
     faixas: jsonField<FaixaVencimentoRow[]>(row.faixas, []),
     clientes: jsonField<ClienteBorderoRow[]>(row.clientes, []),
-    acionamentoDetalhado: jsonField<ColaboradorAcionamentoRow[]>(row.acionamento_detalhado, []),
-    agendadasMes: jsonField<AgendadaRealizadaRow[]>(row.agendadas_mes, []),
-    agendadasDia: jsonField<AgendadaRealizadaRow[]>(row.agendadas_dia, []),
-    trendData: jsonField<HourlyTrendRow[]>(row.trend_data, []),
+    acionamentoDetalhado: jsonField<ColaboradorAcionamentoRow[]>(row.acionamento_detalhado ?? row.acionamentoDetalhado, []),
+    agendadasMes: jsonField<AgendadaRealizadaRow[]>(row.agendadas_mes ?? row.agendadasMes, []),
+    agendadasDia: jsonField<AgendadaRealizadaRow[]>(row.agendadas_dia ?? row.agendadasDia, []),
+    trendData: jsonField<HourlyTrendRow[]>(row.trend_data ?? row.trendData, []),
   };
 }
 
-function hasMeaningfulPatchValue(value: unknown): boolean {
-  if (value == null) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length > 0;
-  if (typeof value === "string") return value.trim().length > 0;
-  return true;
-}
+async function fetchSettingsRow(): Promise<Record<string, unknown> | undefined> {
+  const remote = toRecord(await getAppValue(SETTINGS_DATA_KEY));
+  if (!remote) return undefined;
 
-async function fetchSettingsRow(): Promise<Record<string, string> | undefined> {
-  await ensureInit();
-  const rows = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
-  const row = rows[0];
-  if (!row) return row;
-  // Se ainda estamos na janela de prioridade do cache (escrita local recente),
-  // mesclamos com o cache vencendo nos campos cacheados.
   if (settingsRowCache && Date.now() < settingsCacheUntil) {
-    const merged = { ...row, ...settingsRowCache };
+    const merged = { ...remote, ...settingsRowCache };
     settingsRowCache = merged;
-    return merged as Record<string, string>;
+    return merged;
   }
-  // Janela expirou — leitura fresca passa a ser a verdade.
-  settingsRowCache = { ...row };
-  return row;
+
+  settingsRowCache = { ...remote };
+  return remote;
 }
 
-async function ensureSettingsRow(): Promise<Record<string, string>> {
+async function ensureSettingsRow(): Promise<Record<string, unknown>> {
   const existing = await fetchSettingsRow();
-  if (existing) return (settingsRowCache as Record<string, string>) ?? existing;
-  const seed = {
-    key: SETTINGS_KEY,
+  if (existing) return settingsRowCache ?? existing;
+
+  const seed: Record<string, unknown> = {
     meta_mes: DEFAULT_SETTINGS.metaMes,
     ajuste_mes: DEFAULT_SETTINGS.ajusteMes,
     meta_dia: DEFAULT_SETTINGS.metaDia,
@@ -235,16 +251,15 @@ async function ensureSettingsRow(): Promise<Record<string, string>> {
     agendadas_mes: [],
     agendadas_dia: [],
     trend_data: [],
-    updated_at: new Date().toISOString(),
   };
-  await sheetsUpsert("dashboard_settings", [seed], "key");
+
   settingsRowCache = { ...seed };
   settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
-  return (await fetchSettingsRow()) ?? (settingsRowCache as Record<string, string>);
+  await upsertAppValue(SETTINGS_DATA_KEY, seed);
+  return seed;
 }
 
 export async function getDashboardSettings(): Promise<DashboardSettings> {
-  await ensureInit();
   const row = await ensureSettingsRow();
   return rowToSettings(row);
 }
@@ -252,24 +267,21 @@ export async function getDashboardSettings(): Promise<DashboardSettings> {
 export async function updateDashboardSettings(patch: Partial<DashboardSettings>) {
   return enqueueSettingsWrite(async () => {
     const row = await ensureSettingsRow();
-    const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
+    const merged: Record<string, unknown> = { ...row };
     if (typeof patch.metaMes === "number") merged.meta_mes = patch.metaMes;
     if (typeof patch.ajusteMes === "number") merged.ajuste_mes = patch.ajusteMes;
     if (typeof patch.metaDia === "number") merged.meta_dia = patch.metaDia;
     if (typeof patch.ajusteDia === "number") merged.ajuste_dia = patch.ajusteDia;
     if (typeof patch.atingidoMes === "number") merged.atingido_mes = patch.atingidoMes;
     if (typeof patch.atingidoDia === "number") merged.atingido_dia = patch.atingidoDia;
-    merged.updated_at = new Date().toISOString();
-    // Cache otimista antes da rede: evita que uma leitura/persistência concorrente
-    // use o valor antigo enquanto o Sheets ainda está gravando.
+
     settingsRowCache = { ...merged };
     settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
-    await sheetsUpsert("dashboard_settings", [merged], "key");
+    await upsertAppValue(SETTINGS_DATA_KEY, merged);
   });
 }
 
 export async function getDashboardExtras(): Promise<DashboardExtras> {
-  await ensureInit();
   const row = await ensureSettingsRow();
   return rowToExtras(row);
 }
@@ -277,90 +289,106 @@ export async function getDashboardExtras(): Promise<DashboardExtras> {
 export async function updateDashboardExtras(patch: Partial<DashboardExtras>) {
   return enqueueSettingsWrite(async () => {
     const row = await ensureSettingsRow();
-    const merged: Record<string, unknown> = { ...row, key: SETTINGS_KEY };
-    if (hasMeaningfulPatchValue(patch.commercials)) merged.commercials = patch.commercials;
-    if (hasMeaningfulPatchValue(patch.faixas)) merged.faixas = patch.faixas;
-    if (hasMeaningfulPatchValue(patch.clientes)) merged.clientes = patch.clientes;
-    if (hasMeaningfulPatchValue(patch.acionamentoDetalhado)) merged.acionamento_detalhado = patch.acionamentoDetalhado;
-    if (hasMeaningfulPatchValue(patch.agendadasMes)) merged.agendadas_mes = patch.agendadasMes;
-    if (hasMeaningfulPatchValue(patch.agendadasDia)) merged.agendadas_dia = patch.agendadasDia;
-    if (hasMeaningfulPatchValue(patch.trendData)) merged.trend_data = patch.trendData;
-    merged.updated_at = new Date().toISOString();
+    const merged: Record<string, unknown> = { ...row };
+    if ("commercials" in patch) merged.commercials = patch.commercials ?? [];
+    if ("faixas" in patch) merged.faixas = patch.faixas ?? [];
+    if ("clientes" in patch) merged.clientes = patch.clientes ?? [];
+    if ("acionamentoDetalhado" in patch) merged.acionamento_detalhado = patch.acionamentoDetalhado ?? [];
+    if ("agendadasMes" in patch) merged.agendadas_mes = patch.agendadasMes ?? [];
+    if ("agendadasDia" in patch) merged.agendadas_dia = patch.agendadasDia ?? [];
+    if ("trendData" in patch) merged.trend_data = patch.trendData ?? [];
+
     settingsRowCache = { ...merged };
     settingsCacheUntil = Date.now() + CACHE_PRIORITY_MS;
-    await sheetsUpsert("dashboard_settings", [merged], "key");
+    await upsertAppValue(SETTINGS_DATA_KEY, merged);
   });
 }
 
 // ---------- team_members ----------
 
-function rowToMember(row: Record<string, string>): TeamMember {
+function rowToMember(row: Partial<TeamMember> & Record<string, unknown>, fallbackCategory: TeamCategory): TeamMember {
   return {
     id: String(row.id ?? ""),
-    category: (row.category as TeamCategory) || "empresas",
+    category: (row.category as TeamCategory) || fallbackCategory,
     name: canonicalizeActiveCollaboratorName(String(row.name ?? "")),
     morning: num(row.morning, 0),
     afternoon: num(row.afternoon, 0),
   };
 }
 
-export async function listTeamMembers(category: TeamCategory): Promise<TeamMember[]> {
-  await ensureInit();
-  const rows = await sheetsSelect("team_members", { category });
-  let members = rows.map(rowToMember);
-
-  if (members.length === 0) {
-    const seed = category === "empresas" ? DEFAULT_EMPRESAS : DEFAULT_LEADS;
-    await sheetsUpsert(
-      "team_members",
-      seed.map((m) => ({ ...m, updated_at: new Date().toISOString() })),
-      "id",
-    );
-    members = seed;
-  }
-
-  members.sort((a, b) => {
+function sortMembers(members: TeamMember[]) {
+  return [...members].sort((a, b) => {
     const diff = (b.morning + b.afternoon) - (a.morning + a.afternoon);
     if (diff !== 0) return diff;
     return a.name.localeCompare(b.name);
   });
-  return members;
+}
+
+async function saveTeamMembers(category: TeamCategory, members: TeamMember[]): Promise<void> {
+  await upsertAppValue(teamMembersKey(category), sortMembers(members));
+}
+
+export async function listTeamMembers(category: TeamCategory): Promise<TeamMember[]> {
+  const stored = await getAppValue<unknown>(teamMembersKey(category));
+  let members = Array.isArray(stored)
+    ? stored.map((row) => rowToMember(toRecord(row) ?? {}, category)).filter((m) => m.id)
+    : [];
+
+  if (members.length === 0) {
+    members = category === "empresas" ? DEFAULT_EMPRESAS : DEFAULT_LEADS;
+    await saveTeamMembers(category, members);
+  }
+
+  return sortMembers(members);
 }
 
 export async function upsertTeamMember(member: TeamMember) {
-  await ensureInit();
-  await sheetsUpsert(
-    "team_members",
-    [{
-      id: member.id,
-      category: member.category,
+  return enqueueByKey(teamWriteQueues as Map<string, Promise<void>>, member.category, async () => {
+    const normalized: TeamMember = {
+      ...member,
       name: canonicalizeActiveCollaboratorName(member.name),
-      morning: member.morning,
-      afternoon: member.afternoon,
-      updated_at: new Date().toISOString(),
-    }],
-    "id",
-  );
+    };
+    const members = await listTeamMembers(normalized.category);
+    const idx = members.findIndex((m) => m.id === normalized.id);
+    const next = idx >= 0
+      ? members.map((m) => (m.id === normalized.id ? normalized : m))
+      : [...members, normalized];
+    await saveTeamMembers(normalized.category, next);
+  });
 }
 
 export async function addTeamMember(category: TeamCategory): Promise<TeamMember> {
-  await ensureInit();
   const id = (globalThis.crypto?.randomUUID?.() ?? Date.now().toString()) as string;
   const newMember: TeamMember = { id, category, name: "Novo Colaborador", morning: 0, afternoon: 0 };
-  await sheetsUpsert(
-    "team_members",
-    [{ ...newMember, updated_at: new Date().toISOString() }],
-    "id",
-  );
+  await upsertTeamMember(newMember);
   return newMember;
 }
 
 export async function deleteTeamMember(id: string) {
-  await ensureInit();
-  await sheetsDelete("team_members", id, "id");
+  await Promise.all(((["empresas", "leads"] as TeamCategory[])).map((category) =>
+    enqueueByKey(teamWriteQueues as Map<string, Promise<void>>, category, async () => {
+      const members = await listTeamMembers(category);
+      const next = members.filter((m) => m.id !== id);
+      if (next.length !== members.length) await saveTeamMembers(category, next);
+    })
+  ));
 }
 
 // ---------- daily_events ----------
+
+function normalizeDailyEvent(row: Record<string, unknown>): DailyEvent {
+  return {
+    id: String(row.id ?? ""),
+    businessDate: String(row.businessDate ?? row.business_date ?? ""),
+    scope: (row.scope as DailyEventScope) || "empresas",
+    kind: (row.kind as DailyEventKind) || "single",
+    memberId: row.memberId || row.member_id ? String(row.memberId ?? row.member_id) : null,
+    deltaMorning: num(row.deltaMorning ?? row.delta_morning, 0),
+    deltaAfternoon: num(row.deltaAfternoon ?? row.delta_afternoon, 0),
+    deltaBorderoDia: num(row.deltaBorderoDia ?? row.delta_bordero_dia, 0),
+    createdAt: String(row.createdAt ?? row.created_at ?? ""),
+  };
+}
 
 export async function insertDailyEvent(event: {
   businessDate: string;
@@ -371,83 +399,71 @@ export async function insertDailyEvent(event: {
   deltaAfternoon?: number;
   deltaBorderoDia?: number;
 }) {
-  await ensureInit();
-  const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`) as string;
-  await sheetsAppend("daily_events", [{
-    id,
-    business_date: event.businessDate,
-    scope: event.scope,
-    kind: event.kind,
-    member_id: event.memberId ?? "",
-    delta_morning: event.deltaMorning ?? 0,
-    delta_afternoon: event.deltaAfternoon ?? 0,
-    delta_bordero_dia: event.deltaBorderoDia ?? 0,
-    created_at: new Date().toISOString(),
-  }]);
+  const key = dailyEventsKey(event.businessDate);
+  await enqueueByKey(dailyEventQueues, key, async () => {
+    const current = await getAppValue<unknown>(key);
+    const events = Array.isArray(current)
+      ? current.map((row) => normalizeDailyEvent(toRecord(row) ?? {})).filter((e) => e.id)
+      : [];
+    const nextEvent: DailyEvent = {
+      id: (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`) as string,
+      businessDate: event.businessDate,
+      scope: event.scope,
+      kind: event.kind,
+      memberId: event.memberId ?? null,
+      deltaMorning: event.deltaMorning ?? 0,
+      deltaAfternoon: event.deltaAfternoon ?? 0,
+      deltaBorderoDia: event.deltaBorderoDia ?? 0,
+      createdAt: new Date().toISOString(),
+    };
+    await upsertAppValue(key, [...events, nextEvent]);
+  });
 }
 
 export async function listDailyEvents(businessDate: string, beforeIso?: string): Promise<DailyEvent[]> {
-  await ensureInit();
-  const rows = await sheetsSelect("daily_events", { business_date: businessDate });
-  const evts: DailyEvent[] = rows.map((r) => ({
-    id: String(r.id ?? ""),
-    businessDate: String(r.business_date ?? ""),
-    scope: (r.scope as DailyEventScope) || "empresas",
-    kind: (r.kind as DailyEventKind) || "single",
-    memberId: r.member_id ? String(r.member_id) : null,
-    deltaMorning: num(r.delta_morning, 0),
-    deltaAfternoon: num(r.delta_afternoon, 0),
-    deltaBorderoDia: num(r.delta_bordero_dia, 0),
-    createdAt: String(r.created_at ?? ""),
-  }));
-  const filtered = beforeIso ? evts.filter((e) => e.createdAt <= beforeIso) : evts;
+  const stored = await getAppValue<unknown>(dailyEventsKey(businessDate));
+  const events = Array.isArray(stored)
+    ? stored.map((row) => normalizeDailyEvent(toRecord(row) ?? {})).filter((e) => e.id)
+    : [];
+  const filtered = beforeIso ? events.filter((e) => e.createdAt <= beforeIso) : events;
   filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return filtered;
 }
 
 // ---------- calls ----------
-// As chamadas agora são persistidas exclusivamente via `saveJson("calls:YYYY-MM", ...)`
-// no Lovable Cloud (tabela `app_data`). O caminho legado para Google Sheets foi
-// removido para evitar fontes paralelas e divergência de totais.
+// As chamadas são persistidas via `saveJson("calls:YYYY-MM", ...)` no Lovable Cloud.
 
 // ---------- Reset diário e last activity ----------
 
 export async function resetDayCounters() {
-  await ensureInit();
+  await updateDashboardSettings({ atingidoDia: 0 });
 
-  // Zera atingido_dia
-  const row = await ensureSettingsRow();
-  await sheetsUpsert(
-    "dashboard_settings",
-    [{ ...row, key: SETTINGS_KEY, atingido_dia: 0, updated_at: new Date().toISOString() }],
-    "key",
-  );
-
-  // Zera morning/afternoon de todos os membros
-  const all = await sheetsSelect("team_members");
-  const updated = all
-    .filter((r) => r.category === "empresas" || r.category === "leads")
-    .map((r) => ({ ...r, morning: 0, afternoon: 0, updated_at: new Date().toISOString() }));
-  if (updated.length > 0) await sheetsUpsert("team_members", updated, "id");
+  const [empresas, leads] = await Promise.all([listTeamMembers("empresas"), listTeamMembers("leads")]);
+  await Promise.all([
+    saveTeamMembers("empresas", empresas.map((m) => ({ ...m, morning: 0, afternoon: 0 }))),
+    saveTeamMembers("leads", leads.map((m) => ({ ...m, morning: 0, afternoon: 0 }))),
+  ]);
 }
 
 export async function getLastActivityIso(): Promise<string | null> {
   try {
-    await ensureInit();
-    const settings = await sheetsSelect("dashboard_settings", { key: SETTINGS_KEY });
-    const sUpdated = settings[0]?.updated_at ? new Date(settings[0].updated_at).getTime() : 0;
+    const { data, error } = await supabase
+      .from("app_data")
+      .select("updated_at")
+      .in("key", [SETTINGS_DATA_KEY, teamMembersKey("empresas"), teamMembersKey("leads")]);
+    if (error) throw error;
 
-    const members = await sheetsSelect("team_members");
-    const tUpdated = members.reduce((max, r) => {
-      const t = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+    const maxTs = (data ?? []).reduce((max, row) => {
+      const t = row.updated_at ? new Date(row.updated_at).getTime() : 0;
       return t > max ? t : max;
     }, 0);
 
-    const maxTs = Math.max(sUpdated, tUpdated);
     return maxTs ? new Date(maxTs).toISOString() : null;
   } catch {
     return null;
   }
 }
 
-
+export async function clearPersistenceKeyForTests(key: string) {
+  await deleteAppValue(key);
+}
