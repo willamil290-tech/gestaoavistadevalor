@@ -173,11 +173,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
 
     const readFromLocal = () => {
       const raw = loadJson<StoredCall[]>(key, []);
-      const calls: ParsedCall[] = raw.map((c) => ({
-        ...c,
-        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
-        dateTime: new Date(c.dateTime),
-      }));
+      const calls: ParsedCall[] = raw.map(normalizeStoredCall);
       setStoredCalls(calls);
     };
 
