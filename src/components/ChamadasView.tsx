@@ -677,7 +677,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                 <div className="flex flex-col gap-1.5 text-sm">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceDay"} onChange={() => setSaveMode("replaceDay")} className="mt-1" />
-                    <span><strong>Substituir os dias importados</strong> (recomendado) — apaga apenas os dias presentes no texto e regrava com os dados novos. Use ao reimportar um relatório do mesmo dia.</span>
+                    <span><strong>Substituir pessoa/dia</strong> — regrava apenas os colaboradores presentes no texto, sem apagar outras pessoas do mesmo dia.</span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceMonth"} onChange={() => setSaveMode("replaceMonth")} className="mt-1" />
@@ -685,7 +685,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
-                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas sem apagar nada. ⚠ Pode duplicar se você colar o mesmo dia duas vezes.</span>
+                    <span><strong>Adicionar</strong> (recomendado) — mantém todo mundo do mesmo dia e ignora chamadas exatamente repetidas.</span>
                   </label>
                 </div>
               </div>
