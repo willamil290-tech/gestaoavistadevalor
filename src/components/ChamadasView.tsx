@@ -254,15 +254,6 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       byMonth.get(mk)!.push(c);
     }
 
-    // Conjunto de dias importados (para o modo replaceDay).
-    const importedDays = new Set(parsed.map((c) => c.dateISO));
-    // Conjunto de combinações pessoa+dia importadas (para replaceDay seguro:
-    // só apaga as chamadas das pessoas que estão sendo reimportadas, preservando
-    // os demais colaboradores do mesmo dia).
-    const importedPersonDays = new Set(
-      parsed.map((c) => `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`)
-    );
-
     let totalSaved = 0;
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
@@ -279,11 +270,16 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
         next = [...monthCalls];
       } else if (saveMode === "replaceDay") {
         // Preserva chamadas de outras pessoas no mesmo dia. Só remove as
-        // chamadas cuja combinação (pessoa, dia) está no relatório importado.
+        // chamadas das combinações (pessoa, dia) presentes NESTE mês importado.
+        // Importante: calcular por mês evita que importar um mês apague a mesma
+        // pessoa/dia de outro mês quando o texto contém múltiplos períodos.
+        const importedPersonDaysForMonth = new Set(
+          monthCalls.map((c) => `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`)
+        );
         next = [
           ...existing.filter((c) => {
             const k = `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`;
-            return !importedPersonDays.has(k);
+            return !importedPersonDaysForMonth.has(k);
           }),
           ...monthCalls,
         ];
