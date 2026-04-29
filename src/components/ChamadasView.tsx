@@ -172,8 +172,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     const key = storageKey(selectedYear, selectedMonth);
 
     const readFromLocal = () => {
-      const raw = loadJson<any[]>(key, []);
-      const calls: ParsedCall[] = raw.map((c: any) => ({
+      const raw = loadJson<StoredCall[]>(key, []);
+      const calls: ParsedCall[] = raw.map((c) => ({
         ...c,
         name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
         dateTime: new Date(c.dateTime),
@@ -264,8 +264,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
       const key = `calls:${monthKey}`;
-      const localExisting = loadJson<any[]>(key, []).map(normalizeStoredCall);
-      const remoteExisting = ((await getKeyFromSheets<any[]>(key).catch((e) => {
+      const localExisting = loadJson<StoredCall[]>(key, []).map(normalizeStoredCall);
+      const remoteExisting = ((await getKeyFromSheets<StoredCall[]>(key).catch((e) => {
         console.warn(`[Chamadas] Não foi possível conferir o banco antes de salvar '${key}':`, e);
         return [];
       })) ?? []).map(normalizeStoredCall);
