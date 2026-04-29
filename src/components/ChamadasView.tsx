@@ -145,9 +145,10 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
   // Modo de gravação durante a importação.
-  // Padrão = "replaceDay": ao reimportar o mesmo dia, os dados anteriores
-  // daquele dia são substituídos (evita duplicação silenciosa).
-  const [saveMode, setSaveMode] = useState<SaveMode>("replaceDay");
+  // Padrão = "append": preserva todos os colaboradores já salvos no mesmo dia
+  // e só ignora chamadas exatamente repetidas. Isso evita que um relatório
+  // parcial de uma pessoa apague outra pessoa do mesmo dia.
+  const [saveMode, setSaveMode] = useState<SaveMode>("append");
   // Diagnóstico do último parse (mostrado antes de salvar)
   const [parsePreview, setParsePreview] = useState<{
     calls: ParsedCall[];
