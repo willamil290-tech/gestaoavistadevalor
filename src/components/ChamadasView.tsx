@@ -26,7 +26,13 @@ function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
 }
 
-function normalizeStoredCall(c: any): ParsedCall {
+type StoredCall = Omit<Partial<ParsedCall>, "dateTime"> & {
+  dateTime?: string | Date;
+  name?: string;
+  dateISO?: string;
+};
+
+function normalizeStoredCall(c: StoredCall): ParsedCall {
   return {
     ...c,
     name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
@@ -145,9 +151,10 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
   const [storedCalls, setStoredCalls] = useState<ParsedCall[]>([]);
 
   // Modo de gravação durante a importação.
-  // Padrão = "replaceDay": ao reimportar o mesmo dia, os dados anteriores
-  // daquele dia são substituídos (evita duplicação silenciosa).
-  const [saveMode, setSaveMode] = useState<SaveMode>("replaceDay");
+  // Padrão = "append": preserva todos os colaboradores já salvos no mesmo dia
+  // e só ignora chamadas exatamente repetidas. Isso evita que um relatório
+  // parcial de uma pessoa apague outra pessoa do mesmo dia.
+  const [saveMode, setSaveMode] = useState<SaveMode>("append");
   // Diagnóstico do último parse (mostrado antes de salvar)
   const [parsePreview, setParsePreview] = useState<{
     calls: ParsedCall[];
@@ -165,12 +172,8 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     const key = storageKey(selectedYear, selectedMonth);
 
     const readFromLocal = () => {
-      const raw = loadJson<any[]>(key, []);
-      const calls: ParsedCall[] = raw.map((c: any) => ({
-        ...c,
-        name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
-        dateTime: new Date(c.dateTime),
-      }));
+      const raw = loadJson<StoredCall[]>(key, []);
+      const calls: ParsedCall[] = raw.map(normalizeStoredCall);
       setStoredCalls(calls);
     };
 
@@ -253,21 +256,12 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
       byMonth.get(mk)!.push(c);
     }
 
-    // Conjunto de dias importados (para o modo replaceDay).
-    const importedDays = new Set(parsed.map((c) => c.dateISO));
-    // Conjunto de combinações pessoa+dia importadas (para replaceDay seguro:
-    // só apaga as chamadas das pessoas que estão sendo reimportadas, preservando
-    // os demais colaboradores do mesmo dia).
-    const importedPersonDays = new Set(
-      parsed.map((c) => `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`)
-    );
-
     let totalSaved = 0;
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
       const key = `calls:${monthKey}`;
-      const localExisting = loadJson<any[]>(key, []).map(normalizeStoredCall);
-      const remoteExisting = ((await getKeyFromSheets<any[]>(key).catch((e) => {
+      const localExisting = loadJson<StoredCall[]>(key, []).map(normalizeStoredCall);
+      const remoteExisting = ((await getKeyFromSheets<StoredCall[]>(key).catch((e) => {
         console.warn(`[Chamadas] Não foi possível conferir o banco antes de salvar '${key}':`, e);
         return [];
       })) ?? []).map(normalizeStoredCall);
@@ -278,11 +272,16 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
         next = [...monthCalls];
       } else if (saveMode === "replaceDay") {
         // Preserva chamadas de outras pessoas no mesmo dia. Só remove as
-        // chamadas cuja combinação (pessoa, dia) está no relatório importado.
+        // chamadas das combinações (pessoa, dia) presentes NESTE mês importado.
+        // Importante: calcular por mês evita que importar um mês apague a mesma
+        // pessoa/dia de outro mês quando o texto contém múltiplos períodos.
+        const importedPersonDaysForMonth = new Set(
+          monthCalls.map((c) => `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`)
+        );
         next = [
           ...existing.filter((c) => {
             const k = `${collaboratorNameKey(c.name, c.dateISO)}|${c.dateISO}`;
-            return !importedPersonDays.has(k);
+            return !importedPersonDaysForMonth.has(k);
           }),
           ...monthCalls,
         ];
@@ -680,7 +679,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                 <div className="flex flex-col gap-1.5 text-sm">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceDay"} onChange={() => setSaveMode("replaceDay")} className="mt-1" />
-                    <span><strong>Substituir os dias importados</strong> (recomendado) — apaga apenas os dias presentes no texto e regrava com os dados novos. Use ao reimportar um relatório do mesmo dia.</span>
+                    <span><strong>Substituir pessoa/dia</strong> — regrava apenas os colaboradores presentes no texto, sem apagar outras pessoas do mesmo dia.</span>
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "replaceMonth"} onChange={() => setSaveMode("replaceMonth")} className="mt-1" />
@@ -688,7 +687,7 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
                   </label>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input type="radio" name="saveMode" checked={saveMode === "append"} onChange={() => setSaveMode("append")} className="mt-1" />
-                    <span><strong>Adicionar</strong> ao período existente — soma todas as chamadas sem apagar nada. ⚠ Pode duplicar se você colar o mesmo dia duas vezes.</span>
+                    <span><strong>Adicionar</strong> (recomendado) — mantém todo mundo do mesmo dia e ignora chamadas exatamente repetidas.</span>
                   </label>
                 </div>
               </div>
