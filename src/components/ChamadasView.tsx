@@ -26,7 +26,13 @@ function storageKey(year: number, month: number) {
   return `calls:${year}-${pad2(month)}`;
 }
 
-function normalizeStoredCall(c: any): ParsedCall {
+type StoredCall = Omit<Partial<ParsedCall>, "dateTime"> & {
+  dateTime?: string | Date;
+  name?: string;
+  dateISO?: string;
+};
+
+function normalizeStoredCall(c: StoredCall): ParsedCall {
   return {
     ...c,
     name: canonicalizeCollaboratorNameForDate(c.name ?? "", c.dateISO ?? ""),
