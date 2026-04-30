@@ -94,6 +94,41 @@ export async function pushKeyToSheetsNow(key: string, opts?: { allowEmptyOverwri
   if (error) throw error;
 }
 
+/**
+ * Grava DIRETAMENTE um valor explícito no Cloud (sem depender do localStorage).
+ * Usado em fluxos de importação onde precisamos mesclar a versão remota
+ * mais recente com os dados que estão sendo importados antes de salvar.
+ * Também atualiza o localStorage e marca a chave como bootstrapped para
+ * evitar que o próximo `saveJson` dispare outro push redundante.
+ */
+export async function writeKeyToCloud(key: string, value: unknown): Promise<void> {
+  if (!isBusinessKey(key)) return;
+  if (!hasMeaningfulValue(value)) {
+    if (await remoteHasMeaningfulValue(key)) {
+      console.warn(`[cloudSync] Bloqueado writeKeyToCloud vazio de '${key}'.`);
+      return;
+    }
+  }
+  const { error } = await supabase
+    .from("app_data")
+    .upsert({ key, value: value as never, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw error;
+  // Espelha no localStorage e evita push redundante do saveJson.
+  try {
+    const serialized = JSON.stringify(value);
+    const oldValue = localStorage.getItem(key);
+    bootstrapKeys.set(key, serialized);
+    localStorage.setItem(key, serialized);
+    if (oldValue !== serialized) {
+      try {
+        window.dispatchEvent(new StorageEvent("storage", {
+          key, oldValue, newValue: serialized, storageArea: localStorage,
+        }));
+      } catch { /* ignora */ }
+    }
+  } catch { /* quota — ignora */ }
+}
+
 /** Delete explícito: usado apenas quando o usuário realmente remove/resetta uma chave. */
 export async function deleteKeyFromSheetsNow(key: string): Promise<void> {
   if (!isBusinessKey(key)) return;

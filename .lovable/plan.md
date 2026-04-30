@@ -1,64 +1,34 @@
+Vou corrigir a importação de chamadas para impedir que uma gravação sobrescreva a outra no mesmo dia.
 
+Plano:
 
-## Plano: distribuir eventos Bitrix por data real + recuperar dias 13–20 sem reimportar
+1. Tornar o salvamento de chamadas atômico no Lovable Cloud
+   - Hoje as chamadas do mês inteiro são salvas em uma única chave (`calls:AAAA-MM`).
+   - O problema acontece quando uma tela salva uma versão local desatualizada do mês inteiro, sobrescrevendo dados já existentes no banco.
+   - Vou alterar o fluxo para, na hora de confirmar a importação, buscar novamente a versão mais recente do banco, mesclar com o que foi colado e só então gravar.
 
-### Parte A — Correção estrutural (multi-data)
+2. Gravar imediatamente após mesclar
+   - Em vez de depender apenas do `saveJson`, que salva no localStorage e depois faz envio com debounce, o botão “Confirmar gravação” vai enviar o resultado final diretamente para o Lovable Cloud.
+   - Isso reduz a chance de outro pull/polling ou outro computador substituir o resultado antes do envio terminar.
 
-**1. `src/lib/bitrixLogs.ts`**
-- Parser de data por linha do timeline:
-  - `hoje, HH:MM` → data alvo
-  - `ontem, HH:MM` → data alvo − 1
-  - `anteontem` → data alvo − 2
-  - `X dias atrás` / `há X dias` → data alvo − X
-  - `DD/MM/AAAA HH:MM` ou `DD de <mês> de AAAA, HH:MM` → data exata
-  - `HH:MM` puro sem data → data alvo (fallback)
-- Cada `BitrixEvent` ganha `dateISO: "YYYY-MM-DD"`.
-- Retorno passa a expor `eventsByDate: Record<string, BitrixEvent[]>` além do array atual.
+3. Impedir overwrite vazio ou antigo durante importação
+   - A rotina de chamadas vai evitar que dados locais vazios ou incompletos substituam uma chave remota que já tem conteúdo.
+   - Se houver conflito, sempre será preservado o conjunto mais completo: banco mais recente + dados importados agora.
 
-**2. `src/pages/Index.tsx` — `applyBitrixReportToSite`**
-- Para cada `dateISO` detectado:
-  - Salvar `bitrixEvents:YYYY-MM-DD` com os eventos daquele dia.
-  - Atualizar `acionGeral:YYYY-MM[DATA]` e `acionDet:YYYY-MM[DATA]` por data real (somando totais por dia, por colaborador).
-- A "data de destino" da UI vira **fallback** apenas para eventos sem data explícita.
-- Loop de `pushKeyToSheetsNow` para todas as chaves `bitrixEvents:` gravadas.
+4. Ajustar os modos de gravação
+   - “Adicionar”: continuará preservando todos os colaboradores do mesmo dia e ignorando duplicatas exatas.
+   - “Substituir pessoa/dia”: removerá apenas as chamadas da pessoa e dia presentes no texto importado, mantendo as outras pessoas do mesmo dia.
+   - “Substituir mês inteiro”: continuará existindo, mas vou deixar seu comportamento isolado e explícito, pois esse modo realmente apaga o mês e grava só o texto colado.
 
-**3. `src/components/BitrixLogsAnalyzerView.tsx`**
-- Antes de confirmar, mostrar resumo: "Datas detectadas: 13/04 (24), 14/04 (37)…".
-- Texto explicativo: logs distribuídos automaticamente; data de destino só vale para entradas sem data.
+5. Sincronizar a tela após salvar
+   - Depois do salvamento direto no banco, a tela será atualizada com o resultado final gravado.
+   - Também vou disparar o evento de atualização local para que as outras visões que dependem de chamadas recarreguem corretamente.
 
-### Parte B — Recuperar dias 13–20 SEM reimportar
+Arquivos previstos:
+- `src/lib/cloudSync.ts`: adicionar uma função segura para gravar uma chave com valor explícito no Lovable Cloud, sem depender apenas do conteúdo atual do localStorage.
+- `src/components/ChamadasView.tsx`: usar essa gravação direta e reforçar a mesclagem antes de salvar.
 
-A chave `bitrixEvents:2025-04-22` hoje contém TODOS os eventos da última colagem (multi-dia colapsado num só). Vamos redistribuí-la in-place:
-
-**4. Migração automática única (`src/lib/bitrixBackfill.ts` novo)**
-- Ao carregar `BitrixLogsAnalyzerView` ou `AcionamentoDetalhadoView` pela primeira vez após o deploy:
-  - Ler todas as chaves `bitrixEvents:*` do mês atual e do mês anterior.
-  - Para cada evento dentro delas, re-parsear a string original do log (campo `raw`/`timeText` já guardado em cada `BitrixEvent`) usando o novo parser de data da Parte A.
-  - Reagrupar por `dateISO` real e regravar `bitrixEvents:YYYY-MM-DD` por dia.
-  - Marcar flag `bitrixBackfill:v1:done` em `app_data` para não rodar de novo.
-- Toast: "Logs Bitrix redistribuídos: 13/04 (24), 14/04 (37)…".
-
-**Pré-requisito:** cada `BitrixEvent` precisa ter o texto bruto original preservado. Se hoje não tem, a migração lê o campo `timeText` (ex.: "ontem, 14:32", "há 9 dias, 10:05") que já existe e foi salvo na importação anterior — basta reaplicar o parser novo sobre ele.
-
-Se algum evento não tiver texto suficiente para inferir a data (improvável), permanece no dia 22 como está hoje — sem perda.
-
-### Parte C — Drill-down
-
-**5. `AcionamentoDetalhadoView` e `AcionamentosView`**
-- Manter fallback `pullKeyFromSheets("bitrixEvents:DATA")` já existente — passa a funcionar sozinho assim que a Parte B redistribuir.
-- Sem mudança de lógica de UI.
-
-### Arquivos
-
-- `src/lib/bitrixLogs.ts` — parser de data por evento + `eventsByDate`.
-- `src/lib/bitrixBackfill.ts` (novo) — migração única redistribuindo `bitrixEvents:*` antigos.
-- `src/pages/Index.tsx` — `applyBitrixReportToSite` grava por data real.
-- `src/components/BitrixLogsAnalyzerView.tsx` — resumo de datas + dispara backfill no mount.
-- `src/components/AcionamentoDetalhadoView.tsx` — dispara backfill no mount (garantia).
-
-### Resultado
-
-- Clique em qualquer célula 13–23 abre os logs corretos sem reimportar nada.
-- Próximas colagens Bitrix multi-dia preenchem cada dia automaticamente.
-- Totais diários permanecem corretos.
-
+Resultado esperado:
+- Colar chamadas de uma pessoa em um dia não vai mais apagar as chamadas de outra pessoa no mesmo dia.
+- O comportamento será consistente entre computadores diferentes.
+- O banco continuará sendo a fonte principal; nada volta a depender do Google Sheets.
