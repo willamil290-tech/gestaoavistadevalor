@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadJson, saveJson } from "@/lib/localStore";
-import { getKeyFromSheets, pullKeyFromSheets } from "@/lib/cloudSync";
+import { getKeyFromSheets, pullKeyFromSheets, writeKeyToCloud } from "@/lib/cloudSync";
 import { canonicalizeCollaboratorNameForDate, collaboratorNameKey, isMariaCollaboratorName } from "@/lib/collaboratorNames";
 import { buildPreferredCollaboratorNameMap, getTeamGroup, type TeamGroup, TEAM_GROUP_BADGE_COLORS } from "@/lib/teamGroups";
 import { isIgnoredCommercial } from "@/lib/ignoredCommercials";
@@ -260,11 +260,18 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
     for (const [monthKey, monthCalls] of byMonth) {
       const [y, m] = monthKey.split("-").map(Number);
       const key = `calls:${monthKey}`;
-      const localExisting = loadJson<StoredCall[]>(key, []).map(normalizeStoredCall);
-      const remoteExisting = ((await getKeyFromSheets<StoredCall[]>(key).catch((e) => {
+      // SEMPRE busca a versão mais recente do banco IMEDIATAMENTE antes de salvar
+      // para evitar que dados locais antigos sobrescrevam o que outra pessoa
+      // acabou de importar em outro computador.
+      let remoteExistingRaw: StoredCall[] = [];
+      try {
+        remoteExistingRaw = (await getKeyFromSheets<StoredCall[]>(key)) ?? [];
+      } catch (e) {
         console.warn(`[Chamadas] Não foi possível conferir o banco antes de salvar '${key}':`, e);
-        return [];
-      })) ?? []).map(normalizeStoredCall);
+      }
+      const remoteExisting = remoteExistingRaw.map(normalizeStoredCall);
+      const localExisting = loadJson<StoredCall[]>(key, []).map(normalizeStoredCall);
+      // Mescla local + remoto preservando todas as chamadas existentes.
       const existing = mergeUniqueCalls(remoteExisting, localExisting);
 
       let next: ParsedCall[];
@@ -294,7 +301,15 @@ export const ChamadasView = ({ tvMode = false }: ChamadasViewProps) => {
         ...c,
         name: canonicalizeCollaboratorNameForDate(c.name, c.dateISO),
       }));
-      saveJson(key, normalized);
+      // Grava DIRETO no Lovable Cloud com o resultado mesclado.
+      // Isso evita race entre saveJson (debounced) e o pull/polling de outras abas.
+      try {
+        await writeKeyToCloud(key, normalized);
+      } catch (e) {
+        console.error(`[Chamadas] Falha ao gravar '${key}' no banco:`, e);
+        toast.error(`Falha ao salvar ${monthKey} no banco. Tente novamente.`);
+        continue;
+      }
       totalSaved += monthCalls.length;
 
       // Atualiza o estado local se for o mês exibido

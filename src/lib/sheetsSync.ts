@@ -10,4 +10,5 @@ export {
   pullKeyFromSheets,
   getKeyFromSheets,
   flushPendingPushes,
+  writeKeyToCloud,
 } from "@/lib/cloudSync";
