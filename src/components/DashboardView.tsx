@@ -41,16 +41,21 @@ export const DashboardView = ({
   tvMode = false,
   readOnly = false,
 }: DashboardViewProps) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playedRef = useRef({ day100: false, day200: false, day300: false, day400: false, month100: false, month200: false, month300: false, month400: false });
+  const victoryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const turnDownAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playedRef = useRef({ day100: false, day150: false, day200: false, day300: false, day400: false, month100: false, month200: false, month300: false, month400: false });
   const playedKeyRef = useRef({ dayKey: "", monthKey: "" });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      const a = new Audio("/audio/tema-da-vitoria.mp3");
-      a.preload = "auto";
-      audioRef.current = a;
+      const victory = new Audio("/audio/tema-da-vitoria.mp3");
+      victory.preload = "auto";
+      victoryAudioRef.current = victory;
+
+      const turnDown = new Audio("/audio/turn-down-for-what.mp3");
+      turnDown.preload = "auto";
+      turnDownAudioRef.current = turnDown;
     } catch {}
   }, []);
 
@@ -62,6 +67,7 @@ export const DashboardView = ({
     playedKeyRef.current.dayKey = dayKey;
     playedKeyRef.current.monthKey = monthKey;
     playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
+    playedRef.current.day150 = localStorage.getItem(`themePlayed:day:150:${dayKey}`) === "1";
     playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
     playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
     playedRef.current.day400 = localStorage.getItem(`themePlayed:day:400:${dayKey}`) === "1";
@@ -72,20 +78,27 @@ export const DashboardView = ({
   }, []);
 
 
-  const playTheme = (which: "dia" | "mes") => {
-    const a = audioRef.current;
-    if (!a) {
+  const playAudio = (audio: HTMLAudioElement | null, which: "dia" | "mes", actionLabel: string) => {
+    if (!audio) {
       toast(`Meta do ${which} atingida!`);
       return;
     }
     try {
-      a.currentTime = 0;
-      a.play().catch(() => {
+      audio.currentTime = 0;
+      audio.play().catch(() => {
         toast(`Meta do ${which} atingida!`, {
-          action: { label: "Tocar tema", onClick: () => { a.currentTime = 0; a.play().catch(() => {}); } },
+          action: { label: actionLabel, onClick: () => { audio.currentTime = 0; audio.play().catch(() => {}); } },
         });
       });
     } catch {}
+  };
+
+  const playTheme = (which: "dia" | "mes") => {
+    playAudio(victoryAudioRef.current, which, "Tocar tema");
+  };
+
+  const playTurnDown = (which: "dia" | "mes") => {
+    playAudio(turnDownAudioRef.current, which, "Tocar música");
   };
 
   const atingidoMesLiquido = Math.max(0, atingidoMes - (ajusteMes || 0));
@@ -104,6 +117,7 @@ export const DashboardView = ({
     if (playedKeyRef.current.dayKey !== dayKey) {
       playedKeyRef.current.dayKey = dayKey;
       playedRef.current.day100 = localStorage.getItem(`themePlayed:day:100:${dayKey}`) === "1";
+      playedRef.current.day150 = localStorage.getItem(`themePlayed:day:150:${dayKey}`) === "1";
       playedRef.current.day200 = localStorage.getItem(`themePlayed:day:200:${dayKey}`) === "1";
       playedRef.current.day300 = localStorage.getItem(`themePlayed:day:300:${dayKey}`) === "1";
       playedRef.current.day400 = localStorage.getItem(`themePlayed:day:400:${dayKey}`) === "1";
@@ -116,7 +130,8 @@ export const DashboardView = ({
       playedRef.current.month400 = localStorage.getItem(`themePlayed:month:400:${monthKey}`) === "1";
     }
 
-    // Day milestones: 400% > 300% > 200% > 100% (play highest unplayed)
+    // Day milestones: 400% > 300% > 200% > 150% > 100% (play highest unplayed).
+    // Turn Down For What toca especificamente quando a meta do dia chega em 150% e 200%.
     if (percentualDia >= 400 && !playedRef.current.day400) {
       playedRef.current.day400 = true;
       try { localStorage.setItem(`themePlayed:day:400:${dayKey}`, "1"); } catch {}
@@ -128,7 +143,11 @@ export const DashboardView = ({
     } else if (percentualDia >= 200 && !playedRef.current.day200) {
       playedRef.current.day200 = true;
       try { localStorage.setItem(`themePlayed:day:200:${dayKey}`, "1"); } catch {}
-      playTheme("dia");
+      playTurnDown("dia");
+    } else if (percentualDia >= 150 && !playedRef.current.day150) {
+      playedRef.current.day150 = true;
+      try { localStorage.setItem(`themePlayed:day:150:${dayKey}`, "1"); } catch {}
+      playTurnDown("dia");
     } else if (percentualDia >= 100 && !playedRef.current.day100) {
       playedRef.current.day100 = true;
       try { localStorage.setItem(`themePlayed:day:100:${dayKey}`, "1"); } catch {}
@@ -239,7 +258,7 @@ export const DashboardView = ({
                 variant="outline"
                 size={tvMode ? "sm" : "default"}
                 className="rounded-xl"
-                onClick={() => playTheme("dia")}
+                onClick={() => percentualDia >= 150 && percentualDia < 300 ? playTurnDown("dia") : playTheme("dia")}
                 title="Tocar tema"
               >
                 <Volume2 className="w-4 h-4 mr-2" />
