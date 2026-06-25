@@ -13,6 +13,7 @@ type Props = {
   metaMes: number;
   metaDia: number;
   ajusteMes?: number;
+  ajusteMesOperacao?: "somar" | "diminuir";
   ajusteDia?: number;
   atingidoMes: number;
   atingidoDia: number;
@@ -102,6 +103,7 @@ export function MetasConsolidadasView({
   metaMes,
   metaDia,
   ajusteMes = 0,
+  ajusteMesOperacao = "diminuir",
   ajusteDia: _ajusteDia = 0,
   atingidoMes,
   atingidoDia: _atingidoDia,
@@ -110,9 +112,12 @@ export function MetasConsolidadasView({
   const [y, m] = today.split("-").map(Number);
 
   // ── Metas (mês) ──
-  const metaMesAjustada = Math.max(0, metaMes - (ajusteMes ?? 0));
-  const faltaMes = Math.max(0, metaMesAjustada - atingidoMes);
-  const pctMes = metaMesAjustada > 0 ? Math.min(100, (atingidoMes / metaMesAjustada) * 100) : 0;
+  const atingidoMesAjustado = Math.max(
+    0,
+    ajusteMesOperacao === "somar" ? atingidoMes + (ajusteMes ?? 0) : atingidoMes - (ajusteMes ?? 0)
+  );
+  const faltaMes = Math.max(0, metaMes - atingidoMesAjustado);
+  const pctMes = metaMes > 0 ? Math.min(100, (atingidoMesAjustado / metaMes) * 100) : 0;
 
 
   // ── Metas por colaborador (persistidas por mês) ──
@@ -222,10 +227,10 @@ export function MetasConsolidadasView({
             />
             <div className="flex flex-col items-center gap-1 mt-2">
               <div className={cn("font-extrabold tabular-nums text-primary", tvMode ? "text-5xl" : "text-4xl")}>
-                {formatBRL(atingidoMes)}
+                {formatBRL(atingidoMesAjustado)}
               </div>
               <div className={cn("text-muted-foreground", tvMode ? "text-lg" : "text-sm")}>
-                de <span className="font-semibold text-foreground">{formatBRL(metaMesAjustada)}</span>
+                de <span className="font-semibold text-foreground">{formatBRL(metaMes)}</span>
               </div>
               <div className={cn("mt-1 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary font-bold", tvMode ? "text-xl" : "text-base")}>
                 Falta {formatBRL(faltaMes)}

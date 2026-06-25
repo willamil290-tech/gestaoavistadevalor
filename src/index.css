@@ -361,3 +361,65 @@
 .anim-fire-pulse {
   animation: fire-pulse-scale 1.5s ease-in-out infinite;
 }
+
+/* ===== Modo Brasil ===== */
+html.brasil-mode,
+.brasil-mode {
+  --background: 140 68% 10%;
+  --foreground: 54 100% 96%;
+
+  --card: 145 62% 14%;
+  --card-foreground: 54 100% 96%;
+
+  --popover: 145 62% 14%;
+  --popover-foreground: 54 100% 96%;
+
+  --primary: 145 85% 32%;
+  --primary-foreground: 54 100% 96%;
+
+  --secondary: 51 100% 50%;
+  --secondary-foreground: 222 72% 24%;
+
+  --muted: 145 45% 19%;
+  --muted-foreground: 54 55% 80%;
+
+  --accent: 222 72% 42%;
+  --accent-foreground: 54 100% 96%;
+
+  --border: 51 90% 38%;
+  --input: 145 45% 22%;
+  --ring: 51 100% 50%;
+
+  --sidebar-background: 140 68% 10%;
+  --sidebar-foreground: 54 100% 96%;
+  --sidebar-primary: 145 85% 32%;
+  --sidebar-primary-foreground: 54 100% 96%;
+  --sidebar-accent: 222 72% 42%;
+  --sidebar-accent-foreground: 54 100% 96%;
+  --sidebar-border: 51 90% 38%;
+  --sidebar-ring: 51 100% 50%;
+
+  --navy: 222 72% 24%;
+  --navy-light: 222 72% 32%;
+  --burgundy: 145 85% 32%;
+  --burgundy-light: 51 100% 50%;
+  --teal: 222 72% 42%;
+  --teal-light: 222 72% 52%;
+  --gold: 51 100% 50%;
+}
+
+html.brasil-mode body,
+.brasil-mode {
+  background:
+    radial-gradient(circle at 50% -10%, hsl(51 100% 50% / 0.22), transparent 32rem),
+    radial-gradient(circle at 95% 10%, hsl(222 72% 42% / 0.28), transparent 28rem),
+    linear-gradient(135deg, hsl(140 68% 10%), hsl(145 62% 14%) 45%, hsl(222 72% 24%));
+}
+
+.brasil-mode .bg-card {
+  box-shadow: 0 0 0 1px hsl(51 100% 50% / 0.16), 0 12px 40px hsl(140 85% 8% / 0.26);
+}
+
+.brasil-mode .text-gradient-primary {
+  background-image: linear-gradient(90deg, hsl(51 100% 50%), hsl(145 85% 48%), hsl(222 72% 60%));
+}

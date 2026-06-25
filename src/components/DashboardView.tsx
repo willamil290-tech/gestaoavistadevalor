@@ -11,12 +11,14 @@ import { Volume2 } from "lucide-react";
 interface DashboardViewProps {
   metaMes: number;
   ajusteMes: number;
+  ajusteMesOperacao: "somar" | "diminuir";
   metaDia: number;
   ajusteDia: number;
   atingidoMes: number;
   atingidoDia: number;
   onMetaMesChange: (value: number) => void;
   onAjusteMesChange: (value: number) => void;
+  onAjusteMesOperacaoChange: (value: "somar" | "diminuir") => void;
   onMetaDiaChange: (value: number) => void;
   onAjusteDiaChange: (value: number) => void;
   onAtingidoMesChange: (value: number) => void;
@@ -28,12 +30,14 @@ interface DashboardViewProps {
 export const DashboardView = ({
   metaMes,
   ajusteMes,
+  ajusteMesOperacao,
   metaDia,
   ajusteDia,
   atingidoMes,
   atingidoDia,
   onMetaMesChange,
   onAjusteMesChange,
+  onAjusteMesOperacaoChange,
   onMetaDiaChange,
   onAjusteDiaChange,
   onAtingidoMesChange,
@@ -101,7 +105,11 @@ export const DashboardView = ({
     playAudio(turnDownAudioRef.current, which, "Tocar música");
   };
 
-  const atingidoMesLiquido = Math.max(0, atingidoMes - (ajusteMes || 0));
+  const ajusteMesValor = ajusteMes || 0;
+  const atingidoMesLiquido = Math.max(
+    0,
+    ajusteMesOperacao === "somar" ? atingidoMes + ajusteMesValor : atingidoMes - ajusteMesValor
+  );
   const atingidoDiaLiquido = Math.max(0, atingidoDia - (ajusteDia || 0));
 
   const percentualMes = metaMes > 0 ? (atingidoMesLiquido / metaMes) * 100 : 0;
@@ -224,7 +232,28 @@ export const DashboardView = ({
             <div className="w-full pt-4 border-t border-border space-y-3">
               <EditableValue value={metaMes} onChange={onMetaMesChange} label="Meta do Mês" size="sm" readOnly={readOnly} />
               {!tvMode && (
-                <EditableValue value={ajusteMes} onChange={onAjusteMesChange} label="Ajuste do mês (-)" size="sm" readOnly={readOnly} />
+                <div className="flex flex-col items-center gap-2">
+                  <EditableValue
+                    value={ajusteMes}
+                    onChange={onAjusteMesChange}
+                    label={`Ajuste do mês (${ajusteMesOperacao === "somar" ? "+" : "-"})`}
+                    size="sm"
+                    readOnly={readOnly}
+                  />
+                  {!readOnly && (
+                    <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2">
+                      <span className="text-sm font-medium text-muted-foreground">Operação</span>
+                      <select
+                        value={ajusteMesOperacao}
+                        onChange={(e) => onAjusteMesOperacaoChange(e.target.value as "somar" | "diminuir")}
+                        className="rounded-lg border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="diminuir">Diminuir do mês</option>
+                        <option value="somar">Somar no mês</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

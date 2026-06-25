@@ -171,6 +171,7 @@ const Index = () => {
   const remoteExtras = useDashboardExtras();
   const [metaMes, setMetaMes] = useState(DEFAULT_SETTINGS.metaMes);
   const [ajusteMes, setAjusteMes] = useState(DEFAULT_SETTINGS.ajusteMes);
+  const [ajusteMesOperacao, setAjusteMesOperacao] = useState<"somar" | "diminuir">(DEFAULT_SETTINGS.ajusteMesOperacao);
   const [metaDia, setMetaDia] = useState(DEFAULT_SETTINGS.metaDia);
   const [ajusteDia, setAjusteDia] = useState(DEFAULT_SETTINGS.ajusteDia);
   const [atingidoMes, setAtingidoMes] = useState(DEFAULT_SETTINGS.atingidoMes);
@@ -324,11 +325,20 @@ const Index = () => {
     if (!isSupabaseConfigured || !remoteSettings.data) return;
     setMetaMes(remoteSettings.data.metaMes);
     setAjusteMes(remoteSettings.data.ajusteMes ?? 0);
+    setAjusteMesOperacao(remoteSettings.data.ajusteMesOperacao ?? "diminuir");
     setMetaDia(remoteSettings.data.metaDia);
     setAjusteDia(remoteSettings.data.ajusteDia ?? 0);
     setAtingidoMes(remoteSettings.data.atingidoMes);
     setAtingidoDia(remoteSettings.data.atingidoDia);
   }, [isSupabaseConfigured, remoteSettings.data]);
+
+  const [brasilMode, setBrasilMode] = useState(() => localStorage.getItem("brasilMode") === "1");
+
+  useEffect(() => {
+    localStorage.setItem("brasilMode", brasilMode ? "1" : "0");
+    document.documentElement.classList.toggle("brasil-mode", brasilMode);
+    return () => document.documentElement.classList.remove("brasil-mode");
+  }, [brasilMode]);
 
   useEffect(() => {
     localStorage.setItem("tvMode", tvMode ? "1" : "0");
@@ -809,7 +819,7 @@ const Index = () => {
   ];
 
   return (
-    <div className={cn("bg-background", tvMode ? "h-screen overflow-hidden p-0" : "min-h-screen p-2 md:p-4")}>
+    <div className={cn("bg-background", brasilMode && "brasil-mode", tvMode ? "h-screen overflow-hidden p-0" : "min-h-screen p-2 md:p-4")}>
       <div ref={scrollContainerRef} className={cn("mx-auto w-full", tvMode ? "max-w-none h-full overflow-y-auto" : "max-w-[1600px]")}>
         {!tvMode && (
           <header className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
@@ -834,6 +844,22 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant={brasilMode ? "default" : "outline"}
+                className={cn(
+                  "rounded-xl",
+                  brasilMode && "border-yellow-300 bg-green-600 text-yellow-100 hover:bg-green-700"
+                )}
+                onClick={() => {
+                  const next = !brasilMode;
+                  setBrasilMode(next);
+                  toast.success(next ? "Modo Brasil ativado" : "Modo Brasil desativado");
+                }}
+                title="Modo Brasil"
+              >
+                🇧🇷 Brasil
+              </Button>
+
               <Button variant="outline" className="rounded-xl" onClick={() => setTvMode(true)} title="Modo TV">
                 <Tv2 className="w-4 h-4 mr-2" />TV
               </Button>
@@ -930,6 +956,7 @@ const Index = () => {
             <DashboardView 
               metaMes={metaMes} 
               ajusteMes={ajusteMes}
+              ajusteMesOperacao={ajusteMesOperacao}
               metaDia={metaDia} 
               ajusteDia={ajusteDia}
               atingidoMes={atingidoMes} 
@@ -938,6 +965,7 @@ const Index = () => {
               readOnly={readOnly}
               onMetaMesChange={(v) => { setMetaMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaMes: v }); }}
               onAjusteMesChange={(v) => { setAjusteMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ ajusteMes: v }); }}
+              onAjusteMesOperacaoChange={(v) => { setAjusteMesOperacao(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ ajusteMesOperacao: v }); }}
               onMetaDiaChange={(v) => { setMetaDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ metaDia: v }); }}
               onAjusteDiaChange={(v) => { setAjusteDia(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ ajusteDia: v }); }}
               onAtingidoMesChange={(v) => { setAtingidoMes(v); if (isSupabaseConfigured) remoteSettings.updateAsync({ atingidoMes: v }); }}
@@ -977,6 +1005,7 @@ const Index = () => {
               metaMes={metaMes}
               metaDia={metaDia}
               ajusteMes={ajusteMes}
+              ajusteMesOperacao={ajusteMesOperacao}
               ajusteDia={ajusteDia}
               atingidoMes={atingidoMes}
               atingidoDia={atingidoDia}

@@ -7,9 +7,12 @@ import type { Json } from "@/integrations/supabase/types";
 
 // ---------- Tipos ----------
 
+export type AjusteOperacao = "somar" | "diminuir";
+
 export type DashboardSettings = {
   metaMes: number;
   ajusteMes: number;
+  ajusteMesOperacao: AjusteOperacao;
   metaDia: number;
   ajusteDia: number;
   atingidoMes: number;
@@ -86,6 +89,7 @@ export type DailyEvent = {
 export const DEFAULT_SETTINGS: DashboardSettings = {
   metaMes: 15800000,
   ajusteMes: 0,
+  ajusteMesOperacao: "diminuir",
   metaDia: 1053333.33,
   ajusteDia: 0,
   atingidoMes: 5556931.1,
@@ -199,6 +203,7 @@ function rowToSettings(row: Record<string, unknown> | undefined): DashboardSetti
   return {
     metaMes: num(row.meta_mes ?? row.metaMes, DEFAULT_SETTINGS.metaMes),
     ajusteMes: num(row.ajuste_mes ?? row.ajusteMes, 0),
+    ajusteMesOperacao: (row.ajuste_mes_operacao ?? row.ajusteMesOperacao) === "somar" ? "somar" : "diminuir",
     metaDia: num(row.meta_dia ?? row.metaDia, DEFAULT_SETTINGS.metaDia),
     ajusteDia: num(row.ajuste_dia ?? row.ajusteDia, 0),
     atingidoMes: num(row.atingido_mes ?? row.atingidoMes, DEFAULT_SETTINGS.atingidoMes),
@@ -240,6 +245,7 @@ async function ensureSettingsRow(): Promise<Record<string, unknown>> {
   const seed: Record<string, unknown> = {
     meta_mes: DEFAULT_SETTINGS.metaMes,
     ajuste_mes: DEFAULT_SETTINGS.ajusteMes,
+    ajuste_mes_operacao: DEFAULT_SETTINGS.ajusteMesOperacao,
     meta_dia: DEFAULT_SETTINGS.metaDia,
     ajuste_dia: DEFAULT_SETTINGS.ajusteDia,
     atingido_mes: DEFAULT_SETTINGS.atingidoMes,
@@ -270,6 +276,7 @@ export async function updateDashboardSettings(patch: Partial<DashboardSettings>)
     const merged: Record<string, unknown> = { ...row };
     if (typeof patch.metaMes === "number") merged.meta_mes = patch.metaMes;
     if (typeof patch.ajusteMes === "number") merged.ajuste_mes = patch.ajusteMes;
+    if (patch.ajusteMesOperacao === "somar" || patch.ajusteMesOperacao === "diminuir") merged.ajuste_mes_operacao = patch.ajusteMesOperacao;
     if (typeof patch.metaDia === "number") merged.meta_dia = patch.metaDia;
     if (typeof patch.ajusteDia === "number") merged.ajuste_dia = patch.ajusteDia;
     if (typeof patch.atingidoMes === "number") merged.atingido_mes = patch.atingidoMes;
